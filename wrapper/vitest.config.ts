@@ -25,8 +25,13 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov"],
       all: true,
-      include: ["security/**/*.ts", "lib/**/*.ts", "token-tracker/**/*.ts"],
-      exclude: ["security/**/*.test.ts", "lib/**/*.test.ts", "token-tracker/**/*.test.ts"],
+      include: ["security/**/*.ts", "lib/**/*.ts", "token-tracker/**/*.ts", "digest/**/*.ts"],
+      exclude: [
+        "security/**/*.test.ts",
+        "lib/**/*.test.ts",
+        "token-tracker/**/*.test.ts",
+        "digest/**/*.test.ts",
+      ],
       thresholds: {
         lines: 90,
         functions: 90,
