@@ -36,12 +36,13 @@ export type PermissionManifest = {
 // ── Error type ────────────────────────────────────────────────────────────────
 
 export class PermissionLoadError extends Error {
-  constructor(
-    public readonly skillId: string,
-    public readonly bannedLevel: string,
-  ) {
+  readonly skillId: string;
+  readonly bannedLevel: string;
+  constructor(skillId: string, bannedLevel: string) {
     super(`ArmorClaw: skill "${skillId}" declares hard-banned permission level "${bannedLevel}"`);
     this.name = "PermissionLoadError";
+    this.skillId = skillId;
+    this.bannedLevel = bannedLevel;
   }
 }
 

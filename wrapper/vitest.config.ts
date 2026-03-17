@@ -31,6 +31,8 @@ export default defineConfig({
         "token-tracker/**/*.ts",
         "digest/**/*.ts",
         "undo/**/*.ts",
+        "onboarding/**/*.ts",
+        "dashboard/**/*.ts",
       ],
       exclude: [
         "security/**/*.test.ts",
@@ -38,6 +40,13 @@ export default defineConfig({
         "token-tracker/**/*.test.ts",
         "digest/**/*.test.ts",
         "undo/**/*.test.ts",
+        "onboarding/**/*.test.ts",
+        "onboarding/index.ts",
+        "onboarding/server.ts",
+        "onboarding/tailscale.ts",
+        "dashboard/**/*.test.ts",
+        "dashboard/index.ts",
+        "dashboard/server.ts",
       ],
       thresholds: {
         lines: 90,
@@ -48,6 +57,8 @@ export default defineConfig({
         "security/**/*.ts": { lines: 100, functions: 100, branches: 100, statements: 100 },
         "lib/**/*.ts": { lines: 100, functions: 100, branches: 100, statements: 100 },
         "undo/**/*.ts": { lines: 100, functions: 100, branches: 100, statements: 100 },
+        // Onboarding validators target: 75% minimum
+        "onboarding/validators.ts": { lines: 75, functions: 75, branches: 75, statements: 75 },
       },
     },
   },

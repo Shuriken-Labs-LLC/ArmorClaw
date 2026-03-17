@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArmorClaw</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ── Reset ────────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    button { font-family: inherit; cursor: pointer; }
+    a      { color: inherit; text-decoration: none; }
+
+    /* ── Design tokens ────────────────────────────────────────────────────── */
+    :root {
+      --ac-bg:            #FAFAF8;
+      --ac-surface:       #FFFFFF;
+      --ac-surface2:      #F4F3EF;
+      --ac-border:        #E8E6DF;
+      --ac-border-strong: #D4D1C7;
+      --ac-text:          #1C1C1A;
+      --ac-muted:         #6B6966;
+      --ac-hint:          #9C9991;
+      --ac-teal:          #1D9E75;
+      --ac-teal-light:    #E1F5EE;
+      --ac-amber:         #BA7517;
+      --ac-amber-light:   #FAEEDA;
+      --ac-red:           #A32D2D;
+      --ac-red-light:     #FCEBEB;
+      --ac-blue:          #185FA5;
+      --ac-blue-light:    #E6F1FB;
+    }
+
+    /* ── Global ───────────────────────────────────────────────────────────── */
+    html, body {
+      height: 100%;
+      background: var(--ac-bg);
+      color: var(--ac-text);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── App shell ────────────────────────────────────────────────────────── */
+    .app { display: flex; height: 100vh; overflow: hidden; }
+
+    /* ── Sidebar (desktop) ────────────────────────────────────────────────── */
+    .sidebar {
+      width: 216px;
+      flex-shrink: 0;
+      background: var(--ac-surface);
+      border-right: 0.5px solid var(--ac-border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 20px 16px 18px;
+      border-bottom: 0.5px solid var(--ac-border);
+    }
+    .brand-mark {
+      font-size: 20px;
+      line-height: 1;
+    }
+    .brand-name {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+    }
+
+    .nav-group { padding: 8px 8px 0; }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 13.5px;
+      font-weight: 400;
+      color: var(--ac-muted);
+      cursor: pointer;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      min-height: 40px;
+      transition: background 0.1s, color 0.1s;
+    }
+    .nav-item:hover { background: var(--ac-surface2); color: var(--ac-text); }
+    .nav-item.active { background: var(--ac-teal-light); color: var(--ac-teal); font-weight: 500; }
+    .nav-icon { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 12px 16px;
+      border-top: 0.5px solid var(--ac-border);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .conn-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--ac-hint);
+      flex-shrink: 0;
+    }
+    .conn-dot.live { background: var(--ac-teal); }
+    .conn-label { font-size: 11px; color: var(--ac-hint); }
+
+    /* ── Mobile top bar ───────────────────────────────────────────────────── */
+    .topbar {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      height: 52px;
+      background: var(--ac-surface);
+      border-bottom: 0.5px solid var(--ac-border);
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      flex-shrink: 0;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 8px; }
+    .topbar-brand { font-size: 15px; font-weight: 600; }
+    .topbar-right { display: flex; align-items: center; gap: 8px; }
+    .topbar-conn { display: flex; align-items: center; gap: 4px; }
+    .topbar-menu-btn {
+      background: none; border: none;
+      color: var(--ac-muted); font-size: 20px;
+      width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 8px;
+    }
+    .topbar-menu-btn:hover { background: var(--ac-surface2); }
+
+    /* ── Mobile drawer ────────────────────────────────────────────────────── */
+    .drawer-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.25); z-index: 40;
+    }
+    .drawer-overlay.open { display: block; }
+    .drawer {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: 216px; background: var(--ac-surface);
+      border-right: 0.5px solid var(--ac-border);
+      z-index: 41; overflow-y: auto;
+      transform: translateX(-100%);
+      transition: transform 0.2s ease;
+    }
+    .drawer.open { transform: translateX(0); }
+
+    /* ── Main scroll area ─────────────────────────────────────────────────── */
+    .main { flex: 1; overflow-y: auto; min-width: 0; }
+    .page { padding: 24px 28px 40px; max-width: 860px; }
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ── Page header row ──────────────────────────────────────────────────── */
+    .page-hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .page-hdr-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+    /* Status pill */
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 11px; border-radius: 20px;
+      font-size: 13px; font-weight: 500; white-space: nowrap;
+    }
+    .status-pill.running  { background: var(--ac-teal-light);  color: var(--ac-teal); }
+    .status-pill.paused   { background: var(--ac-amber-light); color: var(--ac-amber); }
+    .status-pill.error    { background: var(--ac-red-light);   color: var(--ac-red); }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+    /* Agent controls */
+    .hdr-controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .btn-agent {
+      padding: 6px 13px; border-radius: 8px;
+      font-size: 13px; font-weight: 500;
+      border: 0.5px solid var(--ac-border);
+      background: var(--ac-surface); color: var(--ac-muted);
+      min-height: 36px;
+      transition: border-color 0.1s, color 0.1s;
+    }
+    .btn-agent:hover { border-color: var(--ac-border-strong); color: var(--ac-text); }
+    .btn-agent.pause:hover  { color: var(--ac-amber); border-color: var(--ac-amber); }
+    .btn-agent.resume { color: var(--ac-teal); border-color: var(--ac-teal); }
+    .btn-agent.resume:hover { background: var(--ac-teal-light); }
+
+    /* Status subline */
+    .status-subline { font-size: 12px; color: var(--ac-muted); margin-bottom: 20px; margin-top: -12px; }
+
+    /* ── Undo banner ──────────────────────────────────────────────────────── */
+    .undo-banner {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 14px;
+      background: var(--ac-amber-light);
+      border: 0.5px solid var(--ac-amber);
+      border-left: 4px solid var(--ac-amber);
+      border-radius: 12px;
+      margin-bottom: 14px;
+    }
+    .undo-text { flex: 1; font-size: 13px; }
+    .undo-timer { font-size: 12px; color: var(--ac-hint); white-space: nowrap; flex-shrink: 0; }
+    .btn-undo {
+      padding: 5px 11px; border-radius: 8px; font-size: 13px; font-weight: 500;
+      background: var(--ac-surface); color: var(--ac-amber);
+      border: 0.5px solid var(--ac-amber);
+      min-height: 34px; flex-shrink: 0;
+    }
+    .btn-undo:hover { background: var(--ac-amber); color: #fff; border-color: var(--ac-amber); }
+    .btn-dismiss-undo {
+      background: none; border: none; color: var(--ac-hint);
+      font-size: 17px; width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 6px; flex-shrink: 0;
+    }
+    .btn-dismiss-undo:hover { color: var(--ac-muted); background: var(--ac-surface2); }
+
+    /* ── Card shell ───────────────────────────────────────────────────────── */
+    .card {
+      background: var(--ac-surface);
+      border: 0.5px solid var(--ac-border);
+      border-radius: 12px;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+    .card-hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 13px 16px;
+      border-bottom: 0.5px solid var(--ac-border);
+    }
+    .card-title { font-size: 13px; font-weight: 500; }
+    .card-meta  { font-size: 12px; color: var(--ac-hint); }
+    .card-action { font-size: 12px; color: var(--ac-teal); font-weight: 500; }
+    .card-action:hover { text-decoration: underline; }
+
+    /* ── Pending approvals ────────────────────────────────────────────────── */
+    .approvals-card {
+      background: var(--ac-surface);
+      border: 0.5px solid var(--ac-border);
+      border-left: 4px solid var(--ac-blue);
+      border-radius: 12px;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+    .approvals-hdr {
+      padding: 13px 16px;
+      font-size: 13px; font-weight: 500; color: var(--ac-blue);
+      border-bottom: 0.5px solid var(--ac-border);
+    }
+    /* Zero state */
+    .approvals-zero {
+      display: flex; align-items: center; gap: 9px;
+      padding: 14px 16px;
+      font-size: 13px; color: var(--ac-muted);
+    }
+    .approvals-zero-icon { font-size: 16px; }
+
+    /* ── Chat card ────────────────────────────────────────────────────────── */
+    .chat-card {
+      background: var(--ac-teal-light);
+      border: 0.5px solid var(--ac-teal);
+      border-radius: 12px;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+    .chat-card-body {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+    }
+    .chat-card-text { flex: 1; min-width: 0; }
+    .chat-card-label {
+      font-size: 13px; font-weight: 500; color: var(--ac-teal);
+      margin-bottom: 2px;
+    }
+    .chat-card-hint { font-size: 12px; color: var(--ac-muted); }
+    .chat-card-btns { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+    .btn-chat {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 16px; border-radius: 8px;
+      font-size: 13px; font-weight: 500;
+      background: var(--ac-teal); color: #fff;
+      border: none; white-space: nowrap;
+      min-height: 38px; min-width: 44px;
+      transition: opacity 0.1s;
+    }
+    .btn-chat:hover { opacity: 0.88; }
+    .chat-none {
+      padding: 14px 16px;
+      font-size: 13px; color: var(--ac-muted);
+    }
+
+    @media (max-width: 640px) {
+      .chat-card-body { flex-direction: column; align-items: flex-start; }
+      .chat-card-btns { width: 100%; }
+      .btn-chat { flex: 1; justify-content: center; }
+    }
+
+    /* ── Token burn widget ────────────────────────────────────────────────── */
+    .budget-body { padding: 14px 16px; }
+    .budget-sentence { font-size: 14px; color: var(--ac-text); margin-bottom: 10px; }
+    .budget-bar-track {
+      background: var(--ac-surface2); border-radius: 6px; height: 7px; overflow: hidden;
+    }
+    .budget-bar-fill {
+      height: 100%; border-radius: 6px; background: var(--ac-teal);
+      transition: width 0.4s ease; max-width: 100%;
+    }
+    .budget-bar-fill.warn { background: var(--ac-amber); }
+    .budget-bar-fill.over { background: var(--ac-red); }
+    .budget-hard-stop {
+      margin-top: 10px; padding: 9px 12px; border-radius: 8px;
+      background: var(--ac-red-light); font-size: 13px; color: var(--ac-red);
+    }
+    .budget-hard-stop a { text-decoration: underline; margin-left: 6px; }
+    /* STUB notice (dev-only, hidden in production) */
+    .stub-notice {
+      margin-top: 8px; font-size: 11px; color: var(--ac-hint);
+      font-style: italic;
+    }
+
+    /* ── Activity feed ────────────────────────────────────────────────────── */
+    .feed-empty {
+      padding: 28px 16px; text-align: center;
+      color: var(--ac-hint); font-size: 13px;
+    }
+    .feed-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 16px;
+      border-left: 4px solid transparent;
+      border-bottom: 0.5px solid var(--ac-border);
+    }
+    .feed-item:last-child { border-bottom: none; }
+    /* Left border + optional tint per outcome */
+    .feed-item.outcome-success  { border-left-color: var(--ac-teal); }
+    .feed-item.outcome-rejected { border-left-color: var(--ac-red);   background: var(--ac-red-light); }
+    .feed-item.outcome-error    { border-left-color: var(--ac-red);   background: var(--ac-red-light); }
+    .feed-item.outcome-undone   { border-left-color: var(--ac-amber); background: var(--ac-amber-light); }
+
+    .feed-body { flex: 1; min-width: 0; }
+    .feed-sentence {
+      font-size: 13px; color: var(--ac-text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .feed-detail {
+      font-size: 11.5px; color: var(--ac-muted); margin-top: 1px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .feed-right {
+      flex-shrink: 0; display: flex; flex-direction: column;
+      align-items: flex-end; gap: 3px;
+    }
+    .feed-time { font-size: 11px; color: var(--ac-hint); white-space: nowrap; }
+    .feed-badge {
+      font-size: 10.5px; font-weight: 500;
+      padding: 2px 7px; border-radius: 20px; white-space: nowrap;
+    }
+    .feed-badge.success  { background: var(--ac-teal-light);  color: var(--ac-teal); }
+    .feed-badge.rejected,
+    .feed-badge.error    { background: var(--ac-red-light);   color: var(--ac-red); }
+    .feed-badge.undone   { background: var(--ac-amber-light); color: var(--ac-amber); }
+
+    /* ── Recipes shortcut row ─────────────────────────────────────────────── */
+    .recipe-empty {
+      padding: 16px; font-size: 13px; color: var(--ac-hint);
+    }
+    .recipe-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; border-bottom: 0.5px solid var(--ac-border);
+    }
+    .recipe-item:last-child { border-bottom: none; }
+    .recipe-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ac-teal); flex-shrink: 0; }
+    .recipe-info { flex: 1; min-width: 0; }
+    .recipe-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .recipe-next { font-size: 12px; color: var(--ac-muted); }
+
+    /* ── Placeholder (other views) ────────────────────────────────────────── */
+    .placeholder { padding: 56px 32px; text-align: center; }
+    .placeholder-icon  { font-size: 30px; margin-bottom: 10px; }
+    .placeholder-title { font-size: 16px; font-weight: 500; color: var(--ac-muted); margin-bottom: 5px; }
+    .placeholder-desc  { font-size: 13px; color: var(--ac-hint); }
+
+    /* ── Responsive ───────────────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      .sidebar { display: none; }
+      .topbar  { display: flex; }
+
+      /* Stack the app vertically: topbar + scrollable main */
+      .app { flex-direction: column; }
+      .main { overflow-y: auto; }
+
+      .page { padding: 14px 14px 48px; }
+
+      /* Header: status + channel on one line, controls below on small screens */
+      .page-hdr { gap: 8px; }
+      .page-hdr-left { gap: 8px; }
+      /* Feed: hide detail line on narrow screens */
+      .feed-detail { display: none; }
+
+      /* Undo banner: tighter */
+      .undo-timer { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Sidebar (desktop) ──────────────────────────────────────────────── -->
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-mark">🛡</span>
+      <span class="brand-name">ArmorClaw</span>
+    </div>
+    <div class="nav-group" id="sidebar-nav"></div>
+    <div class="sidebar-footer">
+      <span class="conn-dot" id="conn-dot"></span>
+      <span class="conn-label" id="conn-label">Connecting…</span>
+    </div>
+  </nav>
+
+  <!-- ── Mobile top bar ────────────────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <span style="font-size:18px">🛡</span>
+      <span class="topbar-brand">ArmorClaw</span>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-conn">
+        <span class="conn-dot" id="conn-dot-mobile"></span>
+      </div>
+      <button class="topbar-menu-btn" onclick="openDrawer()" aria-label="Open menu">☰</button>
+    </div>
+  </header>
+
+  <!-- ── Mobile drawer ─────────────────────────────────────────────────── -->
+  <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+  <nav class="drawer" id="drawer">
+    <div class="sidebar-brand" style="justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span class="brand-mark">🛡</span>
+        <span class="brand-name">ArmorClaw</span>
+      </div>
+      <button onclick="closeDrawer()" style="background:none;border:none;font-size:20px;color:var(--ac-muted);cursor:pointer">×</button>
+    </div>
+    <div class="nav-group" id="drawer-nav"></div>
+  </nav>
+
+  <!-- ── Main ──────────────────────────────────────────────────────────── -->
+  <main class="main">
+    <div class="page">
+
+      <!-- ── HOME VIEW ─────────────────────────────────────────────────── -->
+      <div class="view active" id="view-home">
+
+        <!-- Page header: status pill + agent controls -->
+        <div class="page-hdr">
+          <div class="page-hdr-left">
+            <span class="status-pill running" id="status-pill">
+              <span class="status-dot"></span>
+              <span id="status-text">Running</span>
+            </span>
+          </div>
+          <div class="hdr-controls" id="agent-controls">
+            <button class="btn-agent pause" id="pause-btn"
+                    onclick="pauseAgent()" type="button">Pause</button>
+          </div>
+        </div>
+        <p class="status-subline" id="status-subline">Agent is active and ready</p>
+
+        <!-- Undo banner
+             TODO: wire to wrapper/undo/registry.ts
+             Hidden by default. Shows when an undoable action completes (60s window).
+             Amber left border signals a reversible in-progress state, not an error. -->
+        <div class="undo-banner" id="undo-banner" style="display:none">
+          <span class="undo-text" id="undo-desc">Action completed</span>
+          <span class="undo-timer" id="undo-timer"></span>
+          <button class="btn-undo" onclick="doUndo()" type="button">Undo</button>
+          <button class="btn-dismiss-undo" onclick="dismissUndo()"
+                  type="button" aria-label="Dismiss">×</button>
+        </div>
+
+        <!-- Pending approvals card
+             STUB: approval system not yet wired to skills.
+             When built, POST /api/approvals will add items here and skills
+             will await resolution before executing irreversible actions. -->
+        <div class="approvals-card">
+          <div class="approvals-hdr">Pending approvals</div>
+          <div id="approvals-body">
+            <div class="approvals-zero">
+              <span class="approvals-zero-icon">✓</span>
+              <span>Nothing waiting for you.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Open in channel card
+             Primary mobile action — full-width card between approvals and budget.
+             Hidden when no channels are configured. Populated by syncChannelBtns(). -->
+        <div class="chat-card" id="chat-card" style="display:none">
+          <div class="chat-card-body">
+            <div class="chat-card-text">
+              <div class="chat-card-label">Chat with ArmorClaw</div>
+              <div class="chat-card-hint">Open your connected messaging app to send instructions</div>
+            </div>
+            <div class="chat-card-btns" id="chat-card-btns"></div>
+          </div>
+        </div>
+
+        <!-- Token burn widget
+             TOKEN BURN STUB: displays real data from token-tracker/store.ts.
+             Values will be zero until the model adapter records TokenEvents.
+             Wire the model adapter in wrapper/lib/model-adapter.ts to populate. -->
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-title">Budget</span>
+            <a href="#" class="card-action"
+               onclick="showView('token-burn');return false">See breakdown →</a>
+          </div>
+          <div class="budget-body">
+            <p class="budget-sentence" id="budget-sentence">Loading…</p>
+            <div class="budget-bar-track">
+              <div class="budget-bar-fill" id="budget-bar" style="width:0%"></div>
+            </div>
+            <div id="budget-hard-stop" class="budget-hard-stop" style="display:none">
+              Budget reached — ArmorClaw has paused to avoid charges.
+              <a href="#" onclick="showView('settings');return false">Adjust in Settings →</a>
+            </div>
+            <!-- Stub notice: remove once model adapter is recording real TokenEvents -->
+            <p class="stub-notice">
+              Token tracking is active. Spend will appear here once the model adapter
+              records its first call.
+            </p>
+          </div>
+        </div>
+
+        <!-- Activity feed — translated from audit log NDJSON -->
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-title">Recent activity</span>
+            <span class="card-meta" id="feed-count"></span>
+          </div>
+          <div id="feed-list">
+            <div class="feed-empty">No activity recorded yet.</div>
+          </div>
+        </div>
+
+        <!-- Active recipes shortcut row
+             RECIPES STUB: always shows placeholder until wrapper/recipes/ is built. -->
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-title">Active recipes</span>
+            <a href="#" class="card-action"
+               onclick="showView('recipes');return false">Manage →</a>
+          </div>
+          <div id="recipes-list">
+            <!-- STUB: replace when wrapper/recipes/ is built -->
+            <div class="recipe-empty">No recipes active yet. Set one up in Manage →</div>
+          </div>
+        </div>
+
+      </div><!-- /view-home -->
+
+      <!-- ── PLACEHOLDER VIEWS ─────────────────────────────────────────── -->
+      <div class="view" id="view-skills">
+        <div class="placeholder">
+          <div class="placeholder-icon">⚡</div>
+          <div class="placeholder-title">Skills</div>
+          <div class="placeholder-desc">Bundled and user-created skills will appear here.</div>
+        </div>
+      </div>
+
+      <div class="view" id="view-recipes">
+        <div class="placeholder">
+          <div class="placeholder-icon">🗓</div>
+          <div class="placeholder-title">Recipes</div>
+          <div class="placeholder-desc">Scheduled automations will appear here once wrapper/recipes/ is built.</div>
+        </div>
+      </div>
+
+      <div class="view" id="view-security">
+        <div class="placeholder">
+          <div class="placeholder-icon">🔒</div>
+          <div class="placeholder-title">Security</div>
+          <div class="placeholder-desc">Injection filter stats, CVE alerts, and security events will appear here.</div>
+        </div>
+      </div>
+
+      <div class="view" id="view-token-burn">
+        <div class="placeholder">
+          <div class="placeholder-icon">📊</div>
+          <div class="placeholder-title">Token Burn</div>
+          <div class="placeholder-desc">Detailed spend, skill breakdown, and budget controls will appear here.</div>
+        </div>
+      </div>
+
+      <div class="view" id="view-settings">
+        <div class="placeholder">
+          <div class="placeholder-icon">⚙</div>
+          <div class="placeholder-title">Settings</div>
+          <div class="placeholder-desc">Model provider, sandbox directory, OAuth, and budget settings will appear here.</div>
+        </div>
+      </div>
+
+    </div><!-- /page -->
+  </main>
+</div><!-- /app -->
+
+<script>
+// ── Navigation ─────────────────────────────────────────────────────────────────
+
+const NAV = [
+  { id: 'home',       label: 'Home',       icon: '⊕' },
+  { id: 'skills',     label: 'Skills',     icon: '⚡' },
+  { id: 'recipes',    label: 'Recipes',    icon: '🗓' },
+  { id: 'security',   label: 'Security',   icon: '🔒' },
+  { id: 'token-burn', label: 'Token Burn', icon: '📊' },
+  { id: 'settings',   label: 'Settings',   icon: '⚙' },
+];
+
+let activeView = 'home';
+
+function buildNav(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = '';
+  for (const item of NAV) {
+    const btn = document.createElement('button');
+    btn.className = 'nav-item' + (item.id === activeView ? ' active' : '');
+    btn.dataset.view = item.id;
+    btn.innerHTML = `<span class="nav-icon">${item.icon}</span><span>${item.label}</span>`;
+    btn.onclick = () => { showView(item.id); closeDrawer(); };
+    el.appendChild(btn);
+  }
+}
+
+function showView(id) {
+  activeView = id;
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(`view-${id}`)?.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === id));
+}
+
+// ── Drawer (mobile) ─────────────────────────────────────────────────────────────
+function openDrawer() {
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawer-overlay').classList.add('open');
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawer-overlay').classList.remove('open');
+}
+
+// ── SSE ─────────────────────────────────────────────────────────────────────────
+let dashState = null;
+
+function connectSSE() {
+  const es = new EventSource('/api/events');
+  es.onopen  = () => setLive(true);
+  es.onerror = () => {
+    setLive(false);
+    es.close();
+    setTimeout(connectSSE, 5000);
+  };
+  es.onmessage = e => {
+    try { dashState = JSON.parse(e.data); syncUI(dashState); }
+    catch { /* ignore parse errors */ }
+  };
+}
+
+function setLive(on) {
+  ['conn-dot','conn-dot-mobile'].forEach(id => {
+    document.getElementById(id)?.classList.toggle('live', on);
+  });
+  const lbl = document.getElementById('conn-label');
+  if (lbl) lbl.textContent = on ? 'Live' : 'Reconnecting…';
+}
+
+// ── Sync ─────────────────────────────────────────────────────────────────────────
+function syncUI(s) {
+  syncStatus(s);
+  syncChannelBtns(s);
+  syncUndo(s);
+  syncBudget(s);
+  syncFeed(s);
+  syncRecipes(s);
+}
+
+// Agent status pill + subline + controls
+function syncStatus(s) {
+  const pill     = document.getElementById('status-pill');
+  const txt      = document.getElementById('status-text');
+  const subline  = document.getElementById('status-subline');
+  const controls = document.getElementById('agent-controls');
+  if (!pill) return;
+
+  const st = s.agentStatus;
+  pill.className = `status-pill ${st}`;
+  txt.textContent = st === 'running' ? 'Running' : st === 'paused' ? 'Paused' : 'Error';
+
+  if (subline) {
+    subline.textContent =
+      st === 'running' ? 'Agent is active and ready' :
+      st === 'paused'  ? 'Agent is paused — click Resume to continue' :
+                         'Agent encountered an error — check Security view';
+  }
+
+  if (controls) {
+    controls.innerHTML =
+      st === 'running'
+        ? `<button class="btn-agent pause" onclick="pauseAgent()" type="button">Pause</button>`
+        : st === 'paused'
+        ? `<button class="btn-agent resume" onclick="resumeAgent()" type="button">Resume</button>`
+        : '';
+  }
+}
+
+// "Open in [Channel]" buttons — full-width card between approvals and budget
+function syncChannelBtns(s) {
+  const card = document.getElementById('chat-card');
+  const btns = document.getElementById('chat-card-btns');
+  if (!card || !btns) return;
+  const channels = s.channels || [];
+  if (channels.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  btns.innerHTML = channels.map(ch =>
+    `<a href="${escAttr(ch.url)}" target="_blank" rel="noopener" class="btn-chat">
+       <span>${ch.icon}</span>
+       <span>Open in ${escHtml(ch.name)}</span>
+     </a>`
+  ).join('');
+}
+
+// Undo banner
+let undoDismissed = false;
+let undoTickerId  = null;
+
+function syncUndo(s) {
+  const banner = document.getElementById('undo-banner');
+  if (!banner) return;
+
+  if (!s.undo || undoDismissed) {
+    banner.style.display = 'none';
+    if (undoTickerId) { clearInterval(undoTickerId); undoTickerId = null; }
+    return;
+  }
+
+  banner.style.display = '';
+  const desc = document.getElementById('undo-desc');
+  if (desc) {
+    const labels = {
+      'email-draft': 'Email draft returned to pending',
+      'file-write':  'File change made',
+      'crm-write':   'CRM record updated',
+    };
+    desc.textContent =
+      `${labels[s.undo.actionType] || 'Action completed'} — ${s.undo.skill || 'unknown skill'}`;
+  }
+
+  if (undoTickerId) clearInterval(undoTickerId);
+  undoTickerId = setInterval(() => {
+    const timerEl = document.getElementById('undo-timer');
+    const ms = new Date(s.undo.expiresAt).getTime() - Date.now();
+    if (ms <= 0) {
+      if (banner) banner.style.display = 'none';
+      clearInterval(undoTickerId); undoTickerId = null;
+    } else if (timerEl) {
+      timerEl.textContent = `${Math.ceil(ms / 1000)}s`;
+    }
+  }, 500);
+}
+
+// Token burn widget
+function syncBudget(s) {
+  const sentence = document.getElementById('budget-sentence');
+  const bar      = document.getElementById('budget-bar');
+  const hardStop = document.getElementById('budget-hard-stop');
+  if (!sentence || !bar) return;
+
+  const b   = s.budget || { spentThisMonthUSD: 0, monthlyBudgetUSD: 20, percentUsed: 0, isHardStopped: false };
+  const pct = Math.min(b.percentUsed || 0, 100);
+
+  sentence.textContent =
+    `You've spent ${fmtUSD(b.spentThisMonthUSD)} of your ${fmtUSD(b.monthlyBudgetUSD)} budget this month.`;
+
+  bar.style.width = `${pct}%`;
+  bar.className   = 'budget-bar-fill' + (pct >= 100 ? ' over' : pct >= 80 ? ' warn' : '');
+
+  if (hardStop) hardStop.style.display = b.isHardStopped ? '' : 'none';
+}
+
+// Activity feed — translate audit log entries to plain English
+function syncFeed(s) {
+  const list  = document.getElementById('feed-list');
+  const count = document.getElementById('feed-count');
+  if (!list) return;
+
+  const entries = s.feed || [];
+  if (count) count.textContent = entries.length > 0 ? `${entries.length}` : '';
+
+  if (entries.length === 0) {
+    list.innerHTML = '<div class="feed-empty">No activity recorded yet.</div>';
+    return;
+  }
+
+  // Build skill display-name map from the registry
+  const names = {};
+  for (const sk of (s.skills || [])) names[sk.skillId] = sk.displayName;
+
+  list.innerHTML = entries.map(e => {
+    const outcome  = e.outcome || 'success';
+    const sentence = translateEntry(e, names);
+    const badge    = { success: 'Success', rejected: 'Blocked', error: 'Error', undone: 'Undone' }[outcome] || outcome;
+    // inputSummary is never shown — it contains raw log data / JSON that is
+    // not user-facing. The translated sentence is the only text displayed.
+    return `
+      <div class="feed-item outcome-${escHtml(outcome)}">
+        <div class="feed-body">
+          <div class="feed-sentence">${escHtml(sentence)}</div>
+        </div>
+        <div class="feed-right">
+          <span class="feed-time">${fmtTime(e.timestamp)}</span>
+          <span class="feed-badge ${escHtml(outcome)}">${badge}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/**
+ * Translate an audit log entry into a plain English sentence.
+ * Rules per CLAUDE.md:
+ *  - rejected + injectionFilter signals → "Blocked a suspicious instruction"
+ *  - success + skill name               → "Ran [display name]"
+ *  - error                              → "Agent encountered an error" (generic agent)
+ *                                         or "Something went wrong with [skill]"
+ *
+ * "main" / "Main" is the OpenClaw agent process name, not a skill. Any entry
+ * with skill === "main" (case-insensitive) is attributed to the agent, not a skill.
+ *
+ * inputSummary is intentionally NOT used here — it contains raw log data
+ * (JSON params, internal state) that must never be shown to the user.
+ */
+function translateEntry(e, skillNames) {
+  const outcome  = e.outcome || 'success';
+  const rawSkill = (e.skill || '').trim();
+
+  // "main" is the OpenClaw agent process — not a user-visible skill name
+  const isAgentProcess = rawSkill.toLowerCase() === 'main' || rawSkill === '';
+
+  const display = isAgentProcess
+    ? null
+    : (skillNames[rawSkill] || humaniseSkillName(rawSkill));
+
+  if (outcome === 'rejected') {
+    const isInjection =
+      rawSkill.toLowerCase().includes('injection') ||
+      rawSkill.toLowerCase().includes('filter');
+    return isInjection ? 'Blocked a suspicious instruction' : 'Blocked an unauthorised action';
+  }
+
+  if (outcome === 'error') {
+    return isAgentProcess
+      ? 'Agent encountered an error'
+      : `Something went wrong with ${display}`;
+  }
+
+  if (outcome === 'undone') {
+    return isAgentProcess ? 'Action undone' : `Undid: ${display}`;
+  }
+
+  // success
+  return isAgentProcess ? 'Agent ran a task' : `Ran ${display}`;
+}
+
+/** Convert a raw skill/tool name to something readable: "email_calendar" → "Email calendar" */
+function humaniseSkillName(raw) {
+  return raw
+    .replace(/[-_]/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Recipes shortcut row
+function syncRecipes(s) {
+  const list = document.getElementById('recipes-list');
+  if (!list) return;
+  const recipes = (s.recipes || []).slice(0, 3);
+  if (recipes.length === 0) return; // keep STUB content
+  list.innerHTML = recipes.map(r => `
+    <div class="recipe-item">
+      <span class="recipe-dot"></span>
+      <div class="recipe-info">
+        <div class="recipe-name">${escHtml(r.name)}</div>
+        <div class="recipe-next">Next: ${escHtml(r.nextRun || '—')}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ── Actions ─────────────────────────────────────────────────────────────────────
+async function pauseAgent()  { await fetch('/api/agent/pause',  { method: 'POST' }); }
+async function resumeAgent() { await fetch('/api/agent/resume', { method: 'POST' }); }
+
+async function doUndo() {
+  const r = await fetch('/api/undo', { method: 'POST' });
+  const d = await r.json().catch(() => ({}));
+  if (d.ok) { undoDismissed = true; document.getElementById('undo-banner').style.display = 'none'; }
+}
+function dismissUndo() {
+  undoDismissed = true;
+  document.getElementById('undo-banner').style.display = 'none';
+}
+
+// ── Formatters ──────────────────────────────────────────────────────────────────
+function fmtUSD(n) {
+  if (typeof n !== 'number') return '$0.00';
+  return n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(2)}`;
+}
+
+function fmtTime(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    const now = new Date();
+    const diffMs = now - d;
+    if (diffMs < 60_000)       return 'just now';
+    if (diffMs < 3_600_000)    return `${Math.floor(diffMs / 60_000)}m ago`;
+    if (diffMs < 86_400_000)   return `${Math.floor(diffMs / 3_600_000)}h ago`;
+    return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(d);
+  } catch { return ''; }
+}
+
+function escHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function escAttr(s) { return escHtml(s); }
+
+// ── Boot ────────────────────────────────────────────────────────────────────────
+buildNav('sidebar-nav');
+buildNav('drawer-nav');
+connectSSE();
+</script>
+</body>
+</html>
