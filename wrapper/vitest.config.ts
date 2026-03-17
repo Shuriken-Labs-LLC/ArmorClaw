@@ -25,8 +25,8 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov"],
       all: true,
-      include: ["security/**/*.ts"],
-      exclude: ["security/**/*.test.ts"],
+      include: ["security/**/*.ts", "lib/**/*.ts"],
+      exclude: ["security/**/*.test.ts", "lib/**/*.test.ts"],
       thresholds: {
         lines: 100,
         functions: 100,
