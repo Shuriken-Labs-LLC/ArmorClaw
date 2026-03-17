@@ -20,7 +20,17 @@ import { join } from "node:path";
 import express from "express";
 import { getAllSkills } from "../lib/skill-registry.ts";
 import type { AuditEntry } from "../security/audit-logger.ts";
-import { getBudgetStatus, getMonthTokens } from "../token-tracker/store.ts";
+import {
+  getBudgetStatus,
+  getDailyHistory,
+  getMonthBySkill,
+  getMonthTokens,
+  getRecentEvents,
+  getTodayTokens,
+  resumeFromHardStop,
+  setBudgetMonthlyUSD,
+} from "../token-tracker/store.ts";
+import type { DailyTotal, TokenEvent } from "../token-tracker/store.ts";
 import { getCurrentUndo, executeUndo } from "../undo/registry.ts";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -163,6 +173,73 @@ export function readRecentAuditEntries(limit = 20): AuditEntry[] {
   }
 }
 
+// ── Security stats ────────────────────────────────────────────────────────────
+
+export interface SecurityStats {
+  /** Injection filter is always active in ArmorClaw. */
+  injectionFilterActive: boolean;
+  /** Rejected entries in the audit log for today (UTC date). */
+  rejectionsToday: number;
+  /**
+   * Rejection counts per day for the last 7 days, oldest→newest.
+   * Index 0 = 6 days ago, index 6 = today.
+   */
+  sparkline7d: number[];
+  /** Gateway bind address — always 127.0.0.1 in ArmorClaw. */
+  gatewayHost: string;
+}
+
+/**
+ * Compute security stats from the full audit log.
+ * Reads all entries (not capped at 20) to build the 7-day sparkline.
+ * Never throws — returns safe defaults on any I/O error.
+ */
+export function getSecurityStats(): SecurityStats {
+  try {
+    const raw = readFileSync(auditLogPath(), "utf-8");
+    const entries: AuditEntry[] = [];
+    for (const line of raw.split("\n")) {
+      if (!line.trim()) {
+        continue;
+      }
+      try {
+        entries.push(JSON.parse(line) as AuditEntry);
+      } catch {
+        /* skip */
+      }
+    }
+
+    const now = new Date();
+    const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+
+    const sparkline7d = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(now);
+      d.setUTCDate(d.getUTCDate() - (6 - i));
+      const key = dayKey(d);
+      return entries.filter(
+        (e) =>
+          e.outcome === "rejected" &&
+          typeof e.timestamp === "string" &&
+          e.timestamp.slice(0, 10) === key,
+      ).length;
+    });
+
+    return {
+      injectionFilterActive: true,
+      rejectionsToday: sparkline7d[6],
+      sparkline7d,
+      gatewayHost: "127.0.0.1",
+    };
+  } catch {
+    return {
+      injectionFilterActive: true,
+      rejectionsToday: 0,
+      sparkline7d: [0, 0, 0, 0, 0, 0, 0],
+      gatewayHost: "127.0.0.1",
+    };
+  }
+}
+
 // ── Agent status ──────────────────────────────────────────────────────────────
 
 export type AgentStatus = "running" | "paused" | "error";
@@ -234,6 +311,15 @@ export interface DashboardSnapshot {
   skills: ReturnType<typeof getAllSkills>;
   // RECIPES STUB: always empty until wrapper/recipes/ is built
   recipes: never[];
+  security: SecurityStats;
+  tokenBurn: {
+    todayTokens: ReturnType<typeof getTodayTokens>;
+    monthBySkill: Record<string, number>;
+    /** 30-day daily history, oldest→newest. */
+    dailyHistory30: DailyTotal[];
+    /** Last 50 token events, newest-first. */
+    recentEvents: TokenEvent[];
+  };
   serverTime: string;
 }
 
@@ -265,6 +351,13 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
     feed: readRecentAuditEntries(20),
     skills: getAllSkills(),
     recipes: [], // STUB
+    security: getSecurityStats(),
+    tokenBurn: {
+      todayTokens: getTodayTokens(),
+      monthBySkill: getMonthBySkill(),
+      dailyHistory30: getDailyHistory(30),
+      recentEvents: getRecentEvents(50),
+    },
     serverTime: new Date().toISOString(),
   };
 }
@@ -328,6 +421,28 @@ export function createApp(): express.Application {
 
   app.post("/api/agent/resume", (_req, res) => {
     setAgentStatus("running");
+    notifyListeners();
+    res.json({ ok: true });
+  });
+
+  app.post("/api/budget", (req, res) => {
+    const { monthlyBudgetUSD } = req.body as { monthlyBudgetUSD?: unknown };
+    if (typeof monthlyBudgetUSD !== "number" || monthlyBudgetUSD <= 0) {
+      res.status(422).json({ ok: false, message: "Budget must be a positive number" });
+      return;
+    }
+    try {
+      setBudgetMonthlyUSD(monthlyBudgetUSD);
+    } catch (err) {
+      res.status(422).json({ ok: false, message: String(err) });
+      return;
+    }
+    notifyListeners();
+    res.json({ ok: true });
+  });
+
+  app.post("/api/budget/resume", (_req, res) => {
+    resumeFromHardStop();
     notifyListeners();
     res.json({ ok: true });
   });

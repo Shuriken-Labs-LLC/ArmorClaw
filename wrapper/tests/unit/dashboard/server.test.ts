@@ -21,6 +21,16 @@ vi.mock("../../../token-tracker/store.ts", () => ({
     totalOutputTokens: 400,
     estimatedCostUSD: 4,
   })),
+  getTodayTokens: vi.fn(() => ({
+    totalInputTokens: 100,
+    totalOutputTokens: 50,
+    estimatedCostUSD: 0.5,
+  })),
+  getMonthBySkill: vi.fn(() => ({})),
+  getDailyHistory: vi.fn(() => []),
+  getRecentEvents: vi.fn(() => []),
+  setBudgetMonthlyUSD: vi.fn(),
+  resumeFromHardStop: vi.fn(),
 }));
 
 vi.mock("../../../undo/registry.ts", () => ({
@@ -43,6 +53,7 @@ import {
   clearDashboardStateForTesting,
   getDashboardSnapshot,
   getAgentStatus,
+  getSecurityStats,
   getPendingApprovals,
   notifyListeners,
   onDashboardChange,
@@ -265,6 +276,81 @@ describe("readRecentAuditEntries", () => {
   });
 });
 
+// ── Security stats ────────────────────────────────────────────────────────────
+
+describe("getSecurityStats", () => {
+  const mkMock = (content: string) =>
+    vi.mocked(readFileSync).mockImplementation((path: unknown) => {
+      if (String(path).endsWith("audit.log")) {
+        return content;
+      }
+      throw new Error("ENOENT");
+    });
+
+  it("returns safe defaults when audit log is absent", () => {
+    vi.mocked(readFileSync).mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
+    const s = getSecurityStats();
+    expect(s.injectionFilterActive).toBe(true);
+    expect(s.rejectionsToday).toBe(0);
+    expect(s.sparkline7d).toHaveLength(7);
+    expect(s.sparkline7d.every((n) => n === 0)).toBe(true);
+    expect(s.gatewayHost).toBe("127.0.0.1");
+  });
+
+  it("counts only rejected entries for today in rejectionsToday", () => {
+    const todayISO = new Date().toISOString();
+    const rejected = {
+      timestamp: todayISO,
+      skill: "filter",
+      permissionsUsed: [],
+      inputSummary: "",
+      outcome: "rejected",
+      durationMs: 1,
+    };
+    const success = {
+      timestamp: todayISO,
+      skill: "a",
+      permissionsUsed: [],
+      inputSummary: "",
+      outcome: "success",
+      durationMs: 1,
+    };
+    mkMock(`${JSON.stringify(rejected)}\n${JSON.stringify(success)}\n`);
+    expect(getSecurityStats().rejectionsToday).toBe(1);
+  });
+
+  it("sparkline7d has 7 elements, last element equals rejectionsToday", () => {
+    const todayISO = new Date().toISOString();
+    const entry = {
+      timestamp: todayISO,
+      skill: "f",
+      permissionsUsed: [],
+      inputSummary: "",
+      outcome: "rejected",
+      durationMs: 1,
+    };
+    mkMock(`${JSON.stringify(entry)}\n`);
+    const s = getSecurityStats();
+    expect(s.sparkline7d).toHaveLength(7);
+    expect(s.sparkline7d[6]).toBe(s.rejectionsToday);
+  });
+
+  it("skips malformed audit lines without throwing", () => {
+    mkMock("{bad\n");
+    expect(() => getSecurityStats()).not.toThrow();
+    expect(getSecurityStats().rejectionsToday).toBe(0);
+  });
+
+  it("injectionFilterActive is always true", () => {
+    vi.mocked(readFileSync).mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
+    expect(getSecurityStats().injectionFilterActive).toBe(true);
+  });
+});
+
 // ── Dashboard snapshot ────────────────────────────────────────────────────────
 
 describe("getDashboardSnapshot", () => {
@@ -288,6 +374,7 @@ describe("getDashboardSnapshot", () => {
     expect(snap).toHaveProperty("feed");
     expect(snap).toHaveProperty("skills");
     expect(snap).toHaveProperty("recipes");
+    expect(snap).toHaveProperty("security");
     expect(snap).toHaveProperty("serverTime");
   });
 

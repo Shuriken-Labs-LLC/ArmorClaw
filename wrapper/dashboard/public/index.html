@@ -390,6 +390,264 @@
     .recipe-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .recipe-next { font-size: 12px; color: var(--ac-muted); }
 
+    /* ── Token burn view ──────────────────────────────────────────────────── */
+
+    /* Metric cards row */
+    .metric-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      padding: 14px 16px;
+    }
+    .metric-card {
+      background: var(--ac-surface2);
+      border-radius: 8px;
+      padding: 12px 13px;
+    }
+    .metric-val {
+      font-size: 20px; font-weight: 600;
+      color: var(--ac-text); line-height: 1.15;
+    }
+    .metric-val.warn { color: var(--ac-amber); }
+    .metric-val.over { color: var(--ac-red); }
+    .metric-lbl { font-size: 11.5px; color: var(--ac-muted); margin-top: 3px; }
+    .metric-sub { font-size: 11px; color: var(--ac-hint); margin-top: 2px; }
+
+    /* Daily bar chart */
+    .chart-wrap { padding: 4px 16px 14px; }
+    .chart-lbl  { font-size: 11.5px; color: var(--ac-muted); margin-bottom: 6px; }
+    .chart-bars {
+      display: flex; align-items: flex-end;
+      gap: 2px; height: 72px;
+    }
+    .chart-bar {
+      flex: 1; border-radius: 2px 2px 0 0;
+      background: var(--ac-teal-light);
+      min-height: 2px;
+      transition: background 0.1s;
+      cursor: default;
+    }
+    .chart-bar.has-spend { background: var(--ac-teal); }
+    .chart-bar:hover { opacity: 0.75; }
+    .chart-xlabels {
+      display: flex; gap: 2px;
+      margin-top: 3px;
+    }
+    .chart-xlabel {
+      flex: 1; text-align: center;
+      font-size: 8.5px; color: var(--ac-hint);
+      overflow: hidden;
+    }
+
+    /* Skill breakdown */
+    .skill-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 16px;
+      border-bottom: 0.5px solid var(--ac-border);
+    }
+    .skill-row:last-child { border-bottom: none; }
+    .skill-name {
+      font-size: 13px; width: 148px; flex-shrink: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .skill-bar-track {
+      flex: 1; height: 6px;
+      background: var(--ac-surface2);
+      border-radius: 3px; overflow: hidden;
+    }
+    .skill-bar-fill {
+      height: 100%; border-radius: 3px;
+      background: var(--ac-teal);
+    }
+    .skill-cost {
+      font-size: 12.5px; font-weight: 500;
+      width: 56px; text-align: right; flex-shrink: 0;
+    }
+    .skill-empty { padding: 14px 16px; font-size: 13px; color: var(--ac-hint); }
+
+    /* Events table */
+    .events-wrap { overflow-x: auto; }
+    .events-table {
+      width: 100%; border-collapse: collapse;
+      font-size: 12.5px;
+    }
+    .events-table thead th {
+      font-size: 11.5px; font-weight: 500; color: var(--ac-muted);
+      text-align: left; padding: 8px 16px;
+      border-bottom: 0.5px solid var(--ac-border);
+      white-space: nowrap;
+    }
+    .events-table tbody td {
+      padding: 8px 16px;
+      border-bottom: 0.5px solid var(--ac-border);
+      color: var(--ac-text);
+    }
+    .events-table tbody tr:last-child td { border-bottom: none; }
+    .events-table tbody tr:hover td { background: var(--ac-surface2); }
+    .col-hide-mobile { /* hidden on mobile */ }
+    .events-empty { padding: 20px 16px; font-size: 13px; color: var(--ac-hint); }
+
+    /* Budget editor */
+    .budget-editor {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px; flex-wrap: wrap;
+    }
+    .budget-editor-lbl { font-size: 13px; color: var(--ac-muted); flex-shrink: 0; }
+    .budget-input-wrap {
+      display: flex; align-items: center; gap: 6px;
+    }
+    .budget-prefix { font-size: 15px; color: var(--ac-muted); }
+    .budget-input {
+      font-size: 15px; font-weight: 600;
+      width: 80px; padding: 5px 8px;
+      border: 0.5px solid var(--ac-border);
+      border-radius: 8px;
+      background: var(--ac-surface);
+      color: var(--ac-text);
+      font-family: inherit;
+    }
+    .budget-input:focus { outline: none; border-color: var(--ac-teal); }
+    .btn-save-budget {
+      padding: 6px 13px; border-radius: 8px;
+      font-size: 13px; font-weight: 500;
+      background: var(--ac-teal); color: #fff;
+      border: none; min-height: 34px;
+      transition: opacity 0.1s;
+    }
+    .btn-save-budget:hover { opacity: 0.88; }
+    .btn-resume-budget {
+      padding: 6px 13px; border-radius: 8px;
+      font-size: 13px; font-weight: 500;
+      background: var(--ac-surface); color: var(--ac-red);
+      border: 0.5px solid var(--ac-red);
+      min-height: 34px;
+    }
+    .btn-resume-budget:hover { background: var(--ac-red-light); }
+    .budget-save-msg {
+      font-size: 12px; color: var(--ac-teal);
+    }
+
+    /* Breakdown toggle */
+    .tb-toggle {
+      display: block;
+      padding: 2px 0 12px;
+      font-size: 13px; color: var(--ac-teal); font-weight: 500;
+      text-align: center;
+      background: none; border: none; width: 100%;
+      cursor: pointer;
+    }
+    .tb-toggle:hover { text-decoration: underline; }
+    .tb-breakdown { display: none; }
+    .tb-breakdown.open { display: block; }
+
+    /* Stub notice */
+    .tb-stub {
+      margin: 6px 0 2px;
+      padding: 10px 12px;
+      background: var(--ac-surface2);
+      border-radius: 8px;
+      font-size: 12px; color: var(--ac-hint); font-style: italic;
+    }
+
+    @media (max-width: 640px) {
+      .metric-cards { grid-template-columns: 1fr; gap: 8px; padding: 12px; }
+      .col-hide-mobile { display: none; }
+      .skill-name { width: 110px; }
+      .skill-cost { width: 44px; font-size: 12px; }
+    }
+
+    /* ── Security view ────────────────────────────────────────────────────── */
+
+    /* Stat tiles row */
+    .sec-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 14px 16px;
+    }
+    .sec-stat {
+      background: var(--ac-surface2);
+      border-radius: 8px;
+      padding: 11px 13px;
+    }
+    .sec-stat-val {
+      font-size: 22px; font-weight: 600;
+      color: var(--ac-text); line-height: 1.1;
+    }
+    .sec-stat-val.danger { color: var(--ac-red); }
+    .sec-stat-lbl { font-size: 11.5px; color: var(--ac-muted); margin-top: 2px; }
+
+    /* 7-day sparkline */
+    .sparkline-wrap {
+      padding: 0 16px 14px;
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    .sparkline-lbl { font-size: 11.5px; color: var(--ac-muted); }
+    .sparkline {
+      display: flex; align-items: flex-end;
+      gap: 4px; height: 36px;
+    }
+    .spark-bar {
+      flex: 1; border-radius: 3px 3px 0 0;
+      background: var(--ac-red-light);
+      min-height: 4px;
+      transition: height 0.3s;
+    }
+    .spark-bar.has-value { background: var(--ac-red); }
+    .spark-days {
+      display: flex; gap: 4px;
+    }
+    .spark-day {
+      flex: 1; text-align: center;
+      font-size: 10px; color: var(--ac-hint);
+    }
+
+    /* Filter status badge */
+    .filter-status {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 20px;
+      font-size: 12px; font-weight: 500;
+    }
+    .filter-status.active { background: var(--ac-teal-light); color: var(--ac-teal); }
+    .filter-status.inactive { background: var(--ac-red-light); color: var(--ac-red); }
+    .filter-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    /* Gateway card */
+    .gateway-row {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 14px 16px;
+    }
+    .gateway-icon {
+      font-size: 18px; flex-shrink: 0; margin-top: 1px;
+    }
+    .gateway-text { flex: 1; min-width: 0; }
+    .gateway-title { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+    .gateway-title.secure { color: var(--ac-teal); }
+    .gateway-title.insecure { color: var(--ac-red); }
+    .gateway-detail { font-size: 12px; color: var(--ac-muted); }
+
+    /* Permissions table */
+    .perm-row {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 16px;
+      border-bottom: 0.5px solid var(--ac-border);
+    }
+    .perm-row:last-child { border-bottom: none; }
+    .perm-skill { font-size: 13px; font-weight: 500; flex-shrink: 0; width: 160px; }
+    .perm-list { font-size: 12px; color: var(--ac-muted); line-height: 1.6; }
+    .perm-badge {
+      display: inline-block; font-size: 11px; font-weight: 500;
+      padding: 2px 7px; border-radius: 20px; margin: 1px 2px 1px 0;
+      background: var(--ac-surface2); color: var(--ac-muted);
+    }
+    .perm-empty { padding: 14px 16px; font-size: 13px; color: var(--ac-hint); }
+
+    @media (max-width: 640px) {
+      .sec-stats { grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px; }
+      .perm-row { flex-direction: column; gap: 4px; }
+      .perm-skill { width: auto; }
+    }
+
     /* ── Placeholder (other views) ────────────────────────────────────────── */
     .placeholder { padding: 56px 32px; text-align: center; }
     .placeholder-icon  { font-size: 30px; margin-bottom: 10px; }
@@ -530,7 +788,7 @@
           <div class="card-hdr">
             <span class="card-title">Budget</span>
             <a href="#" class="card-action"
-               onclick="showView('token-burn');return false">See breakdown →</a>
+               onclick="showView('token-burn');openTbBreakdown();return false">See breakdown →</a>
           </div>
           <div class="budget-body">
             <p class="budget-sentence" id="budget-sentence">Loading…</p>
@@ -594,19 +852,197 @@
       </div>
 
       <div class="view" id="view-security">
-        <div class="placeholder">
-          <div class="placeholder-icon">🔒</div>
-          <div class="placeholder-title">Security</div>
-          <div class="placeholder-desc">Injection filter stats, CVE alerts, and security events will appear here.</div>
+
+        <!-- Injection filter status -->
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-title">Injection filter</span>
+            <span class="filter-status active" id="filter-status-badge">
+              <span class="filter-dot"></span>
+              <span id="filter-status-text">Active</span>
+            </span>
+          </div>
+          <div class="sec-stats">
+            <div class="sec-stat">
+              <div class="sec-stat-val" id="sec-rejections-today">—</div>
+              <div class="sec-stat-lbl">Rejections today</div>
+            </div>
+            <div class="sec-stat">
+              <div class="sec-stat-val" id="sec-rejections-week">—</div>
+              <div class="sec-stat-lbl">Rejections this week</div>
+            </div>
+          </div>
+          <div class="sparkline-wrap">
+            <div class="sparkline-lbl">Last 7 days</div>
+            <div class="sparkline" id="sparkline"></div>
+            <div class="spark-days" id="spark-days"></div>
+          </div>
         </div>
+
+        <!-- Gateway status -->
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-title">Gateway</span>
+          </div>
+          <div class="gateway-row" id="gateway-row">
+            <span class="gateway-icon">🔒</span>
+            <div class="gateway-text">
+              <div class="gateway-title secure" id="gateway-title">Secure — localhost only</div>
+              <div class="gateway-detail" id="gateway-detail">
+                Bound to 127.0.0.1. Remote access via Tailscale URL only — never exposed to the internet.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Skill permissions — plain-English summary -->
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-title">Skill permissions</span>
+            <span class="card-meta" id="perm-count"></span>
+          </div>
+          <div id="perm-list">
+            <div class="perm-empty">No skills registered yet.</div>
+          </div>
+        </div>
+
+        <!-- Recent security events — rejected + error entries from audit log -->
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-title">Security events</span>
+            <span class="card-meta" id="sec-event-count"></span>
+          </div>
+          <div id="sec-feed-list">
+            <div class="feed-empty">No security events in recent activity.</div>
+          </div>
+        </div>
+
       </div>
 
       <div class="view" id="view-token-burn">
-        <div class="placeholder">
-          <div class="placeholder-icon">📊</div>
-          <div class="placeholder-title">Token Burn</div>
-          <div class="placeholder-desc">Detailed spend, skill breakdown, and budget controls will appear here.</div>
+
+        <!-- Simple summary card (always visible at top of Token Burn view) -->
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-title">Budget</span>
+          </div>
+          <div class="budget-body">
+            <p class="budget-sentence" id="tb-sentence">Loading…</p>
+            <div class="budget-bar-track">
+              <div class="budget-bar-fill" id="tb-bar" style="width:0%"></div>
+            </div>
+            <div id="tb-hard-stop" class="budget-hard-stop" style="display:none">
+              Budget reached — ArmorClaw has paused.
+              <button class="btn-resume-budget" onclick="resumeBudget()" style="margin-left:8px" type="button">
+                Resume
+              </button>
+            </div>
+            <!-- TOKEN BURN STUB: zeros until model adapter records TokenEvents -->
+            <p class="tb-stub">
+              Token tracking is active — spend will appear here once your agent starts running tasks.
+            </p>
+          </div>
+          <!-- Toggle to show/hide full breakdown -->
+          <button class="tb-toggle" id="tb-toggle-btn"
+                  onclick="toggleTbBreakdown()" type="button">
+            See full breakdown ↓
+          </button>
         </div>
+
+        <!-- Full breakdown — hidden by default, toggled by button above -->
+        <div class="tb-breakdown" id="tb-breakdown">
+
+          <!-- Three metric cards: Today | This month | Budget remaining -->
+          <div class="card">
+            <div class="card-hdr">
+              <span class="card-title">Usage</span>
+            </div>
+            <div class="metric-cards">
+              <div class="metric-card">
+                <div class="metric-val" id="tb-today-cost">$0.00</div>
+                <div class="metric-lbl">Today</div>
+                <div class="metric-sub" id="tb-today-tokens">0 tokens</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-val" id="tb-month-cost">$0.00</div>
+                <div class="metric-lbl">This month</div>
+                <div class="metric-sub" id="tb-month-pct">0% of budget</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-val" id="tb-remaining">$20.00</div>
+                <div class="metric-lbl">Budget remaining</div>
+                <div class="metric-sub" id="tb-days-left"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Daily spend bar chart — 30 days desktop, 14 days mobile -->
+          <div class="card">
+            <div class="card-hdr">
+              <span class="card-title">Daily spend</span>
+              <span class="card-meta" id="tb-chart-range"></span>
+            </div>
+            <div class="chart-wrap">
+              <div class="chart-bars" id="tb-chart-bars"></div>
+              <div class="chart-xlabels" id="tb-chart-labels"></div>
+            </div>
+          </div>
+
+          <!-- Spend by skill — horizontal bar chart -->
+          <div class="card">
+            <div class="card-hdr">
+              <span class="card-title">Spend by skill</span>
+              <span class="card-meta">This month</span>
+            </div>
+            <div id="tb-skill-rows">
+              <div class="skill-empty">No spend recorded yet.</div>
+            </div>
+          </div>
+
+          <!-- Recent token events table — last 50 -->
+          <div class="card">
+            <div class="card-hdr">
+              <span class="card-title">Recent events</span>
+              <span class="card-meta" id="tb-events-count"></span>
+            </div>
+            <div class="events-wrap">
+              <table class="events-table" id="tb-events-table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Skill</th>
+                    <th class="col-hide-mobile">Model</th>
+                    <th class="col-hide-mobile">Tokens</th>
+                    <th>Cost</th>
+                  </tr>
+                </thead>
+                <tbody id="tb-events-body">
+                  <tr><td colspan="5" class="events-empty">No token events recorded yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Inline budget editor -->
+          <div class="card">
+            <div class="card-hdr">
+              <span class="card-title">Monthly budget</span>
+            </div>
+            <div class="budget-editor">
+              <span class="budget-editor-lbl">Monthly limit</span>
+              <div class="budget-input-wrap">
+                <span class="budget-prefix">$</span>
+                <input class="budget-input" id="budget-input"
+                       type="number" min="1" step="1"
+                       value="20" aria-label="Monthly budget in USD">
+              </div>
+              <button class="btn-save-budget" onclick="saveBudget()" type="button">Save</button>
+              <span class="budget-save-msg" id="budget-save-msg" style="display:none">Saved ✓</span>
+            </div>
+          </div>
+
+        </div><!-- /tb-breakdown -->
+
       </div>
 
       <div class="view" id="view-settings">
@@ -699,6 +1135,8 @@ function syncUI(s) {
   syncBudget(s);
   syncFeed(s);
   syncRecipes(s);
+  syncTokenBurn(s);
+  syncSecurity(s);
 }
 
 // Agent status pill + subline + controls
@@ -909,6 +1347,331 @@ function syncRecipes(s) {
         <div class="recipe-next">Next: ${escHtml(r.nextRun || '—')}</div>
       </div>
     </div>`).join('');
+}
+
+// ── Token Burn view ─────────────────────────────────────────────────────────────
+
+let tbBreakdownOpen = false;
+
+function openTbBreakdown() {
+  tbBreakdownOpen = true;
+  const el = document.getElementById('tb-breakdown');
+  const btn = document.getElementById('tb-toggle-btn');
+  if (el) el.classList.add('open');
+  if (btn) btn.textContent = 'Hide breakdown \u2191';
+}
+
+function toggleTbBreakdown() {
+  tbBreakdownOpen = !tbBreakdownOpen;
+  const el  = document.getElementById('tb-breakdown');
+  const btn = document.getElementById('tb-toggle-btn');
+  if (el) el.classList.toggle('open', tbBreakdownOpen);
+  if (btn) btn.textContent = tbBreakdownOpen ? 'Hide breakdown \u2191' : 'See full breakdown \u2193';
+}
+
+function syncTokenBurn(s) {
+  const b  = s.budget || { spentThisMonthUSD: 0, monthlyBudgetUSD: 20, percentUsed: 0, isHardStopped: false };
+  const tb = s.tokenBurn || { todayTokens: {}, monthBySkill: {}, dailyHistory30: [], recentEvents: [] };
+  const today  = tb.todayTokens || { totalInputTokens: 0, totalOutputTokens: 0, estimatedCostUSD: 0 };
+  const skills = s.skills || [];
+
+  // ── Summary card ──
+  const sent = document.getElementById('tb-sentence');
+  const bar  = document.getElementById('tb-bar');
+  const hs   = document.getElementById('tb-hard-stop');
+  if (sent) sent.textContent =
+    'You\u2019ve spent ' + fmtUSD(b.spentThisMonthUSD) + ' of your ' + fmtUSD(b.monthlyBudgetUSD) + ' budget this month.';
+  if (bar) {
+    const pct = Math.min(b.percentUsed || 0, 100);
+    bar.style.width = pct + '%';
+    bar.className = 'budget-bar-fill' + (pct >= 100 ? ' over' : pct >= 80 ? ' warn' : '');
+  }
+  if (hs) hs.style.display = b.isHardStopped ? '' : 'none';
+
+  // ── Metric cards ──
+  const todayCostEl = document.getElementById('tb-today-cost');
+  const todayTokEl  = document.getElementById('tb-today-tokens');
+  const monthCostEl = document.getElementById('tb-month-cost');
+  const monthPctEl  = document.getElementById('tb-month-pct');
+  const remainingEl = document.getElementById('tb-remaining');
+  const daysLeftEl  = document.getElementById('tb-days-left');
+  const budgetInput = document.getElementById('budget-input');
+
+  if (todayCostEl) todayCostEl.textContent = fmtUSD(today.estimatedCostUSD);
+  if (todayTokEl) {
+    const n = (today.totalInputTokens || 0) + (today.totalOutputTokens || 0);
+    todayTokEl.textContent = n.toLocaleString() + ' token' + (n !== 1 ? 's' : '');
+  }
+  if (monthCostEl) {
+    monthCostEl.textContent = fmtUSD(b.spentThisMonthUSD);
+    const pct = b.percentUsed || 0;
+    monthCostEl.className = 'metric-val' + (pct >= 100 ? ' over' : pct >= 80 ? ' warn' : '');
+  }
+  if (monthPctEl) {
+    monthPctEl.textContent = Math.round(b.percentUsed || 0) + '% of ' + fmtUSD(b.monthlyBudgetUSD);
+  }
+  if (remainingEl) {
+    const rem = Math.max(0, b.monthlyBudgetUSD - b.spentThisMonthUSD);
+    remainingEl.textContent = fmtUSD(rem);
+    remainingEl.className = 'metric-val' + (rem <= 0 ? ' over' : rem < b.monthlyBudgetUSD * 0.2 ? ' warn' : '');
+  }
+  if (daysLeftEl) {
+    const now  = new Date();
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const dl   = last.getDate() - now.getDate() + 1;
+    daysLeftEl.textContent = dl + ' day' + (dl !== 1 ? 's' : '') + ' left this month';
+  }
+  if (budgetInput && document.activeElement !== budgetInput) {
+    budgetInput.value = String(b.monthlyBudgetUSD);
+  }
+
+  // ── Daily bar chart ──
+  const chartBars   = document.getElementById('tb-chart-bars');
+  const chartLabels = document.getElementById('tb-chart-labels');
+  const chartRange  = document.getElementById('tb-chart-range');
+  if (chartBars && chartLabels && tb.dailyHistory30) {
+    const isMobile = window.innerWidth <= 640;
+    const count    = isMobile ? 14 : 30;
+    const history  = tb.dailyHistory30.slice(-count);
+    const maxCost  = Math.max.apply(null, history.map(function(d) { return d.estimatedCostUSD; }).concat([0.001]));
+    if (chartRange) chartRange.textContent = 'Last ' + count + ' days';
+
+    chartBars.innerHTML = history.map(function(d) {
+      const pct = d.estimatedCostUSD / maxCost;
+      const h   = Math.max(2, Math.round(pct * 72));
+      const lbl = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(d.date + 'T12:00:00'));
+      return '<div class="chart-bar' + (d.estimatedCostUSD > 0 ? ' has-spend' : '') + '"' +
+             ' style="height:' + h + 'px"' +
+             ' title="' + escAttr(lbl) + ': ' + fmtUSD(d.estimatedCostUSD) + '"></div>';
+    }).join('');
+
+    const step = isMobile ? 3 : 7;
+    chartLabels.innerHTML = history.map(function(d, i) {
+      const text = i % step === 0
+        ? new Intl.DateTimeFormat(undefined, { month: 'numeric', day: 'numeric' }).format(new Date(d.date + 'T12:00:00'))
+        : '';
+      return '<div class="chart-xlabel">' + escHtml(text) + '</div>';
+    }).join('');
+  }
+
+  // ── Skill breakdown ──
+  const skillRows = document.getElementById('tb-skill-rows');
+  if (skillRows) {
+    const bySkill = tb.monthBySkill || {};
+    const entries = Object.keys(bySkill).map(function(k) { return [k, bySkill[k]]; })
+                          .sort(function(a, b) { return b[1] - a[1]; });
+    if (entries.length === 0) {
+      skillRows.innerHTML = '<div class="skill-empty">No spend recorded yet.</div>';
+    } else {
+      const names = {};
+      for (const sk of skills) names[sk.skillId] = sk.displayName;
+      const maxCost = Math.max.apply(null, entries.map(function(e) { return e[1]; }));
+      skillRows.innerHTML = entries.map(function(entry) {
+        const skillId = entry[0];
+        const cost    = entry[1];
+        const name    = names[skillId] || humaniseSkillName(skillId);
+        const pct     = Math.round((cost / maxCost) * 100);
+        return '<div class="skill-row">' +
+          '<div class="skill-name" title="' + escAttr(skillId) + '">' + escHtml(name) + '</div>' +
+          '<div class="skill-bar-track"><div class="skill-bar-fill" style="width:' + pct + '%"></div></div>' +
+          '<div class="skill-cost">' + fmtUSD(cost) + '</div>' +
+          '</div>';
+      }).join('');
+    }
+  }
+
+  // ── Events table ──
+  const tbody    = document.getElementById('tb-events-body');
+  const evtCount = document.getElementById('tb-events-count');
+  if (tbody) {
+    const events = tb.recentEvents || [];
+    if (evtCount) evtCount.textContent = events.length > 0 ? String(events.length) : '';
+    if (events.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="events-empty">No token events recorded yet.</td></tr>';
+    } else {
+      const names = {};
+      for (const sk of skills) names[sk.skillId] = sk.displayName;
+      tbody.innerHTML = events.map(function(e) {
+        const skillName = names[e.skill] || humaniseSkillName(e.skill || '\u2014');
+        const tokens    = (e.inputTokens || 0) + (e.outputTokens || 0);
+        const costCell  = e.estimatedCostUSD > 0
+          ? fmtUSD(e.estimatedCostUSD)
+          : '<span style="color:var(--ac-hint)">\u2014</span>';
+        return '<tr>' +
+          '<td>' + fmtTime(e.timestamp) + '</td>' +
+          '<td>' + escHtml(skillName) + '</td>' +
+          '<td class="col-hide-mobile">' + escHtml(e.model || '\u2014') + '</td>' +
+          '<td class="col-hide-mobile">' + tokens.toLocaleString() + '</td>' +
+          '<td>' + costCell + '</td>' +
+          '</tr>';
+      }).join('');
+    }
+  }
+}
+
+async function saveBudget() {
+  const input = document.getElementById('budget-input');
+  if (!input) return;
+  const val = parseFloat(input.value);
+  if (isNaN(val) || val <= 0) return;
+  const r = await fetch('/api/budget', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ monthlyBudgetUSD: val }),
+  });
+  const d = await r.json().catch(function() { return {}; });
+  if (d.ok) {
+    const msg = document.getElementById('budget-save-msg');
+    if (msg) { msg.style.display = ''; setTimeout(function() { msg.style.display = 'none'; }, 2500); }
+  }
+}
+
+async function resumeBudget() {
+  await fetch('/api/budget/resume', { method: 'POST' });
+}
+
+// ── Security view ───────────────────────────────────────────────────────────────
+
+const PERM_LABELS = {
+  'read:files':        'Read files in sandbox',
+  'write:files':       'Write files in sandbox',
+  'read:email':        'Read email',
+  'send:email':        'Send email',
+  'read:calendar':     'Read calendar',
+  'write:calendar':    'Edit calendar',
+  'read:crm':          'Read CRM records',
+  'write:crm':         'Update CRM records',
+  'browser:sandboxed': 'Control browser (sandboxed)',
+  'network:outbound':  'Make network requests',
+};
+
+const DAY_ABBRS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function syncSecurity(s) {
+  const sec = s.security || {
+    injectionFilterActive: true,
+    rejectionsToday: 0,
+    sparkline7d: [0, 0, 0, 0, 0, 0, 0],
+    gatewayHost: '127.0.0.1',
+  };
+
+  // ── Filter status badge ──
+  const badge = document.getElementById('filter-status-badge');
+  const badgeTxt = document.getElementById('filter-status-text');
+  if (badge && badgeTxt) {
+    badge.className = `filter-status ${sec.injectionFilterActive ? 'active' : 'inactive'}`;
+    badgeTxt.textContent = sec.injectionFilterActive ? 'Active' : 'Inactive';
+  }
+
+  // ── Stat tiles ──
+  const todayEl = document.getElementById('sec-rejections-today');
+  const weekEl  = document.getElementById('sec-rejections-week');
+  if (todayEl) {
+    todayEl.textContent = String(sec.rejectionsToday);
+    todayEl.className = 'sec-stat-val' + (sec.rejectionsToday > 0 ? ' danger' : '');
+  }
+  if (weekEl) {
+    const total = (sec.sparkline7d || []).reduce((a, b) => a + b, 0);
+    weekEl.textContent = String(total);
+    weekEl.className = 'sec-stat-val' + (total > 0 ? ' danger' : '');
+  }
+
+  // ── Sparkline ──
+  const sparkEl = document.getElementById('sparkline');
+  const daysEl  = document.getElementById('spark-days');
+  if (sparkEl && daysEl && sec.sparkline7d) {
+    const vals = sec.sparkline7d;
+    const maxVal = Math.max(...vals, 1); // at least 1 to avoid div-by-zero
+
+    // Day labels: today is index 6, go back 6 days
+    const today = new Date();
+    const labels = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - (6 - i));
+      return DAY_ABBRS[d.getDay()];
+    });
+
+    sparkEl.innerHTML = vals.map((v, i) => {
+      const pct = Math.round((v / maxVal) * 100);
+      const h   = Math.max(4, Math.round((v / maxVal) * 36));
+      return `<div class="spark-bar${v > 0 ? ' has-value' : ''}"
+                   style="height:${h}px"
+                   title="${labels[i]}: ${v} rejection${v !== 1 ? 's' : ''}"></div>`;
+    }).join('');
+
+    daysEl.innerHTML = labels.map(l =>
+      `<div class="spark-day">${l}</div>`
+    ).join('');
+  }
+
+  // ── Gateway ──
+  const gwTitle  = document.getElementById('gateway-title');
+  const gwDetail = document.getElementById('gateway-detail');
+  if (gwTitle && gwDetail) {
+    const secure = sec.gatewayHost === '127.0.0.1';
+    gwTitle.textContent = secure ? 'Secure — localhost only' : `Warning — exposed on ${sec.gatewayHost}`;
+    gwTitle.className = `gateway-title ${secure ? 'secure' : 'insecure'}`;
+    gwDetail.textContent = secure
+      ? 'Bound to 127.0.0.1. Remote access via Tailscale URL only — never exposed to the internet.'
+      : 'The gateway is listening on a non-localhost address. This exposes ArmorClaw to the network.';
+  }
+
+  // ── Permission summary ──
+  const permList  = document.getElementById('perm-list');
+  const permCount = document.getElementById('perm-count');
+  const skills    = s.skills || [];
+  if (permList) {
+    if (skills.length === 0) {
+      permList.innerHTML = '<div class="perm-empty">No skills registered yet.</div>';
+      if (permCount) permCount.textContent = '';
+    } else {
+      if (permCount) permCount.textContent = `${skills.length} skill${skills.length !== 1 ? 's' : ''}`;
+      permList.innerHTML = skills.map(sk => {
+        const perms = (sk.permissionManifest || []);
+        const badges = perms.length === 0
+          ? '<span class="perm-badge">No permissions declared</span>'
+          : perms.map(p =>
+              `<span class="perm-badge">${escHtml(PERM_LABELS[p] || p)}</span>`
+            ).join('');
+        return `<div class="perm-row">
+          <div class="perm-skill">${escHtml(sk.displayName || sk.skillId)}</div>
+          <div class="perm-list">${badges}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // ── Security event feed (rejected + error entries only) ──
+  const secFeed  = document.getElementById('sec-feed-list');
+  const secCount = document.getElementById('sec-event-count');
+  if (!secFeed) return;
+
+  const names = {};
+  for (const sk of skills) names[sk.skillId] = sk.displayName;
+
+  const events = (s.feed || []).filter(e => e.outcome === 'rejected' || e.outcome === 'error');
+  if (secCount) secCount.textContent = events.length > 0 ? `${events.length}` : '';
+
+  if (events.length === 0) {
+    secFeed.innerHTML = '<div class="feed-empty">No security events in recent activity.</div>';
+    return;
+  }
+
+  secFeed.innerHTML = events.map(e => {
+    const outcome  = e.outcome || 'error';
+    const sentence = translateEntry(e, names);
+    const badge    = outcome === 'rejected' ? 'Blocked' : 'Error';
+    return `
+      <div class="feed-item outcome-${escHtml(outcome)}">
+        <div class="feed-body">
+          <div class="feed-sentence">${escHtml(sentence)}</div>
+        </div>
+        <div class="feed-right">
+          <span class="feed-time">${fmtTime(e.timestamp)}</span>
+          <span class="feed-badge ${escHtml(outcome)}">${badge}</span>
+        </div>
+      </div>`;
+  }).join('');
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────────

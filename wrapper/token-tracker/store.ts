@@ -287,6 +287,15 @@ export function getBudgetStatus(): BudgetStatus {
   };
 }
 
+/**
+ * The most recent `limit` token events, newest-first.
+ * Returns [] if the store is empty or unavailable.
+ */
+export function getRecentEvents(limit = 50): TokenEvent[] {
+  const events = loadEvents();
+  return events.slice(-limit).toReversed();
+}
+
 // ── Budget configuration ──────────────────────────────────────────────────────
 
 /** Returns the configured monthly budget in USD (default: $20). */
