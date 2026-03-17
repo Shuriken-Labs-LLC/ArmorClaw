@@ -1,0 +1,11 @@
+{
+  "id": "armorclaw",
+  "name": "ArmorClaw",
+  "version": "2026.3.14",
+  "description": "Security layer: injection filter, permission engine, audit logger",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
