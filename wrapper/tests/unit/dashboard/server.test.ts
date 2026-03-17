@@ -44,23 +44,35 @@ vi.mock("../../../lib/skill-registry.ts", () => ({
 
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn(),
+  writeFileSync: vi.fn(),
+  unlinkSync: vi.fn(),
+}));
+
+vi.mock("node:child_process", () => ({
+  execSync: vi.fn(() => {
+    throw new Error("not found");
+  }),
 }));
 
 // ── Imports ───────────────────────────────────────────────────────────────────
 
-import { readFileSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
 import {
   clearDashboardStateForTesting,
   getDashboardSnapshot,
   getAgentStatus,
   getSecurityStats,
+  getTailscaleUrl,
   getPendingApprovals,
   notifyListeners,
   onDashboardChange,
   readEnvConfig,
   readRecentAuditEntries,
+  resetTailscaleCacheForTesting,
   resetTelegramCacheForTesting,
   setAgentStatus,
+  writeEnvVar,
 } from "../../../dashboard/server.ts";
 import { getBudgetStatus } from "../../../token-tracker/store.ts";
 import { getCurrentUndo } from "../../../undo/registry.ts";
@@ -276,6 +288,84 @@ describe("readRecentAuditEntries", () => {
   });
 });
 
+// ── Tailscale URL detection ───────────────────────────────────────────────────
+
+describe("getTailscaleUrl", () => {
+  beforeEach(() => resetTailscaleCacheForTesting());
+
+  it("returns null when tailscale command is absent", () => {
+    vi.mocked(execSync).mockImplementation(() => {
+      throw new Error("not found");
+    });
+    expect(getTailscaleUrl()).toBeNull();
+  });
+
+  it("parses DNSName from tailscale status JSON", () => {
+    vi.mocked(execSync).mockReturnValue(
+      JSON.stringify({ Self: { DNSName: "my-mac.tail1234.ts.net." } }),
+    );
+    expect(getTailscaleUrl()).toBe("https://my-mac.tail1234.ts.net");
+  });
+
+  it("strips trailing dot from DNSName", () => {
+    vi.mocked(execSync).mockReturnValue(
+      JSON.stringify({ Self: { DNSName: "device.tailnet.ts.net." } }),
+    );
+    expect(getTailscaleUrl()).toBe("https://device.tailnet.ts.net");
+  });
+
+  it("returns null when Self.DNSName is missing", () => {
+    vi.mocked(execSync).mockReturnValue(JSON.stringify({ Self: {} }));
+    expect(getTailscaleUrl()).toBeNull();
+  });
+
+  it("returns null when tailscale output is not valid JSON", () => {
+    vi.mocked(execSync).mockReturnValue("not json");
+    expect(getTailscaleUrl()).toBeNull();
+  });
+
+  it("caches the result on second call", () => {
+    vi.mocked(execSync).mockReturnValue(JSON.stringify({ Self: { DNSName: "host.ts.net." } }));
+    getTailscaleUrl();
+    getTailscaleUrl();
+    expect(vi.mocked(execSync)).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── writeEnvVar ───────────────────────────────────────────────────────────────
+
+describe("writeEnvVar", () => {
+  it("adds a new key when file is missing", () => {
+    vi.mocked(readFileSync).mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
+    const result = writeEnvVar("NEW_KEY", "newval");
+    expect(result).toBe(true);
+    expect(vi.mocked(writeFileSync)).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.stringContaining("NEW_KEY=newval"),
+      "utf-8",
+    );
+  });
+
+  it("updates an existing key in place", () => {
+    vi.mocked(readFileSync).mockReturnValue("OLD_KEY=old\nOTHER=keep\n");
+    writeEnvVar("OLD_KEY", "updated");
+    const written = vi.mocked(writeFileSync).mock.calls[0][1] as string;
+    expect(written).toContain("OLD_KEY=updated");
+    expect(written).toContain("OTHER=keep");
+    expect(written).not.toContain("OLD_KEY=old");
+  });
+
+  it("returns false on write error", () => {
+    vi.mocked(readFileSync).mockReturnValue("");
+    vi.mocked(writeFileSync).mockImplementation(() => {
+      throw new Error("EPERM");
+    });
+    expect(writeEnvVar("K", "v")).toBe(false);
+  });
+});
+
 // ── Security stats ────────────────────────────────────────────────────────────
 
 describe("getSecurityStats", () => {
@@ -374,6 +464,8 @@ describe("getDashboardSnapshot", () => {
     expect(snap).toHaveProperty("feed");
     expect(snap).toHaveProperty("skills");
     expect(snap).toHaveProperty("recipes");
+    expect(snap).toHaveProperty("connectedServices");
+    expect(snap).toHaveProperty("tailscaleUrl");
     expect(snap).toHaveProperty("security");
     expect(snap).toHaveProperty("serverTime");
   });
@@ -443,6 +535,20 @@ describe("getDashboardSnapshot", () => {
       isHardStopped: false,
     });
     expect((await getDashboardSnapshot()).budget.monthlyBudgetUSD).toBe(50);
+  });
+
+  it("connectedServices reflects .env keys", async () => {
+    vi.mocked(readFileSync).mockImplementation((path: unknown) => {
+      if (String(path).endsWith(".env")) {
+        return "GOOGLE_CLIENT_ID=abc\nHUBSPOT_API_KEY=xyz\n";
+      }
+      throw new Error("ENOENT");
+    });
+    const snap = await getDashboardSnapshot();
+    expect(snap.connectedServices.gmail).toBe(true);
+    expect(snap.connectedServices.outlook).toBe(false);
+    expect(snap.connectedServices.hubspot).toBe(true);
+    expect(snap.connectedServices.airtable).toBe(false);
   });
 
   it("serverTime is a recent ISO 8601 string", async () => {

@@ -13,7 +13,8 @@
  * The dashboard never writes application state.
  */
 
-import { readFileSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -41,6 +42,45 @@ const DASHBOARD_HTML = join(import.meta.dirname, "public", "index.html");
 
 /** Absolute path to the repo-root .env file (dashboard/ → wrapper/ → repo root). */
 const ENV_FILE = join(import.meta.dirname, "..", "..", ".env");
+
+// ── Tailscale URL detection ───────────────────────────────────────────────────
+
+/** Cache so we don't shell out on every SSE push (60 s TTL). */
+let _tailscaleUrl: string | null | undefined = undefined;
+let _tailscaleCheckedAt = 0;
+const TAILSCALE_CACHE_TTL_MS = 60_000;
+
+/**
+ * Run `tailscale status --json` and extract the device's Tailscale HTTPS URL.
+ * Returns null when Tailscale is absent, not authenticated, or times out.
+ * Result is cached for 60 seconds.
+ */
+export function getTailscaleUrl(): string | null {
+  const now = Date.now();
+  if (_tailscaleUrl !== undefined && now - _tailscaleCheckedAt < TAILSCALE_CACHE_TTL_MS) {
+    return _tailscaleUrl;
+  }
+  try {
+    const out = execSync("tailscale status --json", {
+      encoding: "utf-8",
+      timeout: 3_000,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const data = JSON.parse(out) as { Self?: { DNSName?: string } };
+    const dns = data?.Self?.DNSName;
+    _tailscaleUrl = dns ? `https://${dns.replace(/\.$/, "")}` : null;
+  } catch {
+    _tailscaleUrl = null;
+  }
+  _tailscaleCheckedAt = now;
+  return _tailscaleUrl;
+}
+
+/** Force re-detection on next request (for testing). */
+export function resetTailscaleCacheForTesting(): void {
+  _tailscaleUrl = undefined;
+  _tailscaleCheckedAt = 0;
+}
 
 // ── .env reader ───────────────────────────────────────────────────────────────
 
@@ -73,6 +113,41 @@ export function readEnvConfig(): Record<string, string> {
     return out;
   } catch {
     return {};
+  }
+}
+
+// ── .env writer ───────────────────────────────────────────────────────────────
+
+/**
+ * Write or update a single key in the repo-root .env file.
+ * Preserves all other lines. Creates the file if absent. Never throws.
+ * Returns true on success, false on I/O error.
+ */
+export function writeEnvVar(key: string, value: string): boolean {
+  try {
+    let existing = "";
+    try {
+      existing = readFileSync(ENV_FILE, "utf-8");
+    } catch {
+      /* new file */
+    }
+
+    const prefix = `${key}=`;
+    let found = false;
+    const lines = existing.split("\n").map((line) => {
+      if (line.startsWith(prefix)) {
+        found = true;
+        return `${key}=${value}`;
+      }
+      return line;
+    });
+    if (!found) {
+      lines.push(`${key}=${value}`);
+    }
+    writeFileSync(ENV_FILE, lines.join("\n").replace(/\n+$/, "") + "\n", "utf-8");
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -311,6 +386,14 @@ export interface DashboardSnapshot {
   skills: ReturnType<typeof getAllSkills>;
   // RECIPES STUB: always empty until wrapper/recipes/ is built
   recipes: never[];
+  connectedServices: {
+    gmail: boolean;
+    outlook: boolean;
+    hubspot: boolean;
+    airtable: boolean;
+  };
+  /** Tailscale HTTPS URL for this device, or null if Tailscale is not active. */
+  tailscaleUrl: string | null;
   security: SecurityStats;
   tokenBurn: {
     todayTokens: ReturnType<typeof getTodayTokens>;
@@ -351,6 +434,13 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
     feed: readRecentAuditEntries(20),
     skills: getAllSkills(),
     recipes: [], // STUB
+    connectedServices: {
+      gmail: Boolean(env["GOOGLE_CLIENT_ID"]),
+      outlook: Boolean(env["MICROSOFT_CLIENT_ID"]),
+      hubspot: Boolean(env["HUBSPOT_API_KEY"]),
+      airtable: Boolean(env["AIRTABLE_API_KEY"]),
+    },
+    tailscaleUrl: getTailscaleUrl(),
     security: getSecurityStats(),
     tokenBurn: {
       todayTokens: getTodayTokens(),
@@ -447,6 +537,83 @@ export function createApp(): express.Application {
     res.json({ ok: true });
   });
 
+  // ── Settings: model provider ──
+  app.post("/api/settings/provider", (req, res) => {
+    const { provider, apiKey } = req.body as { provider?: string; apiKey?: string };
+    const validProviders = new Set(["anthropic", "openai", "ollama"]);
+    if (!provider || !validProviders.has(provider)) {
+      res.status(422).json({ ok: false, message: "provider must be anthropic, openai, or ollama" });
+      return;
+    }
+    writeEnvVar("ARMORCLAW_MODEL_PROVIDER", provider);
+    if (apiKey && apiKey.trim()) {
+      const keyName =
+        provider === "anthropic"
+          ? "ANTHROPIC_API_KEY"
+          : provider === "openai"
+            ? "OPENAI_API_KEY"
+            : "OLLAMA_BASE_URL";
+      writeEnvVar(keyName, apiKey.trim());
+    }
+    notifyListeners();
+    res.json({ ok: true });
+  });
+
+  // ── Settings: sandbox directory ──
+  app.post("/api/settings/sandbox", (req, res) => {
+    const { path: sandboxPath } = req.body as { path?: string };
+    if (!sandboxPath || !sandboxPath.trim().startsWith("/")) {
+      res.status(422).json({ ok: false, message: "path must be an absolute path" });
+      return;
+    }
+    writeEnvVar("ARMORCLAW_SANDBOX_DIR", sandboxPath.trim());
+    notifyListeners();
+    res.json({ ok: true });
+  });
+
+  // ── Audit log CSV export ──
+  app.get("/api/audit/export.csv", (_req, res) => {
+    const entries = readRecentAuditEntries(10_000); // read up to 10k entries for export
+    const header = "timestamp,skill,outcome,durationMs,permissionsUsed\n";
+    const rows = entries
+      .map((e) =>
+        [
+          e.timestamp ?? "",
+          (e.skill ?? "").replace(/,/g, " "),
+          e.outcome ?? "",
+          String(e.durationMs ?? 0),
+          (e.permissionsUsed ?? []).join("|"),
+        ].join(","),
+      )
+      .join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="armorclaw-audit-${new Date().toISOString().slice(0, 10)}.csv"`,
+    );
+    res.send(header + rows);
+  });
+
+  // ── Danger zone: reset ArmorClaw data ──
+  app.post("/api/reset", (req, res) => {
+    const { confirm } = req.body as { confirm?: string };
+    if (confirm !== "reset") {
+      res.status(422).json({ ok: false, message: 'Type "reset" to confirm' });
+      return;
+    }
+    const dir = join(homedir(), ".armorclaw");
+    let deleted = 0;
+    for (const file of ["audit.log", "tokens.ndjson"]) {
+      try {
+        unlinkSync(join(dir, file));
+        deleted++;
+      } catch {
+        /* absent — ok */
+      }
+    }
+    res.json({ ok: true, deleted });
+  });
+
   return app;
 }
 
@@ -470,5 +637,6 @@ export function clearDashboardStateForTesting(): void {
   agentStatus = "running";
   _channelLinksCache = null;
   _telegramUsername = undefined;
+  resetTailscaleCacheForTesting();
   listeners.clear();
 }
