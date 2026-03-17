@@ -25,21 +25,29 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov"],
       all: true,
-      include: ["security/**/*.ts", "lib/**/*.ts", "token-tracker/**/*.ts", "digest/**/*.ts"],
+      include: [
+        "security/**/*.ts",
+        "lib/**/*.ts",
+        "token-tracker/**/*.ts",
+        "digest/**/*.ts",
+        "undo/**/*.ts",
+      ],
       exclude: [
         "security/**/*.test.ts",
         "lib/**/*.test.ts",
         "token-tracker/**/*.test.ts",
         "digest/**/*.test.ts",
+        "undo/**/*.test.ts",
       ],
       thresholds: {
         lines: 90,
         functions: 90,
         branches: 90,
         statements: 90,
-        // Per-file overrides: security/ and lib/ stay at 100%
+        // Per-file overrides: security/, lib/, and undo/ stay at 100%
         "security/**/*.ts": { lines: 100, functions: 100, branches: 100, statements: 100 },
         "lib/**/*.ts": { lines: 100, functions: 100, branches: 100, statements: 100 },
+        "undo/**/*.ts": { lines: 100, functions: 100, branches: 100, statements: 100 },
       },
     },
   },

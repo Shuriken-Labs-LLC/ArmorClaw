@@ -5,7 +5,7 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type AuditOutcome = "success" | "rejected" | "error";
+export type AuditOutcome = "success" | "rejected" | "error" | "undone";
 
 export type AuditEntry = {
   timestamp: string; // ISO 8601
