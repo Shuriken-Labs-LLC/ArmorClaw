@@ -481,9 +481,12 @@ describe("getDashboardSnapshot", () => {
     expect(snap.pendingApprovals).toEqual([]);
   });
 
-  it("recipes is always empty (stub)", async () => {
+  it("recipes returns all bundled recipes", async () => {
     const snap = await getDashboardSnapshot();
-    expect(snap.recipes).toEqual([]);
+    expect(Array.isArray(snap.recipes)).toBe(true);
+    expect(snap.recipes.length).toBeGreaterThan(0);
+    expect(snap.recipes[0]).toHaveProperty("id");
+    expect(snap.recipes[0]).toHaveProperty("active");
   });
 
   it("undo is null when no entry exists", async () => {

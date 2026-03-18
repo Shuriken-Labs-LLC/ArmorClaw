@@ -1,4 +1,6 @@
 import { emptyPluginConfigSchema, type OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { checkPlatformCompatibility } from "./config/platform.ts";
+import { initRecipeScheduler } from "./recipes/index.ts";
 import { registerAuditLogger } from "./security/audit-logger.ts";
 import { registerInjectionFilter } from "./security/injection-filter.ts";
 import { registerPermissionFilter } from "./security/permissions.ts";
@@ -17,11 +19,15 @@ const armorClawPlugin = {
   configSchema: emptyPluginConfigSchema(),
 
   register(api: OpenClawPluginApi): void {
+    // Platform check runs before anything else — throws on hard failures.
+    checkPlatformCompatibility();
     // Order matters: injection check runs first, then permission check, then
     // the audit logger observes the final outcome after execution.
     registerInjectionFilter(api);
     registerPermissionFilter(api);
     registerAuditLogger(api);
+    // Start recipe scheduler after security hooks are in place
+    initRecipeScheduler();
   },
 };
 

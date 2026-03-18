@@ -390,6 +390,45 @@
     .recipe-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .recipe-next { font-size: 12px; color: var(--ac-muted); }
 
+    /* ── Recipes view ────────────────────────────────────────────────────── */
+    .rc-card { padding: 14px 16px; border-bottom: 0.5px solid var(--ac-border); }
+    .rc-card:last-child { border-bottom: none; }
+    .rc-header { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+    .rc-name { font-size: 14px; font-weight: 500; flex: 1; min-width: 0; }
+    .rc-desc { font-size: 13px; color: var(--ac-muted); margin-bottom: 8px; }
+    .rc-meta { font-size: 12px; color: var(--ac-hint); display: flex; gap: 14px; flex-wrap: wrap; }
+    .rc-schedule-wrap { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+    .rc-schedule-sel {
+      font-size: 12px; font-family: inherit;
+      border: 0.5px solid var(--ac-border); border-radius: 6px;
+      padding: 3px 6px; background: var(--ac-surface2); color: var(--ac-text); cursor: pointer;
+    }
+    .rc-custom-cron {
+      display: none; font-size: 12px; font-family: 'DM Mono', monospace;
+      border: 0.5px solid var(--ac-border); border-radius: 6px;
+      padding: 3px 8px; width: 130px;
+    }
+    .rc-custom-cron.visible { display: inline-block; }
+    .rc-apply-btn {
+      display: none; font-size: 12px; padding: 3px 10px;
+      border-radius: 6px; border: 0.5px solid var(--ac-border);
+      background: var(--ac-surface2); color: var(--ac-text); cursor: pointer;
+    }
+    .rc-apply-btn.visible { display: inline-block; }
+    .recipe-toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; cursor: pointer; display: inline-block; }
+    .recipe-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .recipe-toggle-track {
+      position: absolute; inset: 0; border-radius: 10px;
+      background: var(--ac-border-strong); transition: background .15s;
+    }
+    .recipe-toggle input:checked + .recipe-toggle-track { background: var(--ac-teal); }
+    .recipe-toggle-thumb {
+      position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+      border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.15);
+      transition: transform .15s;
+    }
+    .recipe-toggle input:checked ~ .recipe-toggle-thumb { transform: translateX(16px); }
+
     /* ── Settings view ────────────────────────────────────────────────────── */
 
     .settings-card { margin-bottom: 14px; }
@@ -1231,10 +1270,13 @@
       </div><!-- /view-skills -->
 
       <div class="view" id="view-recipes">
-        <div class="placeholder">
-          <div class="placeholder-icon">🗓</div>
-          <div class="placeholder-title">Recipes</div>
-          <div class="placeholder-desc">Scheduled automations will appear here once wrapper/recipes/ is built.</div>
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-title">ArmorClaw recipes</span>
+          </div>
+          <div id="bundled-recipes-list">
+            <div class="recipe-empty">Loading…</div>
+          </div>
         </div>
       </div>
 
@@ -1887,20 +1929,115 @@ function humaniseSkillName(raw) {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
-// Recipes shortcut row
+// Recipes shortcut row + full Recipes view
+const SCHEDULE_PRESETS = [
+  { value: '0 8 * * *',   label: 'Every morning (8am)' },
+  { value: '0 8 * * 1-5', label: 'Weekdays only (8am Mon–Fri)' },
+  { value: '0 9 * * 1',   label: 'Every Monday (9am)' },
+  { value: '0 * * * *',   label: 'Every hour' },
+  { value: 'custom',      label: 'Custom…' },
+];
+
+function recipeCard(r) {
+  const selId   = 'rs-' + r.id;
+  const cronId  = 'rc-' + r.id;
+  const applyId = 'ra-' + r.id;
+  const preset  = SCHEDULE_PRESETS.some(p => p.value === r.schedule && p.value !== 'custom')
+    ? r.schedule : 'custom';
+  const options = SCHEDULE_PRESETS.map(p =>
+    '<option value="' + escHtml(p.value) + '"' + (p.value === preset ? ' selected' : '') + '>' + escHtml(p.label) + '</option>'
+  ).join('');
+  const cronVal = preset === 'custom' ? escHtml(r.schedule) : '';
+  const showCustom = preset === 'custom' ? ' visible' : '';
+  const lastRun = r.lastRun
+    ? 'Last run: ' + fmtTime(r.lastRun) + (r.lastOutcome === 'error' ? ' (failed)' : '')
+    : 'Never run';
+  const nextRun = r.nextRun ? 'Next: ' + fmtTime(r.nextRun) : 'Not scheduled';
+  return '<div class="rc-card">' +
+    '<div class="rc-header">' +
+      '<span class="rc-name">' + escHtml(r.name) + '</span>' +
+      '<div class="rc-schedule-wrap">' +
+        '<select class="rc-schedule-sel" id="' + selId + '" onchange="changeSchedule(\'' + r.id + '\', this.value)">' +
+          options +
+        '</select>' +
+        '<input type="text" class="rc-custom-cron' + showCustom + '" id="' + cronId + '" placeholder="0 8 * * *" value="' + cronVal + '">' +
+        '<button class="rc-apply-btn' + showCustom + '" id="' + applyId + '" onclick="applyCustomSchedule(\'' + r.id + '\')">Apply</button>' +
+      '</div>' +
+      '<label class="recipe-toggle" title="' + (r.active ? 'Deactivate' : 'Activate') + ' recipe">' +
+        '<input type="checkbox"' + (r.active ? ' checked' : '') + ' onchange="toggleRecipe(\'' + r.id + '\', this.checked)">' +
+        '<span class="recipe-toggle-track"></span>' +
+        '<span class="recipe-toggle-thumb"></span>' +
+      '</label>' +
+    '</div>' +
+    '<div class="rc-desc">' + escHtml(r.description) + '</div>' +
+    '<div class="rc-meta"><span>' + escHtml(lastRun) + '</span><span>' + escHtml(nextRun) + '</span></div>' +
+  '</div>';
+}
+
 function syncRecipes(s) {
+  // Home shortcut row
   const list = document.getElementById('recipes-list');
-  if (!list) return;
-  const recipes = (s.recipes || []).slice(0, 3);
-  if (recipes.length === 0) return; // keep STUB content
-  list.innerHTML = recipes.map(r => `
-    <div class="recipe-item">
-      <span class="recipe-dot"></span>
-      <div class="recipe-info">
-        <div class="recipe-name">${escHtml(r.name)}</div>
-        <div class="recipe-next">Next: ${escHtml(r.nextRun || '—')}</div>
-      </div>
-    </div>`).join('');
+  if (list) {
+    const active = (s.recipes || []).filter(r => r.active).slice(0, 3);
+    if (active.length === 0) {
+      list.innerHTML = '<div class="recipe-empty">No recipes active yet. Set one up in Manage →</div>';
+    } else {
+      list.innerHTML = active.map(r =>
+        '<div class="recipe-item">' +
+          '<span class="recipe-dot"></span>' +
+          '<div class="recipe-info">' +
+            '<div class="recipe-name">' + escHtml(r.name) + '</div>' +
+            '<div class="recipe-next">Next: ' + escHtml(r.nextRun ? fmtTime(r.nextRun) : '—') + '</div>' +
+          '</div>' +
+        '</div>'
+      ).join('');
+    }
+  }
+  // Full Recipes view
+  const bundledList = document.getElementById('bundled-recipes-list');
+  if (bundledList) {
+    const recipes = s.recipes || [];
+    if (recipes.length === 0) {
+      bundledList.innerHTML = '<div class="recipe-empty">No recipes found.</div>';
+    } else {
+      bundledList.innerHTML = recipes.map(recipeCard).join('');
+    }
+  }
+}
+
+async function toggleRecipe(id, active) {
+  const endpoint = active ? '/api/recipes/' + id + '/activate' : '/api/recipes/' + id + '/deactivate';
+  try { await fetch(endpoint, { method: 'POST' }); } catch { /* ignore */ }
+}
+
+function changeSchedule(id, value) {
+  const cronInput = document.getElementById('rc-' + id);
+  const applyBtn  = document.getElementById('ra-' + id);
+  if (value === 'custom') {
+    if (cronInput) cronInput.classList.add('visible');
+    if (applyBtn)  applyBtn.classList.add('visible');
+    return;
+  }
+  if (cronInput) cronInput.classList.remove('visible');
+  if (applyBtn)  applyBtn.classList.remove('visible');
+  void applyCustomScheduleWithCron(id, value);
+}
+
+function applyCustomSchedule(id) {
+  const cronInput = document.getElementById('rc-' + id);
+  if (!cronInput) return;
+  void applyCustomScheduleWithCron(id, cronInput.value.trim());
+}
+
+async function applyCustomScheduleWithCron(id, cron) {
+  if (!cron) return;
+  try {
+    await fetch('/api/recipes/' + id + '/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cron }),
+    });
+  } catch { /* ignore */ }
 }
 
 // ── Settings view ───────────────────────────────────────────────────────────────

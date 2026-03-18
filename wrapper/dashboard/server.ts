@@ -27,6 +27,13 @@ import {
   sanitizeFilename,
 } from "../marketplace/importer.ts";
 import { verifySkillSource } from "../marketplace/verifier.ts";
+import {
+  getAllRecipes,
+  activateRecipe,
+  deactivateRecipe,
+  updateSchedule,
+} from "../recipes/store.ts";
+import type { RecipeWithState } from "../recipes/types.ts";
 import type { AuditEntry } from "../security/audit-logger.ts";
 import {
   getBudgetStatus,
@@ -391,8 +398,7 @@ export interface DashboardSnapshot {
   pendingApprovals: PendingApproval[];
   feed: AuditEntry[];
   skills: ReturnType<typeof getAllSkills>;
-  // RECIPES STUB: always empty until wrapper/recipes/ is built
-  recipes: never[];
+  recipes: RecipeWithState[];
   connectedServices: {
     gmail: boolean;
     outlook: boolean;
@@ -440,7 +446,7 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
     pendingApprovals: [], // STUB
     feed: readRecentAuditEntries(20),
     skills: getAllSkills(),
-    recipes: [], // STUB
+    recipes: getAllRecipes(),
     connectedServices: {
       gmail: Boolean(env["GOOGLE_CLIENT_ID"]),
       outlook: Boolean(env["MICROSOFT_CLIENT_ID"]),
@@ -670,6 +676,51 @@ export function createApp(): express.Application {
       const dest = installSkill(code, filename);
       notifyListeners();
       res.json({ ok: true, dest });
+    } catch (err) {
+      res
+        .status(422)
+        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
+    }
+  });
+
+  // ── Recipes ──
+  app.post("/api/recipes/:id/activate", (req, res) => {
+    const { id } = req.params;
+    try {
+      activateRecipe(id);
+      notifyListeners();
+      res.json({ ok: true });
+    } catch (err) {
+      res
+        .status(422)
+        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
+    }
+  });
+
+  app.post("/api/recipes/:id/deactivate", (req, res) => {
+    const { id } = req.params;
+    try {
+      deactivateRecipe(id);
+      notifyListeners();
+      res.json({ ok: true });
+    } catch (err) {
+      res
+        .status(422)
+        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
+    }
+  });
+
+  app.post("/api/recipes/:id/schedule", (req, res) => {
+    const { id } = req.params;
+    const { cron } = req.body as { cron?: unknown };
+    if (typeof cron !== "string" || !cron.trim()) {
+      res.status(422).json({ ok: false, message: "cron expression is required" });
+      return;
+    }
+    try {
+      updateSchedule(id, cron.trim());
+      notifyListeners();
+      res.json({ ok: true });
     } catch (err) {
       res
         .status(422)
