@@ -20,6 +20,13 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import express from "express";
 import { getAllSkills } from "../lib/skill-registry.ts";
+import {
+  fetchSkillSource,
+  installSkill,
+  isValidGitHubUrl,
+  sanitizeFilename,
+} from "../marketplace/importer.ts";
+import { verifySkillSource } from "../marketplace/verifier.ts";
 import type { AuditEntry } from "../security/audit-logger.ts";
 import {
   getBudgetStatus,
@@ -594,6 +601,82 @@ export function createApp(): express.Application {
     res.send(header + rows);
   });
 
+  // ── Skills: analyze from GitHub URL ──
+  app.post("/api/skills/analyze-url", async (req, res) => {
+    const { url } = req.body as { url?: unknown };
+    if (typeof url !== "string" || !url.trim()) {
+      res.status(422).json({ ok: false, message: "url is required" });
+      return;
+    }
+    if (!isValidGitHubUrl(url.trim())) {
+      res.status(422).json({ ok: false, message: "URL must be a GitHub or GitHub Gist HTTPS URL" });
+      return;
+    }
+    try {
+      const { code, filename } = await fetchSkillSource(url.trim());
+      const report = verifySkillSource(code);
+      res.json({ ok: true, report, code, filename });
+    } catch (err) {
+      res
+        .status(422)
+        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
+    }
+  });
+
+  // ── Skills: analyze from uploaded file ──
+  app.post("/api/skills/analyze-file", (req, res) => {
+    const { content, filename } = req.body as { content?: unknown; filename?: unknown };
+    if (typeof content !== "string" || !content.trim()) {
+      res.status(422).json({ ok: false, message: "content (base64) is required" });
+      return;
+    }
+    if (typeof filename !== "string" || !filename.trim()) {
+      res.status(422).json({ ok: false, message: "filename is required" });
+      return;
+    }
+    try {
+      const safe = sanitizeFilename(filename.trim());
+      const code = Buffer.from(content.trim(), "base64").toString("utf-8");
+      const report = verifySkillSource(code);
+      res.json({ ok: true, report, code, filename: safe });
+    } catch (err) {
+      res
+        .status(422)
+        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
+    }
+  });
+
+  // ── Skills: install (re-verifies server-side) ──
+  app.post("/api/skills/install", (req, res) => {
+    const { code, filename } = req.body as { code?: unknown; filename?: unknown };
+    if (typeof code !== "string" || !code) {
+      res.status(422).json({ ok: false, message: "code is required" });
+      return;
+    }
+    if (typeof filename !== "string" || !filename) {
+      res.status(422).json({ ok: false, message: "filename is required" });
+      return;
+    }
+    const report = verifySkillSource(code);
+    if (!report.safe) {
+      res.status(403).json({
+        ok: false,
+        message: "Skill contains dangerous patterns and cannot be installed without override",
+        report,
+      });
+      return;
+    }
+    try {
+      const dest = installSkill(code, filename);
+      notifyListeners();
+      res.json({ ok: true, dest });
+    } catch (err) {
+      res
+        .status(422)
+        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
+    }
+  });
+
   // ── Danger zone: reset ArmorClaw data ──
   app.post("/api/reset", (req, res) => {
     const { confirm } = req.body as { confirm?: string };
@@ -628,7 +711,8 @@ export async function startServer(
     server.listen(port, "127.0.0.1", resolve);
     server.once("error", reject);
   });
-  return { port, close: () => new Promise((resolve) => server.close(() => resolve())) };
+  const addr = server.address() as { port: number };
+  return { port: addr.port, close: () => new Promise((resolve) => server.close(() => resolve())) };
 }
 
 // ── Testing helpers ───────────────────────────────────────────────────────────

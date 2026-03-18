@@ -796,6 +796,152 @@
       .perm-skill { width: auto; }
     }
 
+    /* ── Skills view ──────────────────────────────────────────────────────── */
+    .skill-card {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 0.5px solid var(--ac-border);
+    }
+    .skill-card:last-child { border-bottom: none; }
+    .skill-card-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+    .skill-card-body { flex: 1; min-width: 0; }
+    .skill-card-name { font-size: 13.5px; font-weight: 500; margin-bottom: 2px; }
+    .skill-card-desc { font-size: 12.5px; color: var(--ac-muted); margin-bottom: 7px; }
+    .skill-card-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+    .skill-badge-coming {
+      display: inline-block; font-size: 11px; font-weight: 500;
+      padding: 2px 7px; border-radius: 20px;
+      background: var(--ac-surface2); color: var(--ac-hint);
+    }
+    .skill-badge-user {
+      display: inline-block; font-size: 11px; font-weight: 500;
+      padding: 2px 7px; border-radius: 20px;
+      background: var(--ac-blue-light); color: var(--ac-blue);
+    }
+    .skills-empty { padding: 16px 16px 6px; font-size: 13px; color: var(--ac-hint); }
+
+    /* Import tabs */
+    .import-tabs {
+      display: flex; gap: 0;
+      border-bottom: 0.5px solid var(--ac-border);
+      margin-bottom: 16px;
+    }
+    .import-tab {
+      padding: 9px 16px; font-size: 13px; font-weight: 500;
+      background: none; border: none; border-bottom: 2px solid transparent;
+      color: var(--ac-muted); cursor: pointer;
+      transition: color 0.1s, border-color 0.1s;
+      margin-bottom: -0.5px;
+    }
+    .import-tab:hover { color: var(--ac-text); }
+    .import-tab.active { color: var(--ac-teal); border-bottom-color: var(--ac-teal); }
+    .import-panel { display: none; }
+    .import-panel.active { display: block; }
+
+    /* URL import */
+    .import-row {
+      display: flex; gap: 8px; align-items: flex-start;
+      flex-wrap: wrap; margin-bottom: 8px;
+    }
+    .import-url-input {
+      flex: 1; min-width: 220px;
+      padding: 8px 12px; font-size: 13px; font-family: inherit;
+      border: 0.5px solid var(--ac-border); border-radius: 8px;
+      background: var(--ac-surface); color: var(--ac-text); min-height: 38px;
+    }
+    .import-url-input:focus { outline: none; border-color: var(--ac-teal); }
+    .btn-fetch {
+      padding: 8px 15px; border-radius: 8px;
+      font-size: 13px; font-weight: 500;
+      background: var(--ac-teal); color: #fff;
+      border: none; min-height: 38px; white-space: nowrap;
+      transition: opacity 0.1s;
+    }
+    .btn-fetch:hover { opacity: 0.88; }
+    .btn-fetch:disabled { opacity: 0.5; cursor: default; }
+
+    /* File upload zone */
+    .upload-zone {
+      border: 1.5px dashed var(--ac-border-strong); border-radius: 12px;
+      padding: 28px 20px; text-align: center; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s; margin-bottom: 8px;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      background: var(--ac-teal-light); border-color: var(--ac-teal);
+    }
+    .upload-zone-icon { font-size: 24px; margin-bottom: 6px; }
+    .upload-zone-label { font-size: 13px; color: var(--ac-muted); }
+    .upload-zone-hint { font-size: 11.5px; color: var(--ac-hint); margin-top: 3px; }
+
+    /* Security report card */
+    .report-card {
+      border: 0.5px solid var(--ac-border); border-radius: 12px;
+      overflow: hidden; margin-top: 10px;
+    }
+    .report-card.safe .report-card-hdr   { background: var(--ac-teal-light); }
+    .report-card.unsafe .report-card-hdr { background: var(--ac-red-light); }
+    .report-card-hdr {
+      padding: 12px 16px; display: flex; align-items: center; gap: 8px;
+    }
+    .report-card-icon { font-size: 16px; }
+    .report-card-title { font-size: 13px; font-weight: 500; flex: 1; }
+    .report-card.safe   .report-card-title { color: var(--ac-teal); }
+    .report-card.unsafe .report-card-title { color: var(--ac-red); }
+    .report-card-summary {
+      font-size: 12.5px; color: var(--ac-muted); padding: 10px 16px 2px;
+    }
+    .report-badges { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 16px 12px; }
+    .report-badge {
+      display: inline-block; font-size: 11px; font-weight: 500;
+      padding: 2px 8px; border-radius: 20px;
+    }
+    .report-badge.perm   { background: var(--ac-blue-light);  color: var(--ac-blue); }
+    .report-badge.domain { background: var(--ac-surface2);    color: var(--ac-muted); }
+    .report-badge.warn   { background: var(--ac-amber-light); color: var(--ac-amber); }
+    .report-badge.danger { background: var(--ac-red-light);   color: var(--ac-red); }
+    .report-danger-override {
+      margin: 4px 16px 10px;
+      padding: 10px 12px; background: var(--ac-red-light); border-radius: 8px;
+      display: flex; align-items: flex-start; gap: 8px;
+    }
+    .report-danger-override label {
+      font-size: 12px; color: var(--ac-red); line-height: 1.4; cursor: pointer;
+    }
+    .report-danger-override input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; }
+    .report-actions {
+      display: flex; gap: 8px; align-items: center;
+      padding: 8px 16px 14px;
+      border-top: 0.5px solid var(--ac-border); flex-wrap: wrap;
+    }
+    .btn-install {
+      padding: 7px 16px; border-radius: 8px;
+      font-size: 13px; font-weight: 500;
+      background: var(--ac-teal); color: #fff;
+      border: none; min-height: 36px; transition: opacity 0.1s;
+    }
+    .btn-install:hover { opacity: 0.88; }
+    .btn-install:disabled { opacity: 0.4; cursor: default; }
+    .btn-cancel-import {
+      padding: 7px 13px; border-radius: 8px;
+      font-size: 13px; background: none;
+      border: 0.5px solid var(--ac-border); color: var(--ac-muted); min-height: 36px;
+    }
+    .btn-cancel-import:hover { border-color: var(--ac-border-strong); color: var(--ac-text); }
+    .import-success-msg {
+      margin-top: 10px; padding: 10px 14px;
+      background: var(--ac-teal-light); border-radius: 8px;
+      font-size: 13px; color: var(--ac-teal); font-weight: 500;
+    }
+    .import-error-msg {
+      margin-top: 8px; padding: 9px 13px;
+      background: var(--ac-red-light); border-radius: 8px;
+      font-size: 12.5px; color: var(--ac-red);
+    }
+    .marketplace-stub { padding: 32px 20px; text-align: center; }
+    .marketplace-stub-icon  { font-size: 26px; margin-bottom: 10px; }
+    .marketplace-stub-title { font-size: 15px; font-weight: 500; color: var(--ac-muted); margin-bottom: 6px; }
+    .marketplace-stub-desc  { font-size: 13px; color: var(--ac-hint); max-width: 320px; margin: 0 auto; }
+
     /* ── Placeholder (other views) ────────────────────────────────────────── */
     .placeholder { padding: 56px 32px; text-align: center; }
     .placeholder-icon  { font-size: 30px; margin-bottom: 10px; }
@@ -984,12 +1130,105 @@
 
       <!-- ── PLACEHOLDER VIEWS ─────────────────────────────────────────── -->
       <div class="view" id="view-skills">
-        <div class="placeholder">
-          <div class="placeholder-icon">⚡</div>
-          <div class="placeholder-title">Skills</div>
-          <div class="placeholder-desc">Bundled and user-created skills will appear here.</div>
+
+        <!-- ── ArmorClaw skills ────────────────────────────────────────── -->
+        <div class="card">
+          <div class="card-hdr"><span class="card-title">ArmorClaw skills</span></div>
+          <div class="skill-card">
+            <div class="skill-card-icon">📧</div>
+            <div class="skill-card-body">
+              <div class="skill-card-name">Email + calendar</div>
+              <div class="skill-card-desc">Inbox triage, draft replies, and calendar management for Gmail and Outlook.</div>
+              <div class="skill-card-badges"><span class="skill-badge-coming">Coming soon</span></div>
+            </div>
+          </div>
+          <div class="skill-card">
+            <div class="skill-card-icon">📊</div>
+            <div class="skill-card-body">
+              <div class="skill-card-name">CRM + lead gen</div>
+              <div class="skill-card-desc">Prospect research, follow-up drafts, and CRM record management for HubSpot and Airtable.</div>
+              <div class="skill-card-badges"><span class="skill-badge-coming">Coming soon</span></div>
+            </div>
+          </div>
+          <div class="skill-card">
+            <div class="skill-card-icon">📁</div>
+            <div class="skill-card-body">
+              <div class="skill-card-name">Secure file access</div>
+              <div class="skill-card-desc">Read, write, and watch files within your sandbox directory — never outside it.</div>
+              <div class="skill-card-badges"><span class="skill-badge-coming">Coming soon</span></div>
+            </div>
+          </div>
+          <div class="skill-card">
+            <div class="skill-card-icon">🌐</div>
+            <div class="skill-card-body">
+              <div class="skill-card-name">Browser automation</div>
+              <div class="skill-card-desc">Fill forms, extract data, and capture screenshots in a dedicated, sandboxed browser profile.</div>
+              <div class="skill-card-badges"><span class="skill-badge-coming">Coming soon</span></div>
+            </div>
+          </div>
         </div>
-      </div>
+
+        <!-- ── Your skills ─────────────────────────────────────────────── -->
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-title">Your skills</span>
+            <span class="card-meta" id="user-skills-count"></span>
+          </div>
+          <div id="user-skills-list"></div>
+        </div>
+
+        <!-- ── Import a skill ─────────────────────────────────────────── -->
+        <div class="card">
+          <div class="card-hdr"><span class="card-title">Import a skill</span></div>
+          <div style="padding: 0 16px 8px;">
+            <div class="import-tabs">
+              <button class="import-tab active" id="tab-github"      onclick="switchImportTab('github')">GitHub URL</button>
+              <button class="import-tab"        id="tab-file"        onclick="switchImportTab('file')">Upload file</button>
+              <button class="import-tab"        id="tab-marketplace" onclick="switchImportTab('marketplace')">Marketplace</button>
+            </div>
+
+            <!-- GitHub URL panel -->
+            <div class="import-panel active" id="import-panel-github">
+              <div class="import-row">
+                <input class="import-url-input" id="import-url-input"
+                  type="text" placeholder="https://github.com/user/repo/blob/main/skill.ts"
+                  oninput="clearImportReport('url')"
+                  onkeydown="if(event.key==='Enter')analyzeSkillUrl()">
+                <button class="btn-fetch" id="import-url-btn" onclick="analyzeSkillUrl()">Analyze</button>
+              </div>
+              <div id="import-url-error" class="import-error-msg" style="display:none;"></div>
+              <div id="import-url-report"></div>
+            </div>
+
+            <!-- File upload panel -->
+            <div class="import-panel" id="import-panel-file">
+              <div class="upload-zone" id="upload-zone"
+                onclick="document.getElementById('import-file-input').click()"
+                ondragover="handleFileDragover(event)"
+                ondragleave="handleFileDragleave(event)"
+                ondrop="handleFileDrop(event)">
+                <div class="upload-zone-icon">📂</div>
+                <div class="upload-zone-label">Drop a .ts or .js file here, or click to browse</div>
+                <div class="upload-zone-hint">Only .ts and .js files are supported</div>
+              </div>
+              <input type="file" id="import-file-input" accept=".ts,.js" style="display:none"
+                onchange="if(this.files[0])analyzeSkillFile(this.files[0])">
+              <div id="import-file-error" class="import-error-msg" style="display:none;"></div>
+              <div id="import-file-report"></div>
+            </div>
+
+            <!-- Marketplace stub panel -->
+            <div class="import-panel" id="import-panel-marketplace">
+              <div class="marketplace-stub">
+                <div class="marketplace-stub-icon">🛒</div>
+                <div class="marketplace-stub-title">Marketplace coming soon</div>
+                <div class="marketplace-stub-desc">Verified skills curated by ArmorClaw — browse and install in one tap. Check back in a future update.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /view-skills -->
 
       <div class="view" id="view-recipes">
         <div class="placeholder">
@@ -1451,6 +1690,7 @@ function syncUI(s) {
   syncTokenBurn(s);
   syncSecurity(s);
   syncSettings(s);
+  syncSkills(s);
 }
 
 // Agent status pill + subline + controls
@@ -2170,6 +2410,223 @@ function syncSecurity(s) {
         </div>
       </div>`;
   }).join('');
+}
+
+// ── Skills view ──────────────────────────────────────────────────────────────────
+
+/** Pending install — one slot: { code, filename, source: 'url'|'file' } */
+let _pendingInstall = null;
+
+function syncSkills(s) {
+  const skills = (s.skills || []).filter(sk => sk.author === 'user');
+  const list   = document.getElementById('user-skills-list');
+  const count  = document.getElementById('user-skills-count');
+  if (!list) return;
+  if (count) count.textContent = skills.length > 0 ? String(skills.length) : '';
+  if (skills.length === 0) {
+    list.innerHTML = '<div class="skills-empty">No user skills installed yet. Import one below.</div>';
+    return;
+  }
+  list.innerHTML = skills.map(sk => {
+    const perms = (sk.permissionManifest || []).map(p =>
+      `<span class="perm-badge">${escHtml(PERM_LABELS[p] || p)}</span>`
+    ).join('');
+    return `<div class="skill-card">
+      <div class="skill-card-icon">⚡</div>
+      <div class="skill-card-body">
+        <div class="skill-card-name">${escHtml(sk.displayName || sk.skillId)}</div>
+        <div class="skill-card-desc">${escHtml(sk.description || '')}</div>
+        <div class="skill-card-badges">
+          <span class="skill-badge-user">Built by you</span>
+          ${perms}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function switchImportTab(which) {
+  ['github', 'file', 'marketplace'].forEach(t => {
+    document.getElementById('tab-' + t)?.classList.toggle('active', t === which);
+    document.getElementById('import-panel-' + t)?.classList.toggle('active', t === which);
+  });
+}
+
+function clearImportReport(source) {
+  const errEl = document.getElementById('import-' + source + '-error');
+  const repEl = document.getElementById('import-' + source + '-report');
+  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+  if (repEl) repEl.innerHTML = '';
+  _pendingInstall = null;
+}
+
+function showImportError(source, message) {
+  const errEl = document.getElementById('import-' + source + '-error');
+  if (!errEl) return;
+  errEl.textContent = message;
+  errEl.style.display = 'block';
+}
+
+function renderReportCard(report, code, filename, source) {
+  _pendingInstall = { code, filename, source };
+  const safe      = report.safe;
+  const safeClass = safe ? 'safe' : 'unsafe';
+  const icon      = safe ? '✅' : '⛔';
+  const title     = safe
+    ? 'No dangerous patterns detected'
+    : 'Dangerous patterns found — review before installing';
+
+  const dangerBadges = (report.dangerousPatterns || [])
+    .filter(p => p.severity === 'danger')
+    .map(p => `<span class="report-badge danger">${escHtml(p.label)}</span>`).join('');
+  const warnBadges  = (report.warnings || [])
+    .map(w => `<span class="report-badge warn">${escHtml(w)}</span>`).join('');
+  const permBadges  = (report.permissionsFound || [])
+    .map(p => `<span class="report-badge perm">${escHtml(PERM_LABELS[p] || p)}</span>`).join('');
+  const domainBadges = (report.domainsFound || [])
+    .map(d => `<span class="report-badge domain">${escHtml(d)}</span>`).join('');
+  const allBadges = dangerBadges + warnBadges + permBadges + domainBadges;
+
+  const overrideHtml = safe ? '' : `
+    <div class="report-danger-override">
+      <input type="checkbox" id="danger-override-${escAttr(source)}"
+        onchange="onDangerOverrideChange('${escAttr(source)}')">
+      <label for="danger-override-${escAttr(source)}">
+        I understand this skill contains dangerous patterns and want to install it anyway.
+        This may allow the skill to execute shell commands, eval code, or manipulate system state.
+      </label>
+    </div>`;
+
+  const repEl = document.getElementById('import-' + source + '-report');
+  if (repEl) repEl.innerHTML = `
+    <div class="report-card ${safeClass}" id="report-card-${escAttr(source)}">
+      <div class="report-card-hdr">
+        <span class="report-card-icon">${icon}</span>
+        <span class="report-card-title">${escHtml(title)}</span>
+      </div>
+      <div class="report-card-summary">${escHtml(report.summary)}</div>
+      ${allBadges ? `<div class="report-badges">${allBadges}</div>` : ''}
+      ${overrideHtml}
+      <div class="report-actions">
+        <button class="btn-install" id="btn-install-${escAttr(source)}"
+          ${safe ? '' : 'disabled'}
+          onclick="confirmInstall('${escAttr(source)}')">
+          Install ${escHtml(filename)}
+        </button>
+        <button class="btn-cancel-import" onclick="cancelImport('${escAttr(source)}')">Cancel</button>
+        <span id="install-msg-${escAttr(source)}"></span>
+      </div>
+    </div>`;
+}
+
+function onDangerOverrideChange(source) {
+  const cb  = document.getElementById('danger-override-' + source);
+  const btn = document.getElementById('btn-install-' + source);
+  if (cb && btn) btn.disabled = !cb.checked;
+}
+
+async function analyzeSkillUrl() {
+  const input = document.getElementById('import-url-input');
+  const btn   = document.getElementById('import-url-btn');
+  const url   = (input?.value || '').trim();
+  clearImportReport('url');
+  if (!url) { showImportError('url', 'Please enter a GitHub URL.'); return; }
+  if (btn) btn.disabled = true;
+  try {
+    const res  = await fetch('/api/skills/analyze-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      showImportError('url', data.message || 'Failed to fetch the skill. Check the URL and try again.');
+      return;
+    }
+    renderReportCard(data.report, data.code, data.filename, 'url');
+  } catch {
+    showImportError('url', 'Network error — could not reach the server.');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function handleFileDragover(event) {
+  event.preventDefault();
+  document.getElementById('upload-zone')?.classList.add('drag-over');
+}
+function handleFileDragleave(event) {
+  event.preventDefault();
+  document.getElementById('upload-zone')?.classList.remove('drag-over');
+}
+function handleFileDrop(event) {
+  event.preventDefault();
+  document.getElementById('upload-zone')?.classList.remove('drag-over');
+  const file = event.dataTransfer?.files?.[0];
+  if (file) analyzeSkillFile(file);
+}
+
+function analyzeSkillFile(file) {
+  clearImportReport('file');
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const dataUrl = reader.result;
+    const b64 = typeof dataUrl === 'string' ? dataUrl.split(',')[1] : '';
+    try {
+      const res  = await fetch('/api/skills/analyze-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: b64, filename: file.name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        showImportError('file', data.message || 'Failed to analyze the file.');
+        return;
+      }
+      renderReportCard(data.report, data.code, data.filename, 'file');
+    } catch {
+      showImportError('file', 'Network error — could not reach the server.');
+    }
+  };
+  reader.onerror = () => showImportError('file', 'Could not read the file.');
+  reader.readAsDataURL(file);
+}
+
+async function confirmInstall(source) {
+  const msgEl = document.getElementById('install-msg-' + source);
+  const btn   = document.getElementById('btn-install-' + source);
+  if (!_pendingInstall || _pendingInstall.source !== source) return;
+  if (btn) btn.disabled = true;
+  try {
+    const res  = await fetch('/api/skills/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: _pendingInstall.code, filename: _pendingInstall.filename }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      if (msgEl) { msgEl.style.color = 'var(--ac-red)'; msgEl.textContent = data.message || 'Install failed.'; }
+      if (btn) btn.disabled = false;
+      return;
+    }
+    const repEl = document.getElementById('import-' + source + '-report');
+    if (repEl) repEl.innerHTML = `<div class="import-success-msg">✓ ${escHtml(_pendingInstall.filename)} installed to ~/.armorclaw/skills/</div>`;
+    _pendingInstall = null;
+  } catch {
+    if (msgEl) { msgEl.style.color = 'var(--ac-red)'; msgEl.textContent = 'Network error.'; }
+    if (btn) btn.disabled = false;
+  }
+}
+
+function cancelImport(source) {
+  clearImportReport(source);
+  if (source === 'url') {
+    const input = document.getElementById('import-url-input');
+    if (input) input.value = '';
+  } else if (source === 'file') {
+    const fi = document.getElementById('import-file-input');
+    if (fi) fi.value = '';
+  }
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────────
