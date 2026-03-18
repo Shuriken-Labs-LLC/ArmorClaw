@@ -271,42 +271,134 @@ export function setSpawnGatewayForTesting(fn: () => ReturnType<typeof spawn>): v
   _spawnGateway = fn;
 }
 
-interface LaunchResult {
+// ── Launch checklist types ────────────────────────────────────────────────────
+
+export type LaunchStepId =
+  | "backup"
+  | "config"
+  | "gateway-start"
+  | "gateway-reachable"
+  | "plugin-loaded"
+  | "channel-check";
+
+export type LaunchStepStatus = "pending" | "running" | "done" | "warn" | "error";
+
+export interface LaunchStep {
+  id: LaunchStepId;
+  label: string;
+  status: LaunchStepStatus;
+  detail?: string;
+}
+
+export interface LaunchResult {
   ok: boolean;
   message?: string;
+  steps: LaunchStep[];
 }
+
+/** Listeners for step-by-step progress updates. */
+const _launchListeners: Array<(steps: LaunchStep[]) => void> = [];
+
+export function onLaunchProgress(fn: (steps: LaunchStep[]) => void): () => void {
+  _launchListeners.push(fn);
+  return () => {
+    const idx = _launchListeners.indexOf(fn);
+    if (idx >= 0) {
+      _launchListeners.splice(idx, 1);
+    }
+  };
+}
+
+function emitProgress(steps: LaunchStep[]): void {
+  for (const fn of _launchListeners) {
+    fn(steps);
+  }
+}
+
+// ── Injectable health check ──────────────────────────────────────────────────
+
+export let _httpGet: (url: string) => Promise<string | null> = async (url) => {
+  const http = await import("node:http");
+  return new Promise((resolve) => {
+    const req = http.get(url, { timeout: 3000 }, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume();
+        resolve(null);
+        return;
+      }
+      let data = "";
+      res.on("data", (chunk: Buffer) => {
+        data += chunk.toString();
+      });
+      res.on("end", () => resolve(data));
+    });
+    req.on("error", () => resolve(null));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(null);
+    });
+  });
+};
+
+export function setHttpGetForTesting(fn: (url: string) => Promise<string | null>): void {
+  _httpGet = fn;
+}
+
+// ── Launch sequence ──────────────────────────────────────────────────────────
 
 /**
  * Full gateway launch sequence — called by "Finish setup".
  *
- * 1. Back up existing OpenClaw config (channels) if present.
- * 2. Write .env values (gateway mode + auth token).
- * 3. Run openclaw.mjs config set commands (gateway, plugin registration).
- * 4. Restore channel config backup.
- * 5. Start the gateway as a background process.
- * 6. Verify the gateway is reachable.
+ * Steps:
+ *  1. Back up existing channel config (if reinstalling)
+ *  2. Write gateway + plugin config
+ *  3. Start the gateway process
+ *  4. Verify gateway is reachable (up to 15s)
+ *  5. Verify ArmorClaw plugin is loaded
+ *  6. Check messaging channel connectivity
  *
- * The definition of "setup complete": gateway running, ArmorClaw plugin
- * loaded, no critical security warnings. This function returns only when
- * all conditions are met or on hard failure.
+ * Emits progress via onLaunchProgress() so the wizard can show
+ * a live checklist with checkmarks appearing one by one.
  */
 export async function launchGateway(): Promise<LaunchResult> {
-  // 1. Back up existing channel config if present
+  const steps: LaunchStep[] = [
+    { id: "backup", label: "Backing up existing config", status: "pending" },
+    { id: "config", label: "Writing gateway configuration", status: "pending" },
+    { id: "gateway-start", label: "Starting the gateway", status: "pending" },
+    { id: "gateway-reachable", label: "Waiting for gateway to respond", status: "pending" },
+    { id: "plugin-loaded", label: "Verifying ArmorClaw security layer", status: "pending" },
+    { id: "channel-check", label: "Checking messaging channels", status: "pending" },
+  ];
+
+  function mark(id: LaunchStepId, status: LaunchStepStatus, detail?: string): void {
+    const step = steps.find((s) => s.id === id)!;
+    step.status = status;
+    if (detail) {
+      step.detail = detail;
+    }
+    emitProgress([...steps]);
+  }
+
+  // ── 1. Back up existing channel config ──────────────────────────────────
+
+  mark("backup", "running");
   try {
     if (existsSync(OPENCLAW_CONFIG)) {
       mkdirSync(ARMORCLAW_DIR, { recursive: true });
       copyFileSync(OPENCLAW_CONFIG, join(ARMORCLAW_DIR, "channels-backup.json"));
     }
+    mark("backup", "done");
   } catch {
-    // Non-fatal — best effort backup
+    mark("backup", "warn", "Could not back up existing config — continuing");
   }
 
-  // 2. Write .env values
+  // ── 2. Write gateway + plugin config ────────────────────────────────────
+
+  mark("config", "running");
   const token = generateAuthToken();
   setEnvVar("ARMORCLAW_GATEWAY_MODE", "local");
   setEnvVar("ARMORCLAW_GATEWAY_TOKEN", token);
 
-  // 3. Run openclaw config set commands
   const configCommands = [
     `node ${OPENCLAW_MJS} config set gateway.mode local`,
     `node ${OPENCLAW_MJS} config set gateway.auth.token ${token}`,
@@ -315,58 +407,163 @@ export async function launchGateway(): Promise<LaunchResult> {
     `node ${OPENCLAW_MJS} config set plugins.entries.armorclaw.path '${WRAPPER_DIR}'`,
   ];
 
+  let configErrors = 0;
   for (const cmd of configCommands) {
     try {
       _execCommand(cmd);
     } catch {
-      // Config set failed — non-fatal, the daemon may still start with
-      // env-based config. Continue with remaining commands.
+      configErrors++;
     }
   }
 
-  // 4. Restore channel config backup
+  // Restore channel config from backup after writing new config
   try {
     const backupPath = join(ARMORCLAW_DIR, "channels-backup.json");
     if (existsSync(backupPath) && existsSync(OPENCLAW_CONFIG)) {
       const backup = JSON.parse(readFileSync(backupPath, "utf-8")) as Record<string, unknown>;
       const current = JSON.parse(readFileSync(OPENCLAW_CONFIG, "utf-8")) as Record<string, unknown>;
-      // Restore channel-related keys from backup if they were overwritten
-      if (backup["channels"] && !current["channels"]) {
-        current["channels"] = backup["channels"];
+      const channelKeys = ["channels", "telegram", "whatsapp", "signal"];
+      let restored = false;
+      for (const key of channelKeys) {
+        if (backup[key] && !current[key]) {
+          current[key] = backup[key];
+          restored = true;
+        }
+      }
+      if (restored) {
         const { writeFileSync: wfs } = await import("node:fs");
         wfs(OPENCLAW_CONFIG, JSON.stringify(current, null, 2), "utf-8");
       }
     }
   } catch {
-    // Non-fatal — channel config can be re-done
+    // Non-fatal
   }
 
-  // 5. Start the gateway as a detached background process
+  if (configErrors > 0) {
+    mark("config", "warn", `${configErrors} config command(s) failed — gateway may use defaults`);
+  } else {
+    mark("config", "done");
+  }
+
+  // ── 3. Start the gateway ────────────────────────────────────────────────
+
+  mark("gateway-start", "running");
   try {
     const child = _spawnGateway();
     child.unref();
+    mark("gateway-start", "done");
   } catch (err) {
+    mark(
+      "gateway-start",
+      "error",
+      `Could not start the gateway: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return {
       ok: false,
-      message: `Could not start the gateway: ${err instanceof Error ? err.message : String(err)}`,
+      message: "Could not start the gateway. Please try restarting the app.",
+      steps,
     };
   }
 
-  // 6. Verify gateway is reachable (poll for up to 10 seconds)
+  // ── 4. Verify gateway is reachable (up to 15s) ─────────────────────────
+
+  mark("gateway-reachable", "running");
   const dashboardUrl = `http://127.0.0.1:${DASHBOARD_PORT}/api/dashboard`;
-  for (let attempt = 0; attempt < 20; attempt++) {
+  let dashboardData: string | null = null;
+
+  for (let attempt = 0; attempt < 30; attempt++) {
     await new Promise((r) => setTimeout(r, 500));
-    try {
-      execSync(`curl -sf ${dashboardUrl} > /dev/null 2>&1`, { timeout: 3000 });
-      return { ok: true };
-    } catch {
-      // Not ready yet — retry
+    dashboardData = await _httpGet(dashboardUrl);
+    if (dashboardData) {
+      break;
     }
   }
 
-  // Gateway didn't respond in time — still return ok:true since it may be starting
-  // slowly. The dashboard will show status when it comes up.
-  return { ok: true, message: "Gateway started but not yet responding. It may take a moment." };
+  if (!dashboardData) {
+    mark("gateway-reachable", "error", "Gateway did not respond within 15 seconds");
+    return {
+      ok: false,
+      message: "The gateway started but isn't responding yet. Click Retry to try again.",
+      steps,
+    };
+  }
+  mark("gateway-reachable", "done");
+
+  // ── 5. Verify ArmorClaw plugin is loaded ────────────────────────────────
+
+  mark("plugin-loaded", "running");
+  let pluginLoaded = false;
+  try {
+    const snap = JSON.parse(dashboardData) as Record<string, unknown>;
+    const skills = snap["skills"] as Array<Record<string, unknown>> | undefined;
+    // If the skills registry has any bundled entries, the plugin loaded
+    if (Array.isArray(skills) && skills.some((s) => s["author"] === "bundled")) {
+      pluginLoaded = true;
+    }
+    // Also check the feed for gateway-config audit entry
+    const feed = snap["feed"] as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(feed) && feed.some((e) => e["skill"] === "gateway-config")) {
+      pluginLoaded = true;
+    }
+  } catch {
+    // Parse failure — try once more
+  }
+
+  if (!pluginLoaded) {
+    // Retry once after a short wait — plugin may still be loading
+    await new Promise((r) => setTimeout(r, 2000));
+    const retry = await _httpGet(dashboardUrl);
+    if (retry) {
+      try {
+        const snap = JSON.parse(retry) as Record<string, unknown>;
+        const skills = snap["skills"] as Array<Record<string, unknown>> | undefined;
+        const feed = snap["feed"] as Array<Record<string, unknown>> | undefined;
+        if (
+          (Array.isArray(skills) && skills.some((s) => s["author"] === "bundled")) ||
+          (Array.isArray(feed) && feed.some((e) => e["skill"] === "gateway-config"))
+        ) {
+          pluginLoaded = true;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  if (pluginLoaded) {
+    mark("plugin-loaded", "done");
+  } else {
+    mark(
+      "plugin-loaded",
+      "warn",
+      "ArmorClaw security layer may not be loaded. Please restart the app if issues persist.",
+    );
+  }
+
+  // ── 6. Check messaging channels ─────────────────────────────────────────
+
+  mark("channel-check", "running");
+  const state = getState();
+  const hasChannel = state.telegramConnected || state.whatsappConnected || state.signalConnected;
+
+  if (hasChannel) {
+    mark("channel-check", "done");
+  } else {
+    mark(
+      "channel-check",
+      "warn",
+      "No messaging channel connected — you can set this up later in Settings",
+    );
+  }
+
+  // ── Result ──────────────────────────────────────────────────────────────
+
+  const hasError = steps.some((s) => s.status === "error");
+  return {
+    ok: !hasError,
+    steps,
+    message: hasError ? "Setup could not complete. See the checklist for details." : undefined,
+  };
 }
 
 // ── Express app ───────────────────────────────────────────────────────────────
@@ -705,14 +902,12 @@ export function createApp(): express.Application {
     const t = (token ?? "").trim();
     // Telegram bot tokens look like: 1234567890:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
     if (!t || !/^\d+:[A-Za-z0-9_-]{35,}$/.test(t)) {
-      res
-        .status(422)
-        .json({
-          ok: false,
-          field: "token",
-          message:
-            "That doesn't look like a valid Telegram bot token. It should look like 7123456789:AAHxxxxxx.",
-        });
+      res.status(422).json({
+        ok: false,
+        field: "token",
+        message:
+          "That doesn't look like a valid Telegram bot token. It should look like 7123456789:AAHxxxxxx.",
+      });
       return;
     }
     setEnvVar("TELEGRAM_BOT_TOKEN", t);
@@ -747,17 +942,38 @@ export function createApp(): express.Application {
 
   // ── Step 7 — Review and launch ────────────────────────────────────────────
 
+  // SSE endpoint for launch progress — wizard subscribes before calling /launch
+  app.get("/api/step/7/progress", (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    const unsub = onLaunchProgress((steps) => {
+      try {
+        res.write(`data: ${JSON.stringify(steps)}\n\n`);
+      } catch {
+        /* disconnected */
+      }
+    });
+    req.on("close", unsub);
+  });
+
   app.post("/api/step/7/launch", async (_req, res) => {
     try {
       const result = await launchGateway();
       if (!result.ok) {
-        res.status(500).json({ ok: false, message: result.message });
+        res.status(500).json({ ok: false, message: result.message, steps: result.steps });
         return;
       }
       const state = getState();
       updateState({ completedSteps: [...state.completedSteps, 7] });
       notifyListeners();
-      res.json({ ok: true, dashboardUrl: `http://localhost:${DASHBOARD_PORT}` });
+      res.json({
+        ok: true,
+        dashboardUrl: `http://localhost:${DASHBOARD_PORT}`,
+        steps: result.steps,
+      });
     } catch (err) {
       res.status(500).json({
         ok: false,
