@@ -852,6 +852,18 @@
       padding: 2px 7px; border-radius: 20px;
       background: var(--ac-surface2); color: var(--ac-hint);
     }
+    .skill-badge-active {
+      display: inline-block; font-size: 11px; font-weight: 500;
+      padding: 2px 7px; border-radius: 20px;
+      background: var(--ac-teal-light); color: var(--ac-teal);
+    }
+    .skill-badge-setup {
+      display: inline-block; font-size: 11px; font-weight: 500;
+      padding: 2px 7px; border-radius: 20px;
+      background: var(--ac-amber-light); color: var(--ac-amber);
+    }
+    .skill-card-version { font-size: 11px; color: var(--ac-hint); margin-top: 1px; }
+    .skill-card-missing { font-size: 11.5px; color: var(--ac-amber); margin-top: 3px; }
     .skill-badge-user {
       display: inline-block; font-size: 11px; font-weight: 500;
       padding: 2px 7px; border-radius: 20px;
@@ -1173,37 +1185,8 @@
         <!-- ── ArmorClaw skills ────────────────────────────────────────── -->
         <div class="card">
           <div class="card-hdr"><span class="card-title">ArmorClaw skills</span></div>
-          <div class="skill-card">
-            <div class="skill-card-icon">📧</div>
-            <div class="skill-card-body">
-              <div class="skill-card-name">Email + calendar</div>
-              <div class="skill-card-desc">Inbox triage, draft replies, and calendar management for Gmail and Outlook.</div>
-              <div class="skill-card-badges"><span class="skill-badge-coming">Coming soon</span></div>
-            </div>
-          </div>
-          <div class="skill-card">
-            <div class="skill-card-icon">📊</div>
-            <div class="skill-card-body">
-              <div class="skill-card-name">CRM + lead gen</div>
-              <div class="skill-card-desc">Prospect research, follow-up drafts, and CRM record management for HubSpot and Airtable.</div>
-              <div class="skill-card-badges"><span class="skill-badge-coming">Coming soon</span></div>
-            </div>
-          </div>
-          <div class="skill-card">
-            <div class="skill-card-icon">📁</div>
-            <div class="skill-card-body">
-              <div class="skill-card-name">Secure file access</div>
-              <div class="skill-card-desc">Read, write, and watch files within your sandbox directory — never outside it.</div>
-              <div class="skill-card-badges"><span class="skill-badge-coming">Coming soon</span></div>
-            </div>
-          </div>
-          <div class="skill-card">
-            <div class="skill-card-icon">🌐</div>
-            <div class="skill-card-body">
-              <div class="skill-card-name">Browser automation</div>
-              <div class="skill-card-desc">Fill forms, extract data, and capture screenshots in a dedicated, sandboxed browser profile.</div>
-              <div class="skill-card-badges"><span class="skill-badge-coming">Coming soon</span></div>
-            </div>
+          <div id="bundled-skills-list">
+            <div style="padding:16px;font-size:13px;color:var(--ac-hint)">Loading skills…</div>
           </div>
         </div>
 
@@ -2550,6 +2533,55 @@ function syncSecurity(s) {
 }
 
 // ── Skills view ──────────────────────────────────────────────────────────────────
+
+const SKILL_ICONS = {
+  'email-calendar': '📧',
+  'crm-leadgen':    '📊',
+  'secure-files':   '📁',
+  'browser':        '🌐',
+};
+
+let _bundledSkillsLoaded = false;
+
+function loadBundledSkills() {
+  if (_bundledSkillsLoaded) return;
+  _bundledSkillsLoaded = true;
+  const list = document.getElementById('bundled-skills-list');
+  if (!list) return;
+  fetch('/api/skills/bundled')
+    .then(r => r.json())
+    .then(skills => {
+      if (!Array.isArray(skills) || skills.length === 0) {
+        list.innerHTML = '<div style="padding:16px;font-size:13px;color:var(--ac-hint)">No bundled skills found.</div>';
+        return;
+      }
+      list.innerHTML = skills.map(sk => {
+        const icon = SKILL_ICONS[sk.id] || '⚡';
+        const badge = sk.status === 'active'
+          ? '<span class="skill-badge-active">Active</span>'
+          : '<span class="skill-badge-setup">Setup needed</span>';
+        const missing = sk.status === 'not_configured' && sk.missingConfig
+          ? '<div class="skill-card-missing">' + escHtml(sk.missingConfig) + '</div>'
+          : '';
+        const version = '<div class="skill-card-version">v' + escHtml(sk.version) + '</div>';
+        return '<div class="skill-card">' +
+          '<div class="skill-card-icon">' + icon + '</div>' +
+          '<div class="skill-card-body">' +
+            '<div class="skill-card-name">' + escHtml(sk.displayName) + version + '</div>' +
+            '<div class="skill-card-desc">' + escHtml(sk.description) + '</div>' +
+            '<div class="skill-card-badges">' + badge + '</div>' +
+            missing +
+          '</div>' +
+        '</div>';
+      }).join('');
+    })
+    .catch(() => {
+      list.innerHTML = '<div style="padding:16px;font-size:13px;color:var(--ac-hint)">Could not load skill status.</div>';
+    });
+}
+
+// Load bundled skills when the page loads
+loadBundledSkills();
 
 /** Pending install — one slot: { code, filename, source: 'url'|'file' } */
 let _pendingInstall = null;

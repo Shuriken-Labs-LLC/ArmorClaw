@@ -27,6 +27,7 @@ import {
   generateAuthToken,
   isPublicIp,
   registerTokenRotation,
+  syncTokenToGatewayConfig,
   validateGatewayConfig,
   writeTokenToEnv,
 } from "../../../config/gateway.ts";
@@ -40,6 +41,7 @@ function safeOpts(overrides: Record<string, unknown> = {}) {
     platformCheck: vi.fn(),
     getGatewayHost: () => undefined as string | undefined,
     writeToken: vi.fn().mockReturnValue(true),
+    syncToGateway: vi.fn().mockReturnValue(true),
     ...overrides,
   };
 }
@@ -483,5 +485,72 @@ describe("registerTokenRotation", () => {
     api.fire("session_start", { sessionId: "s1" });
     expect(fakeFn).toHaveBeenCalled();
     expect(writeToken).toHaveBeenCalledWith("ee".repeat(32));
+  });
+
+  it("syncs token to gateway config on session_start", () => {
+    const api = makeMockApi();
+    const syncToGateway = vi.fn().mockReturnValue(true);
+    registerTokenRotation(api as unknown as OpenClawPluginApi, {
+      writeToken: vi.fn().mockReturnValue(true),
+      syncToGateway,
+    });
+    api.fire("session_start", { sessionId: "s1" });
+    expect(syncToGateway).toHaveBeenCalledTimes(1);
+    const token = syncToGateway.mock.calls[0][0] as string;
+    expect(token.length).toBeGreaterThanOrEqual(48);
+  });
+});
+
+// ── syncTokenToGatewayConfig ──────────────────────────────────────────────────
+
+describe("syncTokenToGatewayConfig", () => {
+  it("runs two config set commands with the token", () => {
+    const commands: string[] = [];
+    const runCommand = vi.fn((cmd: string) => {
+      commands.push(cmd);
+    });
+    const result = syncTokenToGatewayConfig("mytoken123", runCommand);
+    expect(result).toBe(true);
+    expect(commands).toHaveLength(2);
+    expect(commands[0]).toContain("gateway.auth.token");
+    expect(commands[0]).toContain("mytoken123");
+    expect(commands[1]).toContain("gateway.mode");
+    expect(commands[1]).toContain("local");
+  });
+
+  it("returns false when command throws", () => {
+    const runCommand = vi.fn().mockImplementation(() => {
+      throw new Error("fail");
+    });
+    const result = syncTokenToGatewayConfig("tok", runCommand);
+    expect(result).toBe(false);
+  });
+
+  it("passes the exact token value to the command", () => {
+    const knownToken = "ab".repeat(32);
+    const runCommand = vi.fn();
+    syncTokenToGatewayConfig(knownToken, runCommand);
+    expect(runCommand.mock.calls[0][0]).toContain(knownToken);
+  });
+});
+
+// ── validateGatewayConfig syncs to gateway ────────────────────────────────────
+
+describe("validateGatewayConfig — gateway sync", () => {
+  it("calls syncToGateway with the generated token", () => {
+    const syncToGateway = vi.fn().mockReturnValue(true);
+    const writeToken = vi.fn().mockReturnValue(true);
+    validateGatewayConfig(safeOpts({ syncToGateway, writeToken }));
+
+    expect(syncToGateway).toHaveBeenCalledTimes(1);
+    // Same token written to both .env and gateway config
+    const envToken = writeToken.mock.calls[0][0] as string;
+    const gwToken = syncToGateway.mock.calls[0][0] as string;
+    expect(envToken).toBe(gwToken);
+  });
+
+  it("does not throw when syncToGateway fails", () => {
+    const syncToGateway = vi.fn().mockReturnValue(false);
+    expect(() => validateGatewayConfig(safeOpts({ syncToGateway }))).not.toThrow();
   });
 });

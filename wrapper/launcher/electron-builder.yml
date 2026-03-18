@@ -1,0 +1,71 @@
+# electron-builder configuration for ArmorClaw Launcher
+#
+# Build:
+#   cd wrapper/launcher && npm run build:mac
+#   cd wrapper/launcher && npm run build:win
+
+appId: ai.armorclaw.launcher
+productName: ArmorClaw
+copyright: Copyright © 2026 ArmorClaw
+
+directories:
+  output: ../../dist/launcher
+
+files:
+  - "**/*"
+  - "!node_modules/.cache"
+  - "!**/tests/**"
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+
+mac:
+  category: public.app-category.productivity
+  icon: assets/icon-green.png
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  darkModeSupport: false
+  hardenedRuntime: true
+  entitlements: null
+  entitlementsInherit: null
+
+dmg:
+  title: "ArmorClaw"
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# ── Windows ───────────────────────────────────────────────────────────────────
+
+win:
+  icon: assets/icon-green.png
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: true
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+  createDesktopShortcut: false
+  createStartMenuShortcut: true
+  shortcutName: ArmorClaw
+  # Auto-start via registry
+  include: null
+
+# ── Linux ─────────────────────────────────────────────────────────────────────
+
+linux:
+  icon: assets/icon-green.png
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  category: Utility

@@ -465,6 +465,74 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
   };
 }
 
+// ── Bundled skill status ──────────────────────────────────────────────────────
+
+export interface BundledSkillStatus {
+  id: string;
+  displayName: string;
+  description: string;
+  version: string;
+  status: "active" | "not_configured";
+  missingConfig?: string;
+}
+
+/**
+ * Check config readiness for all four bundled skills.
+ * Uses the parsed .env map — never reads secrets into output.
+ */
+export function getBundledSkillStatuses(env: Record<string, string>): BundledSkillStatus[] {
+  const emailActive =
+    Boolean(env["GOOGLE_CLIENT_ID"]) ||
+    Boolean(env["GOOGLE_AUTH_CODE_PENDING"]) ||
+    Boolean(env["MICROSOFT_CLIENT_ID"]) ||
+    Boolean(env["MICROSOFT_AUTH_CODE_PENDING"]);
+
+  const crmActive = Boolean(env["HUBSPOT_API_KEY"]) || Boolean(env["AIRTABLE_API_KEY"]);
+
+  return [
+    {
+      id: "email-calendar",
+      displayName: "Email + calendar",
+      description: "Inbox triage, draft replies, and calendar management for Gmail and Outlook.",
+      version: "1.0.0",
+      ...(emailActive
+        ? { status: "active" as const }
+        : {
+            status: "not_configured" as const,
+            missingConfig: "Connect Gmail or Outlook in Settings to activate",
+          }),
+    },
+    {
+      id: "crm-leadgen",
+      displayName: "CRM + lead gen",
+      description:
+        "Prospect research, follow-up drafts, and CRM record management for HubSpot and Airtable.",
+      version: "1.0.0",
+      ...(crmActive
+        ? { status: "active" as const }
+        : {
+            status: "not_configured" as const,
+            missingConfig: "Connect HubSpot or Airtable in Settings",
+          }),
+    },
+    {
+      id: "secure-files",
+      displayName: "Secure file access",
+      description: "Read, write, and watch files within your sandbox directory — never outside it.",
+      version: "1.0.0",
+      status: "active",
+    },
+    {
+      id: "browser",
+      displayName: "Browser automation",
+      description:
+        "Fill forms, extract data, and capture screenshots in a dedicated, sandboxed browser profile.",
+      version: "1.0.0",
+      status: "active",
+    },
+  ];
+}
+
 // ── Express app ───────────────────────────────────────────────────────────────
 
 export function createApp(): express.Application {
@@ -681,6 +749,12 @@ export function createApp(): express.Application {
         .status(422)
         .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
     }
+  });
+
+  // ── Skills: bundled skill status ──
+  app.get("/api/skills/bundled", (_req, res) => {
+    const env = readEnvConfig();
+    res.json(getBundledSkillStatuses(env));
   });
 
   // ── Recipes ──

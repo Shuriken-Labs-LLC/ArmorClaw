@@ -1,0 +1,41 @@
+{
+  "name": "armorclaw",
+  "version": "0.1.0",
+  "description": "OpenClaw, hardened for small business",
+  "keywords": [
+    "agent",
+    "ai",
+    "freelancer",
+    "openclaw",
+    "security",
+    "smb"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/q2dr5tsqfq-cyber/ArmorClaw.git"
+  },
+  "bin": {
+    "armorclaw": "./bin/armorclaw.js"
+  },
+  "files": [
+    "bin/",
+    "security/",
+    "skills/",
+    "onboarding/",
+    "dashboard/",
+    "config/",
+    "lib/",
+    "recipes/",
+    "digest/",
+    "token-tracker/",
+    "undo/",
+    "marketplace/",
+    "index.ts",
+    "openclaw.plugin.json"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

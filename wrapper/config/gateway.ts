@@ -14,6 +14,7 @@
  * All external I/O and randomness are injectable for testing.
  */
 
+import { execSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -148,6 +149,37 @@ export function writeTokenToEnv(token: string, envFile = ENV_FILE): boolean {
   }
 }
 
+// ── OpenClaw gateway config sync ──────────────────────────────────────────────
+
+/**
+ * Path to the OpenClaw entry point, two directories above this file:
+ * wrapper/config/ → wrapper/ → repo root.
+ */
+const OPENCLAW_MJS = join(import.meta.dirname, "..", "..", "openclaw.mjs");
+
+/**
+ * Write the auth token into OpenClaw's gateway config so the daemon
+ * picks it up without manual CLI steps.
+ *
+ * Runs: node openclaw.mjs config set gateway.auth.token <token>
+ *       node openclaw.mjs config set gateway.mode local
+ *
+ * Never throws — returns false on any error. The token is passed as a
+ * CLI argument (visible only to the local process, never logged).
+ */
+export function syncTokenToGatewayConfig(
+  token: string,
+  runCommand: (cmd: string) => void = (cmd) => execSync(cmd, { stdio: "ignore", timeout: 10_000 }),
+): boolean {
+  try {
+    runCommand(`node ${OPENCLAW_MJS} config set gateway.auth.token ${token}`);
+    runCommand(`node ${OPENCLAW_MJS} config set gateway.mode local`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ── Options & result types ────────────────────────────────────────────────────
 
 export interface GatewayConfigOptions {
@@ -158,6 +190,8 @@ export interface GatewayConfigOptions {
    * Receives the raw token — must not log it.
    */
   writeToken?: (token: string) => boolean;
+  /** Override gateway config sync (default: syncTokenToGatewayConfig). */
+  syncToGateway?: (token: string) => boolean;
   /** Override random bytes source (default: crypto.randomBytes). */
   randomBytesFn?: (n: number) => Buffer;
   /** Override platform check (default: checkPlatformCompatibility). */
@@ -206,11 +240,15 @@ export function validateGatewayConfig(options: GatewayConfigOptions = {}): Gatew
     );
   }
 
-  // 3. Generate and write a new auth token
+  // 3. Generate and write a new auth token — same token to both .env and gateway config
   const randomBytesFn = options.randomBytesFn ?? randomBytes;
   const token = generateAuthToken(randomBytesFn);
   const writeToken = options.writeToken ?? ((t: string) => writeTokenToEnv(t));
   const tokenWritten = writeToken(token);
+
+  // 3b. Sync token to OpenClaw gateway config (best-effort, never blocks startup)
+  const syncToGateway = options.syncToGateway ?? ((t: string) => syncTokenToGatewayConfig(t));
+  syncToGateway(token);
 
   // 4. Audit entry — outcome only, no token value, no host secrets
   writeAuditEntry({
@@ -232,6 +270,8 @@ export interface TokenRotationOptions {
   randomBytesFn?: (n: number) => Buffer;
   /** Override token writer (default: writeTokenToEnv). */
   writeToken?: (token: string) => boolean;
+  /** Override gateway config sync (default: syncTokenToGatewayConfig). */
+  syncToGateway?: (token: string) => boolean;
 }
 
 /**
@@ -247,9 +287,12 @@ export function registerTokenRotation(
   const randomBytesFn = options.randomBytesFn ?? randomBytes;
   const writeToken = options.writeToken ?? ((t: string) => writeTokenToEnv(t));
 
+  const syncToGateway = options.syncToGateway ?? ((t: string) => syncTokenToGatewayConfig(t));
+
   api.on("session_start", () => {
     const token = generateAuthToken(randomBytesFn);
     writeToken(token);
+    syncToGateway(token);
     writeAuditEntry({
       timestamp: new Date().toISOString(),
       skill: "gateway-config",

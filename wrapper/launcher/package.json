@@ -1,0 +1,17 @@
+{
+  "name": "armorclaw-launcher",
+  "version": "0.1.0",
+  "description": "ArmorClaw desktop launcher — system tray app",
+  "type": "module",
+  "main": "main.ts",
+  "scripts": {
+    "build:all": "electron-builder --mac --win",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "start": "electron --experimental-strip-types ."
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0"
+  }
+}
