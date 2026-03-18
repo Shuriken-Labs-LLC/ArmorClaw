@@ -1,5 +1,5 @@
 import { emptyPluginConfigSchema, type OpenClawPluginApi } from "openclaw/plugin-sdk";
-import { checkPlatformCompatibility } from "./config/platform.ts";
+import { registerTokenRotation, validateGatewayConfig } from "./config/gateway.ts";
 import { initRecipeScheduler } from "./recipes/index.ts";
 import { registerAuditLogger } from "./security/audit-logger.ts";
 import { registerInjectionFilter } from "./security/injection-filter.ts";
@@ -19,8 +19,9 @@ const armorClawPlugin = {
   configSchema: emptyPluginConfigSchema(),
 
   register(api: OpenClawPluginApi): void {
-    // Platform check runs before anything else — throws on hard failures.
-    checkPlatformCompatibility();
+    // Gateway validation first: platform check + host validation + token rotation.
+    validateGatewayConfig();
+    registerTokenRotation(api);
     // Order matters: injection check runs first, then permission check, then
     // the audit logger observes the final outcome after execution.
     registerInjectionFilter(api);
