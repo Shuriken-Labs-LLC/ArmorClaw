@@ -5,7 +5,7 @@
  * 0.0.0.0 or any public address.
  */
 
-import { execSync, spawn } from "node:child_process";
+import { execSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { homedir } from "node:os";
@@ -420,56 +420,9 @@ export let _execCommand: (cmd: string) => void = (cmd) =>
     },
   });
 
-/** Injectable seam for gateway spawn — returns the ChildProcess. */
-export let _spawnGateway: () => ReturnType<typeof spawn> = () => {
-  const root = process.env["ARMORCLAW_REPO_ROOT"] ?? REPO_ROOT;
-  const mjs = join(root, "openclaw.mjs");
-  const token = process.env["ARMORCLAW_GATEWAY_TOKEN"] ?? "";
-  // If we have a known token, pass it via --token so the gateway uses it
-  // instead of auto-generating a different one that won't match.
-  const args = [mjs, "gateway"];
-  if (token) {
-    args.push("--token", token);
-  }
-  const child = spawn(resolveNodePath(), args, {
-    stdio: ["ignore", "ignore", "pipe"],
-    detached: true,
-    cwd: root,
-    env: {
-      ...process.env,
-      PATH: `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${process.env["PATH"] ?? ""}`,
-    },
-  });
-  // Capture stderr so gateway startup failures surface in the launcher log
-  if (child.stderr) {
-    let buf = "";
-    child.stderr.on("data", (chunk: Buffer) => {
-      buf += chunk.toString();
-      const lines = buf.split("\n");
-      buf = lines.pop() ?? "";
-      for (const line of lines) {
-        if (line.trim()) {
-          process.stderr.write(`[gateway] ${line}\n`);
-        }
-      }
-    });
-    child.stderr.on("end", () => {
-      if (buf.trim()) {
-        process.stderr.write(`[gateway] ${buf}\n`);
-      }
-    });
-  }
-  return child;
-};
-
 /** Override command runner. Test use only. */
 export function setExecCommandForTesting(fn: (cmd: string) => void): void {
   _execCommand = fn;
-}
-
-/** Override gateway spawner. Test use only. */
-export function setSpawnGatewayForTesting(fn: () => ReturnType<typeof spawn>): void {
-  _spawnGateway = fn;
 }
 
 // ── Launch checklist types ────────────────────────────────────────────────────
@@ -478,7 +431,6 @@ export type LaunchStepId =
   | "backup"
   | "config"
   | "gateway-install"
-  | "gateway-start"
   | "gateway-reachable"
   | "plugin-loaded"
   | "channel-check";
@@ -597,7 +549,6 @@ export async function launchGateway(): Promise<LaunchResult> {
     { id: "backup", label: "Backing up existing config", status: "pending" },
     { id: "config", label: "Writing gateway configuration", status: "pending" },
     { id: "gateway-install", label: "Gateway registered", status: "pending" },
-    { id: "gateway-start", label: "Starting the gateway", status: "pending" },
     { id: "gateway-reachable", label: "Waiting for gateway to respond", status: "pending" },
     { id: "plugin-loaded", label: "Verifying ArmorClaw security layer", status: "pending" },
     { id: "channel-check", label: "Checking messaging channels", status: "pending" },
@@ -737,7 +688,7 @@ export async function launchGateway(): Promise<LaunchResult> {
   //
   // On macOS the gateway runs as a LaunchAgent. If the plist is missing
   // (first install, or user cleaned LaunchAgents), register it now.
-  // Non-fatal — if it fails, the direct spawn in step 3 still works.
+  // Non-fatal — GatewayManager handles the spawn independently.
 
   mark("gateway-install", "running");
   if (process.platform === "darwin") {
@@ -763,72 +714,27 @@ export async function launchGateway(): Promise<LaunchResult> {
     mark("gateway-install", "done");
   }
 
-  // ── 3. Start the gateway ────────────────────────────────────────────────
+  // ── 3. Wait for the gateway to be reachable ──────────────────────────────
   //
-  // GatewayManager may have already started the gateway before the wizard
-  // reaches Step 6. Probe port 18789 first — if it's already reachable,
-  // skip the spawn and go straight to config writes and token read.
+  // GatewayManager owns the gateway lifecycle — it spawns the process and
+  // manages restarts. launchGateway() just polls port 18789 until the
+  // gateway is up, then proceeds with config writes and token read.
 
   const GATEWAY_PORT = 18789;
-  const alreadyRunning = await _probePort(GATEWAY_PORT);
-
-  mark("gateway-start", "running");
-  if (alreadyRunning) {
-    process.stderr.write(
-      `[launch] gateway already running on port ${GATEWAY_PORT} — skipping spawn\n`,
-    );
-    mark("gateway-start", "done");
-  } else {
-    try {
-      process.stderr.write(
-        `[launch] spawning gateway: ${resolveNodePath()} ${OPENCLAW_MJS} gateway\n`,
-      );
-      const child = _spawnGateway();
-      child.unref();
-      process.stderr.write(`[launch] gateway spawned — pid=${child.pid}\n`);
-      // Listen for early exit to catch immediate failures
-      child.on("error", (e) =>
-        process.stderr.write(`[launch] gateway spawn error: ${e.message}\n`),
-      );
-      child.on("exit", (code) =>
-        process.stderr.write(`[launch] gateway exited with code=${code}\n`),
-      );
-      mark("gateway-start", "done");
-    } catch (err) {
-      const detail = `Could not start the gateway: ${err instanceof Error ? err.message : String(err)}`;
-      process.stderr.write(`[launch] SPAWN FAILED: ${detail}\n`);
-      mark("gateway-start", "error", detail);
-      return {
-        ok: false,
-        message: detail,
-        steps,
-      };
-    }
-  }
-
-  // ── 4. Verify gateway is reachable (up to 15s) ─────────────────────────
-  //
-  // Probe the actual gateway WebSocket port (18789), NOT the dashboard
-  // port (7390). The dashboard runs in-process and always responds —
-  // it can't tell us whether the gateway process actually started.
 
   mark("gateway-reachable", "running");
   process.stderr.write(`[launch] polling gateway port ${GATEWAY_PORT}\n`);
-  let gatewayUp = alreadyRunning;
+  let gatewayUp = false;
 
-  if (!gatewayUp) {
-    for (let attempt = 0; attempt < 30; attempt++) {
-      await new Promise((r) => setTimeout(r, 500));
-      gatewayUp = await _probePort(GATEWAY_PORT);
-      if (gatewayUp) {
-        process.stderr.write(
-          `[launch] gateway port ${GATEWAY_PORT} reachable on attempt ${attempt + 1}\n`,
-        );
-        break;
-      }
+  for (let attempt = 0; attempt < 30; attempt++) {
+    gatewayUp = await _probePort(GATEWAY_PORT);
+    if (gatewayUp) {
+      process.stderr.write(
+        `[launch] gateway port ${GATEWAY_PORT} reachable on attempt ${attempt + 1}\n`,
+      );
+      break;
     }
-  } else {
-    process.stderr.write(`[launch] gateway port ${GATEWAY_PORT} already confirmed reachable\n`);
+    await new Promise((r) => setTimeout(r, 500));
   }
 
   if (!gatewayUp) {
@@ -838,7 +744,7 @@ export async function launchGateway(): Promise<LaunchResult> {
     mark("gateway-reachable", "error", "Gateway did not respond within 15 seconds");
     return {
       ok: false,
-      message: "The gateway started but isn't responding yet. Click Retry to try again.",
+      message: "The gateway isn't responding yet. Click Retry to try again.",
       steps,
     };
   }

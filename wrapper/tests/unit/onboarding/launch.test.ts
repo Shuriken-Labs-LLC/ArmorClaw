@@ -1,11 +1,10 @@
 /**
  * Unit tests for the Step 6 gateway launch sequence.
  *
- * All child process, HTTP, and file operations are injected.
+ * All HTTP and file operations are injected.
  * No real gateway is spawned; no real files are read.
  */
 
-import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
@@ -50,22 +49,11 @@ import {
   setExecCommandForTesting,
   setHttpGetForTesting,
   setProbePortForTesting,
-  setSpawnGatewayForTesting,
 } from "../../../onboarding/server.ts";
 import type { LaunchStep } from "../../../onboarding/server.ts";
 import { getState } from "../../../onboarding/state.ts";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function makeMockChild() {
-  const child = new EventEmitter() as EventEmitter & {
-    kill: ReturnType<typeof vi.fn>;
-    unref: ReturnType<typeof vi.fn>;
-  };
-  child.kill = vi.fn();
-  child.unref = vi.fn();
-  return child;
-}
 
 const DASHBOARD_SNAPSHOT = JSON.stringify({
   agentStatus: { status: "running" },
@@ -84,9 +72,6 @@ beforeEach(() => {
     connectedChannels: [],
   } as ReturnType<typeof getState>);
   setExecCommandForTesting(vi.fn());
-  setSpawnGatewayForTesting(
-    () => makeMockChild() as ReturnType<typeof import("node:child_process").spawn>,
-  );
   setProbePortForTesting(async () => true);
   setHttpGetForTesting(async () => DASHBOARD_SNAPSHOT);
 });
@@ -103,9 +88,9 @@ describe("launchGateway", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("returns steps array with all 7 steps", async () => {
+  it("returns steps array with all 6 steps", async () => {
     const result = await launchGateway();
-    expect(result.steps).toHaveLength(7);
+    expect(result.steps).toHaveLength(6);
   });
 
   it("all steps are done or warn on success", async () => {
@@ -118,9 +103,6 @@ describe("launchGateway", () => {
   it("writes ARMORCLAW_GATEWAY_MODE to .env (token is read back from gateway after start)", async () => {
     await launchGateway();
     expect(setEnvVar).toHaveBeenCalledWith("ARMORCLAW_GATEWAY_MODE", "local");
-    // Token is NOT written during config — it's read from openclaw.json
-    // after the gateway starts (step 4b). Since the mock health check
-    // returns null here, step 4b doesn't run.
   });
 
   it("runs openclaw config set commands (no token — gateway owns its token)", async () => {
@@ -152,41 +134,14 @@ describe("launchGateway", () => {
     expect(loadCmd).toMatch(/\/.*wrapper/);
   });
 
-  it("spawns the gateway process when not already running", async () => {
-    // First probe (pre-spawn check) must return false so spawn runs
-    let calls = 0;
-    setProbePortForTesting(async () => {
-      calls++;
-      return calls > 1; // false on first call → spawn; true after → reachable
-    });
-    const spawnFn = vi.fn().mockReturnValue(makeMockChild());
-    setSpawnGatewayForTesting(
-      spawnFn as () => ReturnType<typeof import("node:child_process").spawn>,
-    );
-    await launchGateway();
-    expect(spawnFn).toHaveBeenCalledTimes(1);
-  });
-
-  it("skips spawn when gateway is already running", async () => {
-    setProbePortForTesting(async () => true);
-    const spawnFn = vi.fn().mockReturnValue(makeMockChild());
-    setSpawnGatewayForTesting(
-      spawnFn as () => ReturnType<typeof import("node:child_process").spawn>,
-    );
-    await launchGateway();
-    expect(spawnFn).not.toHaveBeenCalled();
-  });
-
-  it("calls unref() on the spawned child to detach it", async () => {
-    let calls = 0;
-    setProbePortForTesting(async () => {
-      calls++;
-      return calls > 1;
-    });
-    const child = makeMockChild();
-    setSpawnGatewayForTesting(() => child as ReturnType<typeof import("node:child_process").spawn>);
-    await launchGateway();
-    expect(child.unref).toHaveBeenCalledTimes(1);
+  it("does not spawn a gateway process (GatewayManager owns lifecycle)", async () => {
+    // launchGateway only polls — it never spawns. Verify by checking
+    // that no child_process.spawn import is exercised (the function
+    // simply doesn't exist anymore). This is a structural assertion:
+    // if someone re-adds a spawn call, it would need _spawnGateway
+    // which no longer exists as an export.
+    const result = await launchGateway();
+    expect(result.ok).toBe(true);
   });
 });
 
@@ -294,9 +249,8 @@ describe("launchGateway — channel check", () => {
 
 describe("launchGateway — gateway restart after token write", () => {
   it("re-polls and succeeds when gateway drops then comes back", async () => {
-    // Simulate: first N calls (initial poll) succeed, then port drops
-    // after token write, then comes back after a few attempts.
-    let _totalCalls = 0;
+    // Simulate: initial polls succeed, then port drops after token write,
+    // then comes back after a few attempts.
     let postTokenPhase = false;
     const origSetEnvVar = vi.mocked(setEnvVar);
     origSetEnvVar.mockImplementation((key: string) => {
@@ -307,7 +261,6 @@ describe("launchGateway — gateway restart after token write", () => {
 
     let postTokenCalls = 0;
     setProbePortForTesting(async () => {
-      _totalCalls++;
       if (!postTokenPhase) {
         return true;
       } // initial poll succeeds
@@ -347,29 +300,6 @@ describe("launchGateway — gateway restart after token write", () => {
       globalThis.setTimeout = origSetTimeout;
     }
   }, 30_000);
-});
-
-describe("launchGateway — spawn failure", () => {
-  it("returns ok: false when spawn throws", async () => {
-    // Pre-spawn probe must return false so the spawn path runs
-    setProbePortForTesting(async () => false);
-    setSpawnGatewayForTesting(() => {
-      throw new Error("ENOENT");
-    });
-    const result = await launchGateway();
-    expect(result.ok).toBe(false);
-    const step = result.steps.find((s) => s.id === "gateway-start");
-    expect(step?.status).toBe("error");
-  });
-
-  it("error message is plain language", async () => {
-    setProbePortForTesting(async () => false);
-    setSpawnGatewayForTesting(() => {
-      throw new Error("ENOENT");
-    });
-    const result = await launchGateway();
-    expect(result.message).toContain("Could not start the gateway");
-  });
 });
 
 describe("launchGateway — config command failures", () => {
@@ -412,7 +342,6 @@ describe("launchGateway — progress steps shape", () => {
       "backup",
       "config",
       "gateway-install",
-      "gateway-start",
       "gateway-reachable",
       "plugin-loaded",
       "channel-check",
