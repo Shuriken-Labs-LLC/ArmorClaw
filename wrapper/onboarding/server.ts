@@ -638,7 +638,9 @@ export async function launchGateway(): Promise<LaunchResult> {
   if (state.connectedChannels.includes("telegram") || telegramToken) {
     configCommands.push(
       `${oc} config set channels.telegram.allowFrom '["*"]'`,
-      `${oc} config set channels.telegram.dmPolicy open`,
+      // dmPolicy removed — allowFrom '["*"]' already permits all senders,
+      // and setting dmPolicy triggers a gateway reload that regenerates the
+      // auth token (cascade). Default pairing policy is fine with wildcard allowFrom.
     );
   }
 
@@ -754,36 +756,8 @@ export async function launchGateway(): Promise<LaunchResult> {
         process.stderr.write(
           `[launch] read gateway token from openclaw.json: ${gatewayToken.slice(0, 12)}...\n`,
         );
-
-        // Writing the token to .env triggers OpenClaw to detect a config
-        // change and restart the gateway (clean exit with code=0). Wait for
-        // the port to drop, then re-poll until the gateway is back up.
-        process.stderr.write(`[launch] waiting for gateway restart after token write\n`);
-        await new Promise((r) => setTimeout(r, 1000));
-
-        let gatewayBack = await _probePort(GATEWAY_PORT);
-        if (!gatewayBack) {
-          process.stderr.write(
-            `[launch] gateway port ${GATEWAY_PORT} dropped — re-polling for restart\n`,
-          );
-          for (let attempt = 0; attempt < 30; attempt++) {
-            await new Promise((r) => setTimeout(r, 500));
-            gatewayBack = await _probePort(GATEWAY_PORT);
-            if (gatewayBack) {
-              process.stderr.write(`[launch] gateway back on attempt ${attempt + 1}\n`);
-              break;
-            }
-          }
-          if (!gatewayBack) {
-            process.stderr.write(
-              `[launch] WARNING: gateway did not come back after token write — continuing anyway\n`,
-            );
-          }
-        } else {
-          process.stderr.write(
-            `[launch] gateway still up after token write (restart may be delayed)\n`,
-          );
-        }
+        // Writing to process.env and .env only — no restart expected.
+        // The gateway owns its token; we just read it.
       } else {
         process.stderr.write(`[launch] WARNING: no gateway token found in openclaw.json\n`);
       }
