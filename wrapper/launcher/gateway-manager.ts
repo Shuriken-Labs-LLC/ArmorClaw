@@ -15,13 +15,12 @@
  */
 
 import { execSync, spawn, type ChildProcess } from "node:child_process";
-import { randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -304,56 +303,28 @@ function defaultEnsureLaunchAgent(): void {
   }
 }
 
-// ── Token pre-write ───────────────────────────────────────────────────────────
+// ── Token read-back ──────────────────────────────────────────────────────────
 
 /**
- * Write our chosen auth token into ~/.openclaw/openclaw.json BEFORE spawning
- * the gateway, so the gateway starts up with the token we already know.
+ * Read the gateway's auth token from ~/.openclaw/openclaw.json.
  *
- * Why this matters:
- * - `openclaw gateway --token <x>` only sets the token at initial process start.
- *   When any config-set command causes the gateway to detect a changed
- *   gateway.auth.token value, it triggers an internal reload — which ignores
- *   the original --token flag and generates a fresh random token. This creates
- *   a cascade of mismatches: our process.env holds <x>, but after the first
- *   reload openclaw.json has <y>, and every subsequent read diverges further.
- * - Pre-writing to openclaw.json means the gateway's startup read finds our
- *   token already in place. Config-set commands never see gateway.auth.token
- *   change (it was always ours), so no reload is triggered.
+ * The gateway owns its token entirely — it generates a random token on
+ * startup and writes it to openclaw.json. ArmorClaw reads it back after
+ * the gateway is confirmed reachable, then uses it for all WebSocket
+ * connections and API calls.
  *
- * The path is always ~/.openclaw/openclaw.json on all platforms.
- * The function is best-effort: if the write fails, a warning is logged and
- * the gateway spawn proceeds without the pre-written token (auth will fail
- * until the user retries, but the process will not crash).
+ * Returns empty string if the file is missing, malformed, or has no token.
  */
-export function writeGatewayTokenToConfig(token: string): void {
+export function readGatewayTokenFromConfig(): string {
   const configPath = join(homedir(), ".openclaw", "openclaw.json");
   try {
-    mkdirSync(dirname(configPath), { recursive: true });
-    let config: Record<string, unknown> = {};
-    try {
-      const raw = readFileSync(configPath, "utf-8");
-      config = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      // File missing or malformed — start with empty object
-    }
-
-    // Deep-set gateway.auth.token without clobbering other keys
-    let gateway = (config["gateway"] ?? {}) as Record<string, unknown>;
-    let auth = (gateway["auth"] ?? {}) as Record<string, unknown>;
-    auth = { ...auth, token };
-    gateway = { ...gateway, auth };
-    config = { ...config, gateway };
-
-    writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
-    process.stderr.write(
-      `[gateway-mgr] pre-wrote token to openclaw.json: ${token.slice(0, 8)}...\n`,
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(
-      `[gateway-mgr] pre-write token (non-fatal, falling back to --token): ${msg.slice(0, 200)}\n`,
-    );
+    const raw = readFileSync(configPath, "utf-8");
+    const config = JSON.parse(raw) as Record<string, unknown>;
+    const gw = config["gateway"] as Record<string, unknown> | undefined;
+    const auth = gw?.["auth"] as Record<string, unknown> | undefined;
+    return typeof auth?.["token"] === "string" ? auth["token"] : "";
+  } catch {
+    return "";
   }
 }
 
@@ -409,24 +380,14 @@ export class GatewayManager extends EventEmitter {
       const resolvedNode = nodePath;
 
       this._spawnGateway = () => {
-        let token = process.env["ARMORCLAW_GATEWAY_TOKEN"] ?? "";
-        if (!token) {
-          token = randomBytes(32).toString("hex");
-          process.env["ARMORCLAW_GATEWAY_TOKEN"] = token;
-        }
-        // Pre-write token to openclaw.json so the gateway starts with our token
-        // already in place. This prevents the internal-reload token cascade:
-        // the gateway reads its config, finds the token unchanged, and config-set
-        // commands never detect a gateway.auth.token diff. See writeGatewayTokenToConfig.
-        writeGatewayTokenToConfig(token);
-        // Do NOT pass --token here. --token only applies at initial spawn;
-        // internal gateway reloads ignore it. Pre-writing to the config file
-        // is the reliable path.
+        // The gateway owns its auth token — it generates one on startup and
+        // writes it to ~/.openclaw/openclaw.json. We read it back after the
+        // gateway is confirmed reachable (see start()). No --token flag, no
+        // pre-write, no token generation here.
         const args = [openclawMjs, "gateway"];
         const hasKey = Boolean(process.env["ANTHROPIC_API_KEY"] || process.env["OPENAI_API_KEY"]);
         process.stderr.write(
           `[gateway-mgr] spawn: ${resolvedNode} openclaw.mjs gateway ` +
-            `token=${token ? token.slice(0, 8) + "..." : "NONE"} ` +
             `apiKey=${hasKey ? "present" : "MISSING"} ` +
             `cwd=${repoRoot}\n`,
         );
@@ -494,6 +455,7 @@ export class GatewayManager extends EventEmitter {
     const existing = await this._checkHealth();
     if (existing) {
       process.stderr.write(`[gateway-mgr] gateway already running — attaching\n`);
+      this._syncTokenFromConfig();
       this._applySnapshot(existing);
       this._startPolling();
       return;
@@ -520,6 +482,7 @@ export class GatewayManager extends EventEmitter {
       await sleep(500);
       const snap = await this._checkHealth();
       if (snap) {
+        this._syncTokenFromConfig();
         this._applySnapshot(snap);
         this._startPolling();
         return;
@@ -527,6 +490,7 @@ export class GatewayManager extends EventEmitter {
     }
 
     // Timed out — might still be starting, keep polling
+    this._syncTokenFromConfig();
     this._updateState("running");
     this._startPolling();
   }
@@ -556,6 +520,25 @@ export class GatewayManager extends EventEmitter {
   }
 
   // ── Internal ──────────────────────────────────────────────────────────────
+
+  /**
+   * Read the gateway's self-generated token from openclaw.json and set it
+   * in process.env so the dashboard, chat panel, and syncGatewayToken()
+   * all use the correct value.
+   */
+  private _syncTokenFromConfig(): void {
+    const token = readGatewayTokenFromConfig();
+    if (token) {
+      process.env["ARMORCLAW_GATEWAY_TOKEN"] = token;
+      process.stderr.write(
+        `[gateway-mgr] read token from openclaw.json: ${token.slice(0, 8)}...\n`,
+      );
+    } else {
+      process.stderr.write(
+        `[gateway-mgr] warning: no token in openclaw.json after gateway confirmed reachable\n`,
+      );
+    }
+  }
 
   private _updateState(state: AgentState): void {
     const prev = this._status.state;

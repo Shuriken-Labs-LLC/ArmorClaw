@@ -1505,14 +1505,13 @@ export function createApp(): express.Application {
   // ── Chat: gateway config for WebSocket connection ──
   //
   // Returns the gateway WebSocket URL and auth token so the desktop chat
-  // window and inline chat panel can connect. Uses the token from process.env
-  // (set by gateway-manager before spawning with --token), falling back to
-  // openclaw.json if not set.
+  // window and inline chat panel can connect. The GatewayManager reads
+  // the token from openclaw.json after confirming the gateway is reachable,
+  // then sets process.env. Fallback polls openclaw.json directly.
   app.get("/api/chat/gateway-config", async (_req, res) => {
-    // Prefer process.env — the gateway manager sets this before spawning
-    // the gateway with --token, so it's guaranteed to match the gateway's
-    // actual auth token. The config file may contain a different token
-    // generated asynchronously by the gateway.
+    // Prefer process.env — the gateway manager reads the token from
+    // openclaw.json after the gateway is confirmed reachable and sets
+    // process.env to match.
     let token = process.env["ARMORCLAW_GATEWAY_TOKEN"] ?? "";
 
     // Fallback: read from openclaw.json (external gateway or legacy path)

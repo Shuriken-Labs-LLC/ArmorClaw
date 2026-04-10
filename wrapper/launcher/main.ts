@@ -13,7 +13,7 @@
  * running in-process — never spawned as external node subprocesses.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { app, dialog, Notification, shell } from "electron";
@@ -179,40 +179,18 @@ export async function openWizard(): Promise<void> {
 
 /**
  * Persist the gateway auth token to ~/armorclaw/.env as ARMORCLAW_GATEWAY_TOKEN.
- * ArmorClaw generates the token and pre-writes it to openclaw.json before
- * spawning the gateway. This function makes it available to other processes.
+ *
+ * The gateway owns its token — it generates one on startup and writes it to
+ * ~/.openclaw/openclaw.json. The GatewayManager reads it back after confirming
+ * the gateway is reachable and sets process.env. This function persists that
+ * value to .env so other processes (e.g. the onboarding server) can read it.
  */
 function syncGatewayToken(): void {
   try {
-    // If the gateway manager already generated a token (set in process.env),
-    // persist it to .env and trust it. The gateway was started with this token
-    // pre-written to openclaw.json, so process.env and the config file agree.
-    const envToken = process.env["ARMORCLAW_GATEWAY_TOKEN"] ?? "";
-    if (envToken) {
-      import("../onboarding/env-writer.js")
-        .then((mod) => {
-          mod.setEnvVar("ARMORCLAW_GATEWAY_TOKEN", envToken);
-        })
-        .catch(() => {});
-      return;
-    }
-
-    // Fallback: no token in env — read from the gateway's config file.
-    // This path handles the case where the gateway was started externally.
-    const configPath = join(homedir(), ".openclaw", "openclaw.json");
-    if (!existsSync(configPath)) {
-      return;
-    }
-
-    const cfg = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
-    const gw = cfg["gateway"] as Record<string, unknown> | undefined;
-    const auth = gw?.["auth"] as Record<string, unknown> | undefined;
-    const token = typeof auth?.["token"] === "string" ? auth["token"] : "";
+    const token = process.env["ARMORCLAW_GATEWAY_TOKEN"] ?? "";
     if (!token) {
       return;
     }
-
-    process.env["ARMORCLAW_GATEWAY_TOKEN"] = token;
     import("../onboarding/env-writer.js")
       .then((mod) => {
         mod.setEnvVar("ARMORCLAW_GATEWAY_TOKEN", token);
