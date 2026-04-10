@@ -4309,6 +4309,7 @@ function chatSendConnectAuth() {
       minProtocol: 3,
       maxProtocol: 3,
       client: { id: 'webchat-ui', displayName: 'ArmorClaw Dashboard Chat', version: '0.1.0', platform: 'web', mode: 'webchat' },
+      scopes: ['operator.read', 'operator.write'],
       auth: chatGatewayToken ? { token: chatGatewayToken } : undefined,
     }
   };
