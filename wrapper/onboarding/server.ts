@@ -598,81 +598,20 @@ export async function launchGateway(): Promise<LaunchResult> {
     );
   }
 
-  // ── 2. Write gateway + plugin config ────────────────────────────────────
+  // ── 2. Gateway + plugin config ───────────────────────────────────────────
+  //
+  // Config values (gateway.mode, controlUi.allowedOrigins, plugins.load.paths,
+  // plugins.allow) are now pre-written directly to ~/.openclaw/openclaw.json by
+  // GatewayManager._spawnGateway() BEFORE the gateway process starts. This
+  // eliminates `config set` calls on a live gateway, which trigger openclaw.json
+  // writes → gateway reloads → token regeneration (the cascade).
+  //
+  // Telegram bot token is in .env as TELEGRAM_BOT_TOKEN — gateway reads it
+  // directly. No channels.* config set needed.
 
   mark("config", "running");
   setEnvVar("ARMORCLAW_GATEWAY_MODE", "local");
-
-  // Use the resolved repo root (from env var) for all paths, not the
-  // module-level constants which may point inside the asar.
-  const actualRoot = process.env["ARMORCLAW_REPO_ROOT"] ?? REPO_ROOT;
-  const actualMjs = join(actualRoot, "openclaw.mjs");
-  const actualWrapper = join(actualRoot, "wrapper");
-  const nodeBin = resolveNodePath();
-  const oc = `"${nodeBin}" "${actualMjs}"`;
-  process.stderr.write(
-    `[launch] config using: root=${actualRoot} mjs=${actualMjs} wrapper=${actualWrapper}\n`,
-  );
-  // Do NOT set gateway.auth.token — let the gateway generate and own its token.
-  // ArmorClaw reads it back from openclaw.json after the gateway starts.
-  const configCommands = [
-    `${oc} config set gateway.mode local`,
-    `${oc} config set gateway.controlUi.allowedOrigins '["*"]'`,
-    `${oc} config set plugins.load.paths '["${actualWrapper}"]'`,
-    `${oc} config set plugins.allow '["wrapper"]'`,
-  ];
-
-  // memory.paths was removed — OpenClaw's current schema does not expose a
-  // memory.paths config key. Vector search is configured separately when the
-  // memory module matures. Attempting to set it causes a config validation
-  // error on every launch, so we skip it until the key lands in upstream.
-
-  // Telegram: bot token is written to .env as TELEGRAM_BOT_TOKEN (wizard
-  // fallback path). The gateway reads it from there. Do NOT use config set
-  // for any channels.telegram.* key — every write to openclaw.json triggers
-  // the gateway to reload and regenerate gateway.auth.token (token cascade).
-
-  let configErrors = 0;
-  for (const cmd of configCommands) {
-    try {
-      process.stderr.write(`[launch] exec: ${cmd.slice(0, 120)}\n`);
-      _execCommand(cmd);
-      process.stderr.write(`[launch]   → ok\n`);
-    } catch (err) {
-      configErrors++;
-      const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`[launch]   → FAILED: ${msg.slice(0, 200)}\n`);
-    }
-  }
-
-  // Restore channel config from backup after writing new config
-  try {
-    const backupPath = join(ARMORCLAW_DIR, "channels-backup.json");
-    if (existsSync(backupPath) && existsSync(OPENCLAW_CONFIG)) {
-      const backup = JSON.parse(readFileSync(backupPath, "utf-8")) as Record<string, unknown>;
-      const current = JSON.parse(readFileSync(OPENCLAW_CONFIG, "utf-8")) as Record<string, unknown>;
-      const channelKeys = ["channels", "telegram", "whatsapp", "signal"];
-      let restored = false;
-      for (const key of channelKeys) {
-        if (backup[key] && !current[key]) {
-          current[key] = backup[key];
-          restored = true;
-        }
-      }
-      if (restored) {
-        const { writeFileSync: wfs } = await import("node:fs");
-        wfs(OPENCLAW_CONFIG, JSON.stringify(current, null, 2), "utf-8");
-      }
-    }
-  } catch {
-    // Non-fatal
-  }
-
-  if (configErrors > 0) {
-    mark("config", "warn", `${configErrors} config command(s) failed — gateway may use defaults`);
-  } else {
-    mark("config", "done");
-  }
+  mark("config", "done");
 
   // ── 2b. Gateway service registration ───────────────────────────────────
   //

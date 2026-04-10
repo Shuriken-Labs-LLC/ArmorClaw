@@ -16,7 +16,7 @@
 
 import { execSync, spawn, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import { homedir } from "node:os";
@@ -328,6 +328,77 @@ export function readGatewayTokenFromConfig(): string {
   }
 }
 
+// ── Config pre-write ──────────────────────────────────────────────────────────
+
+/**
+ * Pre-write required gateway config values directly to ~/.openclaw/openclaw.json
+ * BEFORE spawning the gateway. This eliminates the need for `config set` commands
+ * on a live gateway, which trigger reloads and token regeneration (cascade).
+ *
+ * Deep-merges into existing config — only writes keys that are missing or wrong.
+ * Skips the write entirely if all values are already correct.
+ */
+function preWriteGatewayConfig(wrapperPath: string): void {
+  const configDir = join(homedir(), ".openclaw");
+  const configPath = join(configDir, "openclaw.json");
+
+  let config: Record<string, unknown> = {};
+  try {
+    if (existsSync(configPath)) {
+      config = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
+    }
+  } catch {
+    // Malformed JSON — start fresh (preserving nothing is safer than crashing)
+    config = {};
+  }
+
+  let changed = false;
+
+  // gateway.mode = "local"
+  const gw = (config["gateway"] ?? {}) as Record<string, unknown>;
+  if (gw["mode"] !== "local") {
+    gw["mode"] = "local";
+    changed = true;
+  }
+
+  // gateway.controlUi.allowedOrigins = ["*"]
+  const controlUi = (gw["controlUi"] ?? {}) as Record<string, unknown>;
+  const origins = controlUi["allowedOrigins"];
+  if (!Array.isArray(origins) || origins.length !== 1 || origins[0] !== "*") {
+    controlUi["allowedOrigins"] = ["*"];
+    changed = true;
+  }
+  gw["controlUi"] = controlUi;
+  config["gateway"] = gw;
+
+  // plugins.load.paths = ["<wrapperPath>"]
+  const plugins = (config["plugins"] ?? {}) as Record<string, unknown>;
+  const load = (plugins["load"] ?? {}) as Record<string, unknown>;
+  const paths = load["paths"];
+  if (!Array.isArray(paths) || paths.length !== 1 || paths[0] !== wrapperPath) {
+    load["paths"] = [wrapperPath];
+    changed = true;
+  }
+  plugins["load"] = load;
+
+  // plugins.allow = ["wrapper"]
+  const allow = plugins["allow"];
+  if (!Array.isArray(allow) || allow.length !== 1 || allow[0] !== "wrapper") {
+    plugins["allow"] = ["wrapper"];
+    changed = true;
+  }
+  config["plugins"] = plugins;
+
+  if (!changed) {
+    process.stderr.write(`[gateway-mgr] config already correct — skipping pre-write\n`);
+    return;
+  }
+
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
+  process.stderr.write(`[gateway-mgr] pre-wrote gateway config to ${configPath}\n`);
+}
+
 // ── Gateway Manager ───────────────────────────────────────────────────────────
 
 export interface GatewayManagerOptions {
@@ -380,10 +451,16 @@ export class GatewayManager extends EventEmitter {
       const resolvedNode = nodePath;
 
       this._spawnGateway = () => {
+        // Pre-write config so the gateway starts with correct values in place.
+        // This replaces the old `config set` calls in launchGateway() which
+        // modified openclaw.json on a live gateway, triggering reloads and
+        // token regeneration (cascade).
+        preWriteGatewayConfig(join(repoRoot, "wrapper"));
+
         // The gateway owns its auth token — it generates one on startup and
         // writes it to ~/.openclaw/openclaw.json. We read it back after the
         // gateway is confirmed reachable (see start()). No --token flag, no
-        // pre-write, no token generation here.
+        // token generation here.
         const args = [openclawMjs, "gateway"];
         const hasKey = Boolean(process.env["ANTHROPIC_API_KEY"] || process.env["OPENAI_API_KEY"]);
         process.stderr.write(
