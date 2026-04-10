@@ -15,12 +15,13 @@
  */
 
 import { execSync, spawn, type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -265,8 +266,16 @@ function getLaunchAgentPlistPath(): string | null {
 }
 
 /**
- * Ensure the OpenClaw gateway LaunchAgent is registered on macOS.
- * If the plist doesn't exist, runs `openclaw gateway install` once.
+ * Disable the OpenClaw LaunchAgent on macOS if it is present.
+ *
+ * ArmorClaw owns the gateway process lifecycle — it generates the auth token
+ * before spawning and passes it via --token. A concurrently-running
+ * LaunchAgent gateway (KeepAlive: true) generates its own token, which
+ * conflicts with ours and causes permanent "Connecting..." in the dashboard.
+ *
+ * If the plist exists, unload it so launchd stops managing the gateway.
+ * ArmorClaw then spawns it directly as a child process.
+ * Never installs the plist — that would re-introduce the conflict.
  * Silent on success; logs on failure but never throws.
  */
 function defaultEnsureLaunchAgent(): void {
@@ -275,35 +284,75 @@ function defaultEnsureLaunchAgent(): void {
     return;
   } // Not macOS — nothing to do
 
-  if (existsSync(plistPath)) {
+  if (!existsSync(plistPath)) {
     return;
-  } // Already installed
-
-  const repoRoot = getRepoRoot();
-  const openclawMjs = join(repoRoot, "openclaw.mjs");
-  if (!existsSync(openclawMjs)) {
-    return;
-  } // Can't find openclaw — skip silently
-
-  let nodePath: string;
-  try {
-    nodePath = findNodePath();
-  } catch {
-    return; // No node — will fail later with a proper error
-  }
+  } // Plist not present — nothing to unload
 
   try {
-    execSync(`"${nodePath}" "${openclawMjs}" gateway install`, {
+    execSync(`launchctl unload "${plistPath}"`, {
       stdio: "pipe",
-      timeout: 15_000,
-      cwd: repoRoot,
+      timeout: 5_000,
       env: { ...process.env, PATH: FULL_PATH },
     });
-    process.stderr.write(`[gateway-mgr] gateway install: LaunchAgent registered\n`);
+    process.stderr.write(
+      `[gateway-mgr] unloaded OpenClaw LaunchAgent — ArmorClaw now owns gateway lifecycle\n`,
+    );
+  } catch (err) {
+    // Non-fatal: already unloaded, or launchctl unavailable
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[gateway-mgr] launchctl unload (non-fatal): ${msg.slice(0, 200)}\n`);
+  }
+}
+
+// ── Token pre-write ───────────────────────────────────────────────────────────
+
+/**
+ * Write our chosen auth token into ~/.openclaw/openclaw.json BEFORE spawning
+ * the gateway, so the gateway starts up with the token we already know.
+ *
+ * Why this matters:
+ * - `openclaw gateway --token <x>` only sets the token at initial process start.
+ *   When any config-set command causes the gateway to detect a changed
+ *   gateway.auth.token value, it triggers an internal reload — which ignores
+ *   the original --token flag and generates a fresh random token. This creates
+ *   a cascade of mismatches: our process.env holds <x>, but after the first
+ *   reload openclaw.json has <y>, and every subsequent read diverges further.
+ * - Pre-writing to openclaw.json means the gateway's startup read finds our
+ *   token already in place. Config-set commands never see gateway.auth.token
+ *   change (it was always ours), so no reload is triggered.
+ *
+ * The path is always ~/.openclaw/openclaw.json on all platforms.
+ * The function is best-effort: if the write fails, a warning is logged and
+ * the gateway spawn proceeds without the pre-written token (auth will fail
+ * until the user retries, but the process will not crash).
+ */
+export function writeGatewayTokenToConfig(token: string): void {
+  const configPath = join(homedir(), ".openclaw", "openclaw.json");
+  try {
+    mkdirSync(dirname(configPath), { recursive: true });
+    let config: Record<string, unknown> = {};
+    try {
+      const raw = readFileSync(configPath, "utf-8");
+      config = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      // File missing or malformed — start with empty object
+    }
+
+    // Deep-set gateway.auth.token without clobbering other keys
+    let gateway = (config["gateway"] ?? {}) as Record<string, unknown>;
+    let auth = (gateway["auth"] ?? {}) as Record<string, unknown>;
+    auth = { ...auth, token };
+    gateway = { ...gateway, auth };
+    config = { ...config, gateway };
+
+    writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+    process.stderr.write(
+      `[gateway-mgr] pre-wrote token to openclaw.json: ${token.slice(0, 8)}...\n`,
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     process.stderr.write(
-      `[gateway-mgr] gateway install failed (non-fatal): ${msg.slice(0, 200)}\n`,
+      `[gateway-mgr] pre-write token (non-fatal, falling back to --token): ${msg.slice(0, 200)}\n`,
     );
   }
 }
@@ -360,14 +409,23 @@ export class GatewayManager extends EventEmitter {
       const resolvedNode = nodePath;
 
       this._spawnGateway = () => {
-        const token = process.env["ARMORCLAW_GATEWAY_TOKEN"] ?? "";
-        const args = [openclawMjs, "gateway"];
-        if (token) {
-          args.push("--token", token);
+        let token = process.env["ARMORCLAW_GATEWAY_TOKEN"] ?? "";
+        if (!token) {
+          token = randomBytes(32).toString("hex");
+          process.env["ARMORCLAW_GATEWAY_TOKEN"] = token;
         }
+        // Pre-write token to openclaw.json so the gateway starts with our token
+        // already in place. This prevents the internal-reload token cascade:
+        // the gateway reads its config, finds the token unchanged, and config-set
+        // commands never detect a gateway.auth.token diff. See writeGatewayTokenToConfig.
+        writeGatewayTokenToConfig(token);
+        // Do NOT pass --token here. --token only applies at initial spawn;
+        // internal gateway reloads ignore it. Pre-writing to the config file
+        // is the reliable path.
+        const args = [openclawMjs, "gateway"];
         const hasKey = Boolean(process.env["ANTHROPIC_API_KEY"] || process.env["OPENAI_API_KEY"]);
         process.stderr.write(
-          `[gateway-mgr] spawn: ${resolvedNode} ${args.join(" ").slice(0, 80)}... ` +
+          `[gateway-mgr] spawn: ${resolvedNode} openclaw.mjs gateway ` +
             `token=${token ? token.slice(0, 8) + "..." : "NONE"} ` +
             `apiKey=${hasKey ? "present" : "MISSING"} ` +
             `cwd=${repoRoot}\n`,

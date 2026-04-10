@@ -178,12 +178,27 @@ export async function openWizard(): Promise<void> {
 // ── Gateway token sync ────────────────────────────────────────────────────────
 
 /**
- * Read the gateway's auth token from ~/.openclaw/openclaw.json and write it
- * to ~/armorclaw/.env as ARMORCLAW_GATEWAY_TOKEN. The gateway owns its token —
- * ArmorClaw reads it back so the chat window and dashboard can authenticate.
+ * Persist the gateway auth token to ~/armorclaw/.env as ARMORCLAW_GATEWAY_TOKEN.
+ * ArmorClaw generates the token and pre-writes it to openclaw.json before
+ * spawning the gateway. This function makes it available to other processes.
  */
 function syncGatewayToken(): void {
   try {
+    // If the gateway manager already generated a token (set in process.env),
+    // persist it to .env and trust it. The gateway was started with this token
+    // pre-written to openclaw.json, so process.env and the config file agree.
+    const envToken = process.env["ARMORCLAW_GATEWAY_TOKEN"] ?? "";
+    if (envToken) {
+      import("../onboarding/env-writer.js")
+        .then((mod) => {
+          mod.setEnvVar("ARMORCLAW_GATEWAY_TOKEN", envToken);
+        })
+        .catch(() => {});
+      return;
+    }
+
+    // Fallback: no token in env — read from the gateway's config file.
+    // This path handles the case where the gateway was started externally.
     const configPath = join(homedir(), ".openclaw", "openclaw.json");
     if (!existsSync(configPath)) {
       return;
@@ -197,16 +212,12 @@ function syncGatewayToken(): void {
       return;
     }
 
-    // Update process.env so the dashboard's /api/chat/gateway-config can serve it
-    if (process.env["ARMORCLAW_GATEWAY_TOKEN"] !== token) {
-      process.env["ARMORCLAW_GATEWAY_TOKEN"] = token;
-      // Also write to .env file for persistence
-      import("../onboarding/env-writer.js")
-        .then((mod) => {
-          mod.setEnvVar("ARMORCLAW_GATEWAY_TOKEN", token);
-        })
-        .catch(() => {});
-    }
+    process.env["ARMORCLAW_GATEWAY_TOKEN"] = token;
+    import("../onboarding/env-writer.js")
+      .then((mod) => {
+        mod.setEnvVar("ARMORCLAW_GATEWAY_TOKEN", token);
+      })
+      .catch(() => {});
   } catch {
     // Non-fatal
   }

@@ -684,35 +684,15 @@ export async function launchGateway(): Promise<LaunchResult> {
     mark("config", "done");
   }
 
-  // ── 2b. Ensure gateway LaunchAgent is registered (macOS only) ──────────
+  // ── 2b. Gateway service registration ───────────────────────────────────
   //
-  // On macOS the gateway runs as a LaunchAgent. If the plist is missing
-  // (first install, or user cleaned LaunchAgents), register it now.
-  // Non-fatal — GatewayManager handles the spawn independently.
+  // ArmorClaw owns the gateway lifecycle — it spawns the gateway as a child
+  // process via GatewayManager. We do NOT install the OpenClaw LaunchAgent
+  // plist here (and GatewayManager actively unloads it if present) because
+  // a LaunchAgent-managed gateway generates its own token and conflicts with
+  // ArmorClaw's token. Skip silently on all platforms.
 
-  mark("gateway-install", "running");
-  if (process.platform === "darwin") {
-    const plistPath = join(homedir(), "Library", "LaunchAgents", "ai.openclaw.gateway.plist");
-    if (existsSync(plistPath)) {
-      mark("gateway-install", "done");
-    } else {
-      try {
-        const nodeBinInstall = resolveNodePath();
-        const ocInstall = `"${nodeBinInstall}" "${actualMjs}"`;
-        process.stderr.write(`[launch] exec: ${ocInstall} gateway install\n`);
-        _execCommand(`${ocInstall} gateway install`);
-        process.stderr.write(`[launch]   → ok\n`);
-        mark("gateway-install", "done");
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        process.stderr.write(`[launch] gateway install failed (non-fatal): ${msg.slice(0, 200)}\n`);
-        mark("gateway-install", "warn", "Could not register gateway service — will start directly");
-      }
-    }
-  } else {
-    // Windows/Linux: no LaunchAgent needed — skip silently
-    mark("gateway-install", "done");
-  }
+  mark("gateway-install", "done");
 
   // ── 3. Wait for the gateway to be reachable ──────────────────────────────
   //
@@ -765,6 +745,11 @@ export async function launchGateway(): Promise<LaunchResult> {
       const auth = gw?.["auth"] as Record<string, unknown> | undefined;
       const gatewayToken = typeof auth?.["token"] === "string" ? auth["token"] : "";
       if (gatewayToken) {
+        // Update live process.env first so readGatewayToken() (server.ts) and
+        // syncGatewayToken() (main.ts) both see the correct value immediately.
+        // setEnvVar only writes to the .env file — without this, syncGatewayToken
+        // reads the stale pre-restart token from process.env and overwrites .env.
+        process.env["ARMORCLAW_GATEWAY_TOKEN"] = gatewayToken;
         setEnvVar("ARMORCLAW_GATEWAY_TOKEN", gatewayToken);
         process.stderr.write(
           `[launch] read gateway token from openclaw.json: ${gatewayToken.slice(0, 12)}...\n`,

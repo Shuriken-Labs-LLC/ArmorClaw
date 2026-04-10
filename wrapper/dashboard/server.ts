@@ -390,13 +390,16 @@ async function checkGatewayReachable(): Promise<boolean> {
 
 // ── Pending approvals ─────────────────────────────────────────────────────────
 //
-// Merges two sources:
-//  1. In-process: security/permissions.ts approval queue (ArmorClaw's own
-//     permission engine, runs as an OpenClaw plugin)
-//  2. Gateway: exec.approvals RPC on the OpenClaw gateway WebSocket (:18789)
+// Source: in-process security/permissions.ts approval queue (ArmorClaw's own
+// permission engine, runs as an OpenClaw plugin).
 //
-// If the gateway is unreachable, falls back to in-process only — no error
-// is surfaced to the user.
+// Gateway-side exec approvals (exec.approval.request/resolve) are NOT polled
+// here. The gateway has no "list pending" RPC — pending approvals arrive as
+// exec.approval.requested events pushed to connected operator clients. That
+// requires a persistent WebSocket subscription, not a short-lived poll.
+// TODO(post-v1): maintain a persistent gateway WS and listen for
+//   exec.approval.requested / exec.approval.resolved events; merge with
+//   local approvals here.
 
 export interface PendingApproval {
   id: string;
@@ -408,201 +411,25 @@ export interface PendingApproval {
 }
 
 /**
- * Read the gateway auth token from ~/.openclaw/openclaw.json.
- * Returns "" if the file doesn't exist or lacks a token.
- */
-function readGatewayToken(): string {
-  try {
-    const configPath = join(homedir(), ".openclaw", "openclaw.json");
-    const raw = readFileSync(configPath, "utf-8");
-    const config = JSON.parse(raw) as Record<string, unknown>;
-    const gw = config["gateway"] as Record<string, unknown> | undefined;
-    const auth = gw?.["auth"] as Record<string, unknown> | undefined;
-    return typeof auth?.["token"] === "string" ? auth["token"] : "";
-  } catch {
-    return "";
-  }
-}
-
-/**
- * Fetch pending approvals from the OpenClaw gateway via a short-lived
- * WebSocket request to exec.approvals. Uses Node 22+ native WebSocket.
+ * Get pending approvals from the in-process permission engine.
  *
- * Performs the full auth handshake before sending the RPC:
- *   gateway → connect.challenge event
- *   client  → connect req (with token + nonce)
- *   gateway → connect res (success)
- *   client  → exec.approvals req
- *   gateway → exec.approvals res
- *
- * Returns [] if the gateway is unreachable, auth fails, or the RPC fails.
- * Never throws.
- */
-async function fetchGatewayApprovals(): Promise<PendingApproval[]> {
-  const gatewayToken = readGatewayToken();
-  if (!gatewayToken) {
-    return [];
-  }
-
-  return new Promise<PendingApproval[]>((resolve) => {
-    const timeout = setTimeout(() => {
-      try {
-        ws.close();
-      } catch {
-        /* ignore */
-      }
-      resolve([]);
-    }, 4000);
-
-    let ws: WebSocket;
-    try {
-      ws = new WebSocket("ws://127.0.0.1:18789");
-    } catch {
-      clearTimeout(timeout);
-      resolve([]);
-      return;
-    }
-
-    ws.addEventListener("error", () => {
-      clearTimeout(timeout);
-      resolve([]);
-    });
-
-    const connectId = `connect-approvals-${Date.now()}`;
-    const approvalsId = `approvals-${Date.now()}`;
-    let authenticated = false;
-
-    ws.addEventListener("message", (evt: MessageEvent) => {
-      try {
-        const raw = typeof evt.data === "string" ? evt.data : String(evt.data);
-        const data = JSON.parse(raw) as Record<string, unknown>;
-
-        // Step 1: gateway sends challenge — respond with connect req
-        if (data["type"] === "event" && data["event"] === "connect.challenge") {
-          const _nonce = (data["payload"] as Record<string, unknown> | undefined)?.["nonce"];
-          ws.send(
-            JSON.stringify({
-              type: "req",
-              id: connectId,
-              method: "connect",
-              params: {
-                minProtocol: 3,
-                maxProtocol: 3,
-                client: {
-                  id: "gateway-client",
-                  displayName: "ArmorClaw Dashboard",
-                  version: "0.1.0",
-                  platform: "node",
-                  mode: "backend",
-                },
-                auth: { token: gatewayToken },
-              },
-            }),
-          );
-          return;
-        }
-
-        // Step 2: connect response — if success, send exec.approvals
-        if (data["type"] === "res" && data["id"] === connectId) {
-          if (data["error"]) {
-            clearTimeout(timeout);
-            ws.close();
-            resolve([]);
-            return;
-          }
-          authenticated = true;
-          ws.send(
-            JSON.stringify({
-              type: "req",
-              id: approvalsId,
-              method: "exec.approvals",
-              params: {},
-            }),
-          );
-          return;
-        }
-
-        // Step 3: exec.approvals response
-        if (data["type"] === "res" && data["id"] === approvalsId && authenticated) {
-          clearTimeout(timeout);
-          ws.close();
-
-          if (data["error"]) {
-            resolve([]);
-            return;
-          }
-
-          const result = data["result"] as Record<string, unknown> | undefined;
-          const approvals = Array.isArray(result?.["approvals"])
-            ? (result["approvals"] as Array<Record<string, unknown>>)
-            : [];
-
-          resolve(
-            approvals.map((a) => ({
-              id: String((a["id"] as string) ?? `gw-${Date.now()}-${Math.random()}`),
-              skill: String(
-                (a["toolName"] as string) ??
-                  (a["tool"] as string) ??
-                  (a["skill"] as string) ??
-                  "unknown",
-              ),
-              displayName: humaniseToolName(
-                String(
-                  (a["displayName"] as string) ??
-                    (a["toolName"] as string) ??
-                    (a["tool"] as string) ??
-                    "Unknown",
-                ),
-              ),
-              requestedAt: String(
-                (a["timestamp"] as string) ??
-                  (a["requestedAt"] as string) ??
-                  new Date().toISOString(),
-              ),
-              source: "gateway" as const,
-            })),
-          );
-        }
-      } catch {
-        // Malformed frame — ignore
-      }
-    });
-  });
-}
-
-/**
- * Get pending approvals from both the in-process permission engine AND
- * the gateway's exec.approvals RPC. Deduplicates by id.
- * Falls back to in-process only if the gateway is unreachable.
+ * Gateway-level exec approvals (exec.approval.request/resolve) are not
+ * included here — the gateway pushes them as events to persistent operator
+ * WebSocket connections; there is no "list pending" query RPC.
+ * See TODO in the section comment above for the post-v1 path.
  */
 export async function getPendingApprovals(): Promise<ReadonlyArray<PendingApproval>> {
   const skills = getAllSkills();
   const nameMap = new Map(skills.map((s) => [s.skillId, s.displayName]));
 
-  // Source 1: in-process permission engine
   const rawApprovals = getPermissionPendingApprovals();
-  const localApprovals: PendingApproval[] = rawApprovals.map((a: PendingToolApproval) => ({
+  return rawApprovals.map((a: PendingToolApproval) => ({
     id: a.id,
     skill: a.toolName,
     displayName: nameMap.get(a.skillId ?? "") ?? humaniseToolName(a.toolName),
     requestedAt: a.timestamp,
     source: "local" as const,
   }));
-
-  // Source 2: gateway exec.approvals RPC (non-blocking, best-effort)
-  const gatewayApprovals = await fetchGatewayApprovals();
-
-  // Merge, deduplicating by id (local wins on collision)
-  const seenIds = new Set(localApprovals.map((a) => a.id));
-  const merged = [...localApprovals];
-  for (const ga of gatewayApprovals) {
-    if (!seenIds.has(ga.id)) {
-      merged.push(ga);
-      seenIds.add(ga.id);
-    }
-  }
-
-  return merged;
 }
 
 /** Convert a raw tool name to something readable: "read_email" → "Read email" */
@@ -1678,30 +1505,35 @@ export function createApp(): express.Application {
   // ── Chat: gateway config for WebSocket connection ──
   //
   // Returns the gateway WebSocket URL and auth token so the desktop chat
-  // window can connect. Always reads the token fresh from openclaw.json
-  // (the gateway owns its token — ArmorClaw never sets it).
+  // window and inline chat panel can connect. Uses the token from process.env
+  // (set by gateway-manager before spawning with --token), falling back to
+  // openclaw.json if not set.
   app.get("/api/chat/gateway-config", async (_req, res) => {
-    const configPath = join(homedir(), ".openclaw", "openclaw.json");
+    // Prefer process.env — the gateway manager sets this before spawning
+    // the gateway with --token, so it's guaranteed to match the gateway's
+    // actual auth token. The config file may contain a different token
+    // generated asynchronously by the gateway.
+    let token = process.env["ARMORCLAW_GATEWAY_TOKEN"] ?? "";
 
-    // Poll for up to 5 seconds (10 × 500ms) for the gateway to write its
-    // token to openclaw.json. On first launch the gateway may still be
-    // starting when the chat window asks for the config.
-    let token = "";
-    for (let attempt = 0; attempt < 10; attempt++) {
-      try {
-        const raw = readFileSync(configPath, "utf-8");
-        const config = JSON.parse(raw) as Record<string, unknown>;
-        const gw = config["gateway"] as Record<string, unknown> | undefined;
-        const auth = gw?.["auth"] as Record<string, unknown> | undefined;
-        const t = typeof auth?.["token"] === "string" ? auth["token"] : "";
-        if (t) {
-          token = t;
-          break;
+    // Fallback: read from openclaw.json (external gateway or legacy path)
+    if (!token) {
+      const configPath = join(homedir(), ".openclaw", "openclaw.json");
+      for (let attempt = 0; attempt < 10; attempt++) {
+        try {
+          const raw = readFileSync(configPath, "utf-8");
+          const config = JSON.parse(raw) as Record<string, unknown>;
+          const gw = config["gateway"] as Record<string, unknown> | undefined;
+          const auth = gw?.["auth"] as Record<string, unknown> | undefined;
+          const t = typeof auth?.["token"] === "string" ? auth["token"] : "";
+          if (t) {
+            token = t;
+            break;
+          }
+        } catch {
+          // File doesn't exist yet — keep polling
         }
-      } catch {
-        // File doesn't exist yet — keep polling
+        await new Promise((r) => setTimeout(r, 500));
       }
-      await new Promise((r) => setTimeout(r, 500));
     }
 
     if (!token) {
