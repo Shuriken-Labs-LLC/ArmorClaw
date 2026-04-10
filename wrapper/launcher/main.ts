@@ -91,6 +91,11 @@ function setSharedEnvVars(): void {
   } catch {
     // .env may not exist on first launch — that's fine
   }
+
+  // Clear any stale gateway token loaded from .env — the gateway owns its
+  // token and writes it to openclaw.json on startup. The /api/chat/gateway-config
+  // fallback path reads openclaw.json directly for the authoritative value.
+  delete process.env["ARMORCLAW_GATEWAY_TOKEN"];
 }
 
 // ── Dashboard server lifecycle ──────────────────────────────────────────────

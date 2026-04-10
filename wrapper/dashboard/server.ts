@@ -1577,11 +1577,9 @@ export function createApp(): express.Application {
       return;
     }
     const openclawMjs = join(repoRoot, "openclaw.mjs");
-    const token = process.env["ARMORCLAW_GATEWAY_TOKEN"] ?? "";
+    // Gateway owns its token — no --token flag. It generates a new token on
+    // startup and writes it to openclaw.json. The next poll cycle reads it back.
     const gwArgs = [openclawMjs, "gateway"];
-    if (token) {
-      gwArgs.push("--token", token);
-    }
     try {
       const child = spawn(nodeBin, gwArgs, {
         stdio: "ignore",
@@ -1726,11 +1724,9 @@ export function createApp(): express.Application {
       // No existing process — that's fine
     }
     const openclawMjs = join(repoRoot, "openclaw.mjs");
-    const gwToken = process.env["ARMORCLAW_GATEWAY_TOKEN"] ?? "";
+    // Gateway owns its token — no --token flag. It generates a new token on
+    // startup and writes it to openclaw.json. The next poll cycle reads it back.
     const gwArgs = [openclawMjs, "gateway"];
-    if (gwToken) {
-      gwArgs.push("--token", gwToken);
-    }
     try {
       const child = spawn(nodeBin, gwArgs, {
         stdio: "ignore",

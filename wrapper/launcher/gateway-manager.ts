@@ -328,6 +328,26 @@ export function readGatewayTokenFromConfig(): string {
   }
 }
 
+// ── Synchronous gateway port check ───────────────────────────────────────────
+
+/**
+ * Check if something is already listening on the gateway port (18789).
+ * Synchronous — uses execSync with a short timeout so it can be called
+ * from the synchronous _spawnGateway() callback.
+ */
+function isGatewayPortOpen(): boolean {
+  try {
+    // Use Node's net module via a tiny inline script to avoid shell differences
+    const result = execSync(
+      `node -e "const s=require('net').createConnection({host:'127.0.0.1',port:${GATEWAY_PORT},timeout:1000},()=>{process.stdout.write('1');s.destroy()});s.on('error',()=>{process.stdout.write('0');});"`,
+      { encoding: "utf-8", timeout: 3000, stdio: ["ignore", "pipe", "ignore"] },
+    ).trim();
+    return result === "1";
+  } catch {
+    return false;
+  }
+}
+
 // ── Config pre-write ──────────────────────────────────────────────────────────
 
 /**
@@ -455,7 +475,15 @@ export class GatewayManager extends EventEmitter {
         // This replaces the old `config set` calls in launchGateway() which
         // modified openclaw.json on a live gateway, triggering reloads and
         // token regeneration (cascade).
-        preWriteGatewayConfig(join(repoRoot, "wrapper"));
+        // Guard: skip if a gateway is already listening on the port — writing
+        // to openclaw.json on a live gateway triggers a reload and new token.
+        if (!isGatewayPortOpen()) {
+          preWriteGatewayConfig(join(repoRoot, "wrapper"));
+        } else {
+          process.stderr.write(
+            `[gateway-mgr] gateway already on port ${GATEWAY_PORT} — skipping config pre-write\n`,
+          );
+        }
 
         // The gateway owns its auth token — it generates one on startup and
         // writes it to ~/.openclaw/openclaw.json. We read it back after the
