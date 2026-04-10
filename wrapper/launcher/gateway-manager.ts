@@ -267,10 +267,10 @@ function getLaunchAgentPlistPath(): string | null {
 /**
  * Disable the OpenClaw LaunchAgent on macOS if it is present.
  *
- * ArmorClaw owns the gateway process lifecycle — it generates the auth token
- * before spawning and passes it via --token. A concurrently-running
- * LaunchAgent gateway (KeepAlive: true) generates its own token, which
- * conflicts with ours and causes permanent "Connecting..." in the dashboard.
+ * The gateway owns its auth token — it generates one on startup and writes
+ * it to openclaw.json. A concurrently-running LaunchAgent gateway
+ * (KeepAlive: true) generates a different token, which conflicts with
+ * the one ArmorClaw reads back and causes permanent "Connecting...".
  *
  * If the plist exists, unload it so launchd stops managing the gateway.
  * ArmorClaw then spawns it directly as a child process.

@@ -1513,6 +1513,7 @@ export function createApp(): express.Application {
     // openclaw.json after the gateway is confirmed reachable and sets
     // process.env to match.
     let token = process.env["ARMORCLAW_GATEWAY_TOKEN"] ?? "";
+    let tokenSource = token ? "process.env" : "";
 
     // Fallback: read from openclaw.json (external gateway or legacy path)
     if (!token) {
@@ -1526,6 +1527,7 @@ export function createApp(): express.Application {
           const t = typeof auth?.["token"] === "string" ? auth["token"] : "";
           if (t) {
             token = t;
+            tokenSource = `openclaw.json (attempt ${attempt + 1})`;
             break;
           }
         } catch {
@@ -1534,6 +1536,10 @@ export function createApp(): express.Application {
         await new Promise((r) => setTimeout(r, 500));
       }
     }
+
+    process.stderr.write(
+      `[dashboard] /api/chat/gateway-config → source=${tokenSource || "NONE"} token=${token ? token.slice(0, 8) + "..." : "EMPTY"}\n`,
+    );
 
     if (!token) {
       res.status(503).json({
