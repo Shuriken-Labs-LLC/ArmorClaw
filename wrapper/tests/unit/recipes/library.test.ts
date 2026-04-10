@@ -12,16 +12,14 @@ import type { Recipe } from "../../../recipes/types.ts";
 const CRON_RE = /^(\S+\s+){4}\S+$/;
 
 describe("BUNDLED_RECIPES", () => {
-  it("exports exactly 6 recipes", () => {
-    expect(BUNDLED_RECIPES).toHaveLength(6);
+  it("exports exactly 4 recipes", () => {
+    expect(BUNDLED_RECIPES).toHaveLength(4);
   });
 
   it("includes the expected recipe ids", () => {
     const ids = BUNDLED_RECIPES.map((r) => r.id);
     expect(ids).toContain("morning-inbox");
     expect(ids).toContain("daily-briefing");
-    expect(ids).toContain("overdue-leads");
-    expect(ids).toContain("lead-followup");
     expect(ids).toContain("file-watcher");
     expect(ids).toContain("weekly-summary");
   });
@@ -88,16 +86,6 @@ describe("BUNDLED_RECIPES", () => {
     expect(r.skill).toBe("email-calendar");
   });
 
-  it("overdue-leads uses crm-leadgen skill", () => {
-    const r = BUNDLED_RECIPES.find((x) => x.id === "overdue-leads")!;
-    expect(r.skill).toBe("crm-leadgen");
-  });
-
-  it("lead-followup uses crm-leadgen skill", () => {
-    const r = BUNDLED_RECIPES.find((x) => x.id === "lead-followup")!;
-    expect(r.skill).toBe("crm-leadgen");
-  });
-
   it("file-watcher uses secure-files skill", () => {
     const r = BUNDLED_RECIPES.find((x) => x.id === "file-watcher")!;
     expect(r.skill).toBe("secure-files");
@@ -106,11 +94,6 @@ describe("BUNDLED_RECIPES", () => {
   it("weekly-summary uses digest skill", () => {
     const r = BUNDLED_RECIPES.find((x) => x.id === "weekly-summary")!;
     expect(r.skill).toBe("digest");
-  });
-
-  it("overdue-leads default schedule is Mondays 9am", () => {
-    const r = BUNDLED_RECIPES.find((x) => x.id === "overdue-leads")!;
-    expect(r.defaultSchedule).toBe("0 9 * * 1");
   });
 
   it("file-watcher default schedule is every 30 minutes", () => {

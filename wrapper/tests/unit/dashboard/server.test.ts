@@ -42,6 +42,12 @@ vi.mock("../../../lib/skill-registry.ts", () => ({
   getAllSkills: vi.fn(() => []),
 }));
 
+vi.mock("../../../security/permissions.ts", () => ({
+  getPendingApprovals: vi.fn(() => []),
+  resolveApproval: vi.fn(() => true),
+  onApprovalChange: vi.fn(() => () => {}),
+}));
+
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
@@ -117,12 +123,37 @@ describe("agent status", () => {
   });
 });
 
-// ── Pending approvals stub ────────────────────────────────────────────────────
+// ── Pending approvals ─────────────────────────────────────────────────────────
 
-describe("pending approvals (stub)", () => {
-  it("always returns an empty array — approval system not yet wired", () => {
-    expect(getPendingApprovals()).toHaveLength(0);
-    expect(getPendingApprovals()).toEqual([]);
+describe("pending approvals", () => {
+  it("returns empty array when no pending approvals exist", async () => {
+    const result = await getPendingApprovals();
+    expect(result).toHaveLength(0);
+    expect(result).toEqual([]);
+  });
+
+  it("maps permission engine approvals to dashboard PendingApproval shape", async () => {
+    const { getPendingApprovals: mockGetPending } =
+      await import("../../../security/permissions.ts");
+    (mockGetPending as ReturnType<typeof vi.fn>).mockReturnValueOnce([
+      {
+        id: "approval-1-12345",
+        toolName: "read_email",
+        skillId: null,
+        timestamp: "2026-04-06T12:00:00Z",
+        resolved: false,
+        approved: false,
+      },
+    ]);
+    const result = await getPendingApprovals();
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: "approval-1-12345",
+      skill: "read_email",
+      displayName: "Read email",
+      requestedAt: "2026-04-06T12:00:00Z",
+      source: "local",
+    });
   });
 });
 
@@ -543,15 +574,13 @@ describe("getDashboardSnapshot", () => {
   it("connectedServices reflects .env keys", async () => {
     vi.mocked(readFileSync).mockImplementation((path: unknown) => {
       if (String(path).endsWith(".env")) {
-        return "GOOGLE_CLIENT_ID=abc\nHUBSPOT_API_KEY=xyz\n";
+        return "GOOGLE_OAUTH_ACCESS_TOKEN=ya29.test\n";
       }
       throw new Error("ENOENT");
     });
     const snap = await getDashboardSnapshot();
     expect(snap.connectedServices.gmail).toBe(true);
     expect(snap.connectedServices.outlook).toBe(false);
-    expect(snap.connectedServices.hubspot).toBe(true);
-    expect(snap.connectedServices.airtable).toBe(false);
   });
 
   it("serverTime is a recent ISO 8601 string", async () => {

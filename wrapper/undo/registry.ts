@@ -2,7 +2,7 @@ import { writeAuditEntry } from "../security/audit-logger.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type UndoActionType = "email-draft" | "file-write" | "crm-write";
+export type UndoActionType = "email-draft" | "file-write";
 
 export interface UndoEntry {
   id: string; // uuid

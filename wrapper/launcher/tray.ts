@@ -12,14 +12,22 @@
 
 import { join } from "node:path";
 import { app, Menu, nativeImage, Notification, shell, Tray } from "electron";
-import type { GatewayManager, GatewayStatus } from "./gateway-manager.ts";
+import { getModelAdapterState, onModelAdapterChange } from "../lib/model-adapter.js";
+import {
+  checkForUpdates,
+  getUpdateStatus,
+  getUpdateVersion,
+  onUpdateChange,
+  restartAndUpdate,
+} from "./auto-updater.js";
+import type { GatewayManager, GatewayStatus } from "./gateway-manager.js";
 
 // ── Asset paths ───────────────────────────────────────────────────────────────
 
-const ASSETS = join(import.meta.dirname, "assets");
+const ASSETS = join(import.meta.dirname, "..", "assets");
 
 function iconPath(variant: "green" | "amber" | "red"): string {
-  return join(ASSETS, `icon-${variant}.png`);
+  return join(ASSETS, `tray-${variant}.png`);
 }
 
 // ── Status labels ─────────────────────────────────────────────────────────────
@@ -59,6 +67,62 @@ function iconVariant(status: GatewayStatus): "green" | "amber" | "red" {
   return "red";
 }
 
+// ── Update menu items ─────────────────────────────────────────────────────────
+
+function buildUpdateMenuItems(): Electron.MenuItemConstructorOptions[] {
+  const status = getUpdateStatus();
+  const version = getUpdateVersion();
+
+  switch (status) {
+    case "ready":
+      return [
+        {
+          label: `Update available — restart to install (v${version})`,
+          click: () => restartAndUpdate(),
+        },
+      ];
+    case "downloading":
+      return [{ label: "Downloading update...", enabled: false }];
+    case "available":
+      return [
+        {
+          label: `Update v${version} available`,
+          enabled: false,
+        },
+        {
+          label: "Download and install",
+          click: () => {
+            void import("electron-updater").then((pkg) => {
+              const { autoUpdater: au } = pkg.default ?? pkg;
+              au.downloadUpdate().catch(() => {});
+            });
+          },
+        },
+      ];
+    case "checking":
+      return [{ label: "Checking for updates...", enabled: false }];
+    default:
+      return [{ label: "Check for updates", click: () => checkForUpdates() }];
+  }
+}
+
+// ── Provider status menu item ─────────────────────────────────────────────────
+
+function buildProviderMenuItems(): Electron.MenuItemConstructorOptions[] {
+  const state = getModelAdapterState();
+  if (!state.primary) {
+    return [];
+  }
+
+  const labels: Record<string, string> = {
+    anthropic: "Running on Claude",
+    openai: "Running on GPT",
+    ollama: "Running locally (Ollama)",
+  };
+
+  return [{ label: labels[state.primary] ?? `Running on ${state.primary}`, enabled: false }];
+}
+
 // ── Tray builder ──────────────────────────────────────────────────────────────
 
 export interface TrayHandle {
@@ -87,6 +151,12 @@ export function createTray(manager: GatewayManager): TrayHandle {
       { type: "separator" },
       {
         label: "Open Dashboard",
+        click: () => {
+          void import("./dashboard-window.js").then((m) => m.openDashboardWindow());
+        },
+      },
+      {
+        label: "Open Dashboard in Browser",
         click: () => shell.openExternal(status.dashboardUrl),
       },
       {
@@ -106,9 +176,14 @@ export function createTray(manager: GatewayManager): TrayHandle {
         },
       },
       {
-        label: "Check for updates",
-        click: () => shell.openExternal("https://armorclaw.ai/update"),
+        label: "Open setup wizard",
+        click: () => {
+          // Dynamic import to avoid circular dependency at module load time
+          void import("./main.js").then((m) => m.openWizard());
+        },
       },
+      ...buildProviderMenuItems(),
+      ...buildUpdateMenuItems(),
       { type: "separator" },
       {
         label: "Quit ArmorClaw",
@@ -146,6 +221,14 @@ export function createTray(manager: GatewayManager): TrayHandle {
 
   // Wire up manager events
   manager.on("state-change", (s: GatewayStatus) => update(s));
+
+  // Rebuild the menu when update status or model provider changes
+  onUpdateChange(() => {
+    tray.setContextMenu(buildMenu(currentStatus));
+  });
+  onModelAdapterChange(() => {
+    tray.setContextMenu(buildMenu(currentStatus));
+  });
 
   // Initial state
   tray.setContextMenu(buildMenu(currentStatus));

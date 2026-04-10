@@ -273,7 +273,7 @@ describe("getTrialSummary", () => {
   it("counts only outcome:success for tasksCompleted", () => {
     const lines = [
       JSON.stringify({ outcome: "success", skill: "email-calendar" }),
-      JSON.stringify({ outcome: "success", skill: "crm-leadgen" }),
+      JSON.stringify({ outcome: "success", skill: "secure-files" }),
       JSON.stringify({ outcome: "error", skill: "email-calendar" }),
       JSON.stringify({ outcome: "rejected", skill: "email-calendar" }),
     ].join("\n");

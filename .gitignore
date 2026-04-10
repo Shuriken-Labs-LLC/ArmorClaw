@@ -134,3 +134,10 @@ ui/src/ui/__screenshots__
 ui/src/ui/views/__screenshots__
 ui/.vitest-attachments
 docs/superpowers
+
+# ArmorClaw launcher build output and test artifacts
+wrapper/launcher/dist-src/
+wrapper/launcher/test-results/
+
+# Obsidian session handoff vault (personal, not project code)
+ArmorClaw Vault/

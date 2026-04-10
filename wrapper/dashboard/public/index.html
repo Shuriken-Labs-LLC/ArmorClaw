@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ArmorClaw</title>
+  <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -15,22 +16,25 @@
 
     /* ── Design tokens ────────────────────────────────────────────────────── */
     :root {
-      --ac-bg:            #FAFAF8;
-      --ac-surface:       #FFFFFF;
-      --ac-surface2:      #F4F3EF;
-      --ac-border:        #E8E6DF;
-      --ac-border-strong: #D4D1C7;
-      --ac-text:          #1C1C1A;
-      --ac-muted:         #6B6966;
-      --ac-hint:          #9C9991;
-      --ac-teal:          #1D9E75;
-      --ac-teal-light:    #E1F5EE;
-      --ac-amber:         #BA7517;
-      --ac-amber-light:   #FAEEDA;
-      --ac-red:           #A32D2D;
-      --ac-red-light:     #FCEBEB;
-      --ac-blue:          #185FA5;
-      --ac-blue-light:    #E6F1FB;
+      color-scheme: dark;
+      --ac-bg:            #0D0F14;
+      --ac-surface:       #13161E;
+      --ac-surface2:      #1A1D27;
+      --ac-border:        #2A2D3A;
+      --ac-border-strong: #3A3D4E;
+      --ac-text:          #E8E6FF;
+      --ac-muted:         #8B8DA8;
+      --ac-hint:          #5A5C75;
+      --ac-teal:          #1DE9B6;
+      --ac-teal-light:    #0D2E26;
+      --ac-purple:        #9B6DFF;
+      --ac-purple-light:  #1A1030;
+      --ac-amber:         #FFB347;
+      --ac-amber-light:   #2A1F0A;
+      --ac-red:           #FF5370;
+      --ac-red-light:     #2A0F14;
+      --ac-blue:          #82AAFF;
+      --ac-blue-light:    #0F1A2E;
     }
 
     /* ── Global ───────────────────────────────────────────────────────────── */
@@ -84,7 +88,10 @@
       border-radius: 8px;
       font-size: 13.5px;
       font-weight: 400;
+      /* Belt-and-suspenders: -webkit-text-fill-color wins over UA ButtonText
+         on older Chromium builds that ignore color-scheme on <button>. */
       color: var(--ac-muted);
+      -webkit-text-fill-color: var(--ac-muted);
       cursor: pointer;
       border: none;
       background: none;
@@ -92,9 +99,22 @@
       text-align: left;
       min-height: 40px;
       transition: background 0.1s, color 0.1s;
+      font-family: inherit;
+      -webkit-appearance: none;
+      appearance: none;
+      outline: none;
     }
-    .nav-item:hover { background: var(--ac-surface2); color: var(--ac-text); }
-    .nav-item.active { background: var(--ac-teal-light); color: var(--ac-teal); font-weight: 500; }
+    .nav-item:hover {
+      background: var(--ac-surface2);
+      color: var(--ac-text);
+      -webkit-text-fill-color: var(--ac-text);
+    }
+    .nav-item.active {
+      background: var(--ac-teal-light);
+      color: var(--ac-teal);
+      -webkit-text-fill-color: var(--ac-teal);
+      font-weight: 500;
+    }
     .nav-icon { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
 
     .sidebar-footer {
@@ -268,6 +288,25 @@
       font-size: 13px; color: var(--ac-muted);
     }
     .approvals-zero-icon { font-size: 16px; }
+    /* Approval item */
+    .approval-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 0.5px solid var(--ac-border);
+      background: var(--ac-blue-light);
+    }
+    .approval-item:last-child { border-bottom: none; }
+    .approval-info { flex: 1; min-width: 0; }
+    .approval-name { font-size: 13px; color: var(--ac-text); font-weight: 500; }
+    .approval-detail { font-size: 12px; color: var(--ac-muted); margin-top: 2px; }
+    .approval-actions { display: flex; gap: 8px; flex-shrink: 0; margin-left: 12px; }
+    .approval-actions button {
+      padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer;
+      border: none; font-family: inherit; font-weight: 500;
+      min-height: 32px; min-width: 44px;
+    }
+    .btn-approve { background: var(--ac-teal); color: var(--ac-bg); }
+    .btn-reject { background: var(--ac-red-light); color: var(--ac-red); border: 0.5px solid var(--ac-red) !important; }
 
     /* ── Chat card ────────────────────────────────────────────────────────── */
     .chat-card {
@@ -314,6 +353,134 @@
 
     /* ── Token burn widget ────────────────────────────────────────────────── */
     .budget-body { padding: 14px 16px; }
+    /* ── Inline chat panel ──────────────────────────────────────────────── */
+    .chat-panel {
+      background: var(--ac-surface);
+      border: 0.5px solid var(--ac-border);
+      border-radius: 12px;
+      margin-bottom: 14px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 320px;
+    }
+    .chat-panel-hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 13px 16px;
+      border-bottom: 0.5px solid var(--ac-border);
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .chat-panel-hdr-left { display: flex; align-items: center; gap: 8px; }
+    .chat-panel-title { font-size: 13px; font-weight: 500; }
+    .chat-conn-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--ac-hint);
+      flex-shrink: 0;
+    }
+    .chat-conn-dot.connected { background: var(--ac-teal); }
+    .chat-conn-label { font-size: 11px; color: var(--ac-hint); }
+    .chat-conn-label.connected { color: var(--ac-teal); }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .chat-msg {
+      max-width: 85%;
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.45;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    .chat-msg.user {
+      align-self: flex-end;
+      background: var(--ac-teal);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .chat-msg.agent {
+      align-self: flex-start;
+      background: var(--ac-surface2);
+      border: 0.5px solid var(--ac-border);
+      border-bottom-left-radius: 4px;
+    }
+    .chat-msg .chat-agent-hdr {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+    }
+    .chat-agent-badge {
+      width: 18px; height: 18px; border-radius: 4px;
+      background: var(--ac-teal-light);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px;
+    }
+    .chat-agent-name { font-size: 12px; font-weight: 500; color: var(--ac-teal); }
+    .chat-msg.system {
+      align-self: center;
+      background: var(--ac-surface2);
+      color: var(--ac-muted);
+      font-size: 12px; text-align: center;
+      border-radius: 8px; max-width: 90%;
+    }
+    .chat-typing {
+      align-self: flex-start;
+      padding: 10px 16px;
+      background: var(--ac-surface2);
+      border: 0.5px solid var(--ac-border);
+      border-radius: 12px; border-bottom-left-radius: 4px;
+      display: none;
+    }
+    .chat-typing.visible { display: flex; gap: 4px; align-items: center; }
+    .chat-typing-dot {
+      width: 5px; height: 5px; background: var(--ac-hint);
+      border-radius: 50%; animation: chatBounce 1.4s infinite ease-in-out both;
+    }
+    .chat-typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .chat-typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes chatBounce {
+      0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); }
+    }
+    .chat-input-bar {
+      padding: 8px 12px;
+      border-top: 0.5px solid var(--ac-border);
+      display: flex; gap: 8px; align-items: flex-end;
+      flex-shrink: 0;
+    }
+    .chat-input-field {
+      flex: 1;
+      border: 0.5px solid var(--ac-border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-family: inherit; font-size: 13px;
+      color: var(--ac-text);
+      background: var(--ac-bg);
+      resize: none;
+      max-height: 80px; min-height: 34px;
+      line-height: 1.4;
+      outline: none;
+    }
+    .chat-input-field:focus { border-color: var(--ac-teal); }
+    .chat-input-field::placeholder { color: var(--ac-hint); }
+    .chat-send-btn {
+      width: 34px; height: 34px; border-radius: 8px;
+      background: var(--ac-teal); border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 15px; flex-shrink: 0;
+    }
+    .chat-send-btn:hover { box-shadow: 0 0 12px rgba(29, 233, 182, 0.3); }
+    .chat-send-btn:disabled { opacity: 0.4; cursor: default; }
+    .chat-debug {
+      display: none; max-height: 80px; overflow-y: auto;
+      background: #0a0b10; border-top: 1px solid var(--ac-border);
+      padding: 4px 8px; font-family: 'DM Mono', monospace;
+      font-size: 10px; color: var(--ac-hint);
+    }
+
     .budget-sentence { font-size: 14px; color: var(--ac-text); margin-bottom: 10px; }
     .budget-bar-track {
       background: var(--ac-surface2); border-radius: 6px; height: 7px; overflow: hidden;
@@ -424,10 +591,115 @@
     .recipe-toggle input:checked + .recipe-toggle-track { background: var(--ac-teal); }
     .recipe-toggle-thumb {
       position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
-      border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.15);
+      border-radius: 50%; background: var(--ac-surface2); box-shadow: 0 1px 2px rgba(0,0,0,.3);
       transition: transform .15s;
     }
     .recipe-toggle input:checked ~ .recipe-toggle-thumb { transform: translateX(16px); }
+
+    /* ── Channels view ───────────────────────────────────────────────────── */
+    .ch-row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 16px;
+      border-bottom: 0.5px solid var(--ac-border);
+    }
+    .ch-row:last-child { border-bottom: none; }
+    .ch-icon { font-size: 22px; width: 32px; text-align: center; flex-shrink: 0; }
+    .ch-info { flex: 1; min-width: 0; }
+    .ch-name { font-size: 14px; font-weight: 500; }
+    .ch-desc { font-size: 12.5px; color: var(--ac-muted); margin-top: 1px; }
+    .ch-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .ch-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 12px; font-weight: 500;
+      padding: 3px 10px; border-radius: 20px; white-space: nowrap;
+    }
+    .ch-badge.active { background: var(--ac-teal-light); color: var(--ac-teal); }
+    .ch-badge.not-configured { background: var(--ac-surface2); color: var(--ac-muted); }
+    .ch-badge.coming-soon { background: var(--ac-purple-light); color: var(--ac-purple); }
+    .ch-badge.error { background: var(--ac-red-light); color: var(--ac-red); }
+    .btn-configure {
+      padding: 6px 14px; border-radius: 8px;
+      font-size: 12.5px; font-weight: 500;
+      border: 0.5px solid var(--ac-teal);
+      background: var(--ac-surface); color: var(--ac-teal);
+      min-height: 34px; cursor: pointer;
+      transition: background 0.1s, box-shadow 0.1s;
+    }
+    .btn-configure:hover { background: var(--ac-teal-light); box-shadow: 0 0 12px rgba(29, 233, 182, 0.3); }
+    .btn-configure:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn-configure:disabled:hover { background: var(--ac-surface); box-shadow: none; }
+
+    /* Inline setup panel */
+    .ch-setup {
+      display: none; padding: 0 16px 16px;
+      border-bottom: 0.5px solid var(--ac-border);
+    }
+    .ch-setup.open { display: block; }
+    .ch-setup-inner {
+      background: var(--ac-surface2);
+      border: 0.5px solid var(--ac-border);
+      border-radius: 12px;
+      padding: 16px 20px;
+    }
+    .ch-step {
+      margin-bottom: 20px; padding-bottom: 16px;
+      border-bottom: 0.5px solid var(--ac-border);
+    }
+    .ch-step:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+    .ch-step-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--ac-teal-light); color: var(--ac-teal);
+      font-size: 12px; font-weight: 600; margin-right: 8px;
+      flex-shrink: 0;
+    }
+    .ch-step-title {
+      font-size: 14px; font-weight: 500; color: var(--ac-text);
+      margin-bottom: 8px; display: flex; align-items: center;
+    }
+    .ch-step-body { font-size: 13px; color: var(--ac-muted); line-height: 1.6; }
+    .ch-step-body a { color: var(--ac-teal); text-decoration: underline; }
+    .ch-step-body a:hover { opacity: 0.85; }
+    .ch-field {
+      width: 100%; padding: 9px 12px; margin-top: 8px;
+      border: 0.5px solid var(--ac-border);
+      border-radius: 8px; font-size: 13px;
+      background: var(--ac-surface); color: var(--ac-text);
+      font-family: 'DM Mono', monospace;
+    }
+    .ch-field:focus { outline: none; border-color: var(--ac-teal); }
+    .ch-field-hint {
+      font-size: 11.5px; color: var(--ac-hint); margin-top: 6px;
+      line-height: 1.5;
+    }
+    .ch-validate-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+    .ch-validate-msg {
+      font-size: 13px; flex: 1; min-width: 0;
+    }
+    .ch-validate-msg.success { color: var(--ac-teal); }
+    .ch-validate-msg.error { color: var(--ac-red); }
+    .ch-save-row { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+    .ch-save-msg { font-size: 13px; }
+    .ch-save-msg.success { color: var(--ac-teal); }
+    .ch-save-msg.error { color: var(--ac-red); }
+    .btn-primary {
+      padding: 8px 18px; border-radius: 8px;
+      font-size: 13px; font-weight: 500;
+      background: var(--ac-teal); color: #0D0F14;
+      border: none; cursor: pointer; min-height: 38px;
+      transition: box-shadow 0.1s;
+    }
+    .btn-primary:hover { box-shadow: 0 0 12px rgba(29, 233, 182, 0.3); }
+    .btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn-primary:disabled:hover { box-shadow: none; }
+    .btn-ghost {
+      padding: 6px 14px; border-radius: 8px;
+      font-size: 12.5px; font-weight: 500;
+      border: 0.5px solid var(--ac-border);
+      background: transparent; color: var(--ac-muted);
+      cursor: pointer; min-height: 34px;
+    }
+    .btn-ghost:hover { border-color: var(--ac-border-strong); color: var(--ac-text); }
 
     /* ── Settings view ────────────────────────────────────────────────────── */
 
@@ -479,9 +751,9 @@
     }
     .btn-settings:hover { border-color: var(--ac-border-strong); color: var(--ac-text); }
     .btn-settings.primary {
-      background: var(--ac-teal); color: #fff; border-color: var(--ac-teal);
+      background: var(--ac-teal); color: #0D0F14; border-color: var(--ac-teal); font-weight: 500;
     }
-    .btn-settings.primary:hover { opacity: 0.88; }
+    .btn-settings.primary:hover { box-shadow: 0 0 12px rgba(29, 233, 182, 0.3); }
     .btn-settings.danger {
       color: var(--ac-red); border-color: var(--ac-red);
       background: var(--ac-surface);
@@ -993,6 +1265,63 @@
     .marketplace-stub-title { font-size: 15px; font-weight: 500; color: var(--ac-muted); margin-bottom: 6px; }
     .marketplace-stub-desc  { font-size: 13px; color: var(--ac-hint); max-width: 320px; margin: 0 auto; }
 
+    /* ── Skills sections ──────────────────────────────────────────────── */
+    .skills-section { display: none; }
+    .skills-section.active { display: block; }
+
+    .clawhub-card {
+      padding: 16px;
+      border-bottom: 0.5px solid var(--ac-border);
+    }
+    .clawhub-card:last-child { border-bottom: none; }
+    .clawhub-card-name { font-weight: 500; font-size: 14px; margin-bottom: 4px; }
+    .clawhub-card-desc { font-size: 13px; color: var(--ac-muted); margin-bottom: 8px; }
+    .clawhub-card-caps {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
+    }
+    .cap-badge {
+      font-size: 11px; padding: 3px 8px; border-radius: 20px;
+      background: var(--ac-surface2); color: var(--ac-muted); border: 0.5px solid var(--ac-border);
+    }
+    .clawhub-warning {
+      padding: 10px 12px; border-radius: 8px; margin-bottom: 10px;
+      background: var(--ac-amber-light); border: 1px solid var(--ac-amber);
+      font-size: 12px; color: var(--ac-amber); line-height: 1.5;
+    }
+    .clawhub-confirm-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    .clawhub-confirm-row label { font-size: 12px; color: var(--ac-muted); cursor: pointer; }
+    .clawhub-confirm-row input[type="checkbox"] { accent-color: var(--ac-teal); }
+
+    .installed-skill-card {
+      padding: 16px;
+      border-bottom: 0.5px solid var(--ac-border);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .installed-skill-card:last-child { border-bottom: none; }
+    .installed-skill-info { flex: 1; min-width: 0; }
+    .installed-skill-name { font-weight: 500; font-size: 14px; }
+    .installed-skill-desc { font-size: 12px; color: var(--ac-muted); margin-top: 2px; }
+    .installed-skill-meta { font-size: 11px; color: var(--ac-hint); margin-top: 4px; }
+    .installed-skill-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+    .toggle-switch {
+      width: 40px; height: 22px; border-radius: 11px; border: none;
+      background: var(--ac-border-strong); cursor: pointer; position: relative;
+      transition: background 0.2s;
+    }
+    .toggle-switch.on { background: var(--ac-teal); }
+    .toggle-switch::after {
+      content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%;
+      background: white; top: 3px; left: 3px; transition: transform 0.2s;
+    }
+    .toggle-switch.on::after { transform: translateX(18px); }
+    .btn-remove {
+      background: var(--ac-red-light); color: var(--ac-red); border: none;
+      padding: 6px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;
+    }
+    .btn-remove:hover { opacity: 0.8; }
+
     /* ── Placeholder (other views) ────────────────────────────────────────── */
     .placeholder { padding: 56px 32px; text-align: center; }
     .placeholder-icon  { font-size: 30px; margin-bottom: 10px; }
@@ -1027,7 +1356,7 @@
   <!-- ── Sidebar (desktop) ──────────────────────────────────────────────── -->
   <nav class="sidebar">
     <div class="sidebar-brand">
-      <span class="brand-mark">🛡</span>
+      <img class="brand-mark" src="/favicon.png" alt="" style="width:22px;height:22px;border-radius:4px;">
       <span class="brand-name">ArmorClaw</span>
     </div>
     <div class="nav-group" id="sidebar-nav"></div>
@@ -1040,7 +1369,7 @@
   <!-- ── Mobile top bar ────────────────────────────────────────────────── -->
   <header class="topbar">
     <div class="topbar-left">
-      <span style="font-size:18px">🛡</span>
+      <img src="/favicon.png" alt="" style="width:20px;height:20px;border-radius:4px;">
       <span class="topbar-brand">ArmorClaw</span>
     </div>
     <div class="topbar-right">
@@ -1056,7 +1385,7 @@
   <nav class="drawer" id="drawer">
     <div class="sidebar-brand" style="justify-content:space-between">
       <div style="display:flex;align-items:center;gap:9px">
-        <span class="brand-mark">🛡</span>
+        <img class="brand-mark" src="/favicon.png" alt="" style="width:22px;height:22px;border-radius:4px;">
         <span class="brand-name">ArmorClaw</span>
       </div>
       <button onclick="closeDrawer()" style="background:none;border:none;font-size:20px;color:var(--ac-muted);cursor:pointer">×</button>
@@ -1086,8 +1415,7 @@
         </div>
         <p class="status-subline" id="status-subline">Agent is active and ready</p>
 
-        <!-- Undo banner
-             TODO: wire to wrapper/undo/registry.ts
+        <!-- Undo banner — wired to wrapper/undo/registry.ts via SSE snapshot.
              Hidden by default. Shows when an undoable action completes (60s window).
              Amber left border signals a reversible in-progress state, not an error. -->
         <div class="undo-banner" id="undo-banner" style="display:none">
@@ -1098,10 +1426,9 @@
                   type="button" aria-label="Dismiss">×</button>
         </div>
 
-        <!-- Pending approvals card
-             STUB: approval system not yet wired to skills.
-             When built, POST /api/approvals will add items here and skills
-             will await resolution before executing irreversible actions. -->
+        <!-- Pending approvals card — wired to security/permissions.ts approval queue.
+             Approvals are informational for v1. Full execution gating (pause until
+             user responds) requires async approval support in the gateway hook system. -->
         <div class="approvals-card">
           <div class="approvals-hdr">Pending approvals</div>
           <div id="approvals-body">
@@ -1118,17 +1445,41 @@
         <div class="chat-card" id="chat-card" style="display:none">
           <div class="chat-card-body">
             <div class="chat-card-text">
-              <div class="chat-card-label">Chat with ArmorClaw</div>
-              <div class="chat-card-hint">Open your connected messaging app to send instructions</div>
+              <div class="chat-card-label">Talk to your agent</div>
+              <div class="chat-card-hint">Open a conversation in your messaging app</div>
             </div>
             <div class="chat-card-btns" id="chat-card-btns"></div>
           </div>
         </div>
 
-        <!-- Token burn widget
-             TOKEN BURN STUB: displays real data from token-tracker/store.ts.
-             Values will be zero until the model adapter records TokenEvents.
-             Wire the model adapter in wrapper/lib/model-adapter.ts to populate. -->
+        <!-- Inline chat panel — connects to gateway via WebSocket -->
+        <div class="chat-panel" id="chat-panel">
+          <div class="chat-panel-hdr" id="chat-panel-hdr">
+            <div class="chat-panel-hdr-left">
+              <span class="chat-panel-title">Chat</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="chat-conn-dot" id="chat-conn-dot"></span>
+              <span class="chat-conn-label" id="chat-conn-label">Connecting...</span>
+            </div>
+          </div>
+          <div class="chat-messages" id="chat-messages">
+            <div class="chat-msg system">Connecting to gateway...</div>
+          </div>
+          <div class="chat-typing" id="chat-typing">
+            <div class="chat-typing-dot"></div>
+            <div class="chat-typing-dot"></div>
+            <div class="chat-typing-dot"></div>
+          </div>
+          <div class="chat-input-bar">
+            <textarea class="chat-input-field" id="chat-input" placeholder="Message ArmorClaw..." rows="1"></textarea>
+            <button class="chat-send-btn" id="chat-send-btn" type="button" disabled>↑</button>
+          </div>
+          <div class="chat-debug" id="chat-debug"></div>
+        </div>
+
+        <!-- Token burn widget — wired to token-tracker/store.ts via SSE snapshot.
+             Values will be zero until the model adapter records TokenEvents. -->
         <div class="card">
           <div class="card-hdr">
             <span class="card-title">Budget</span>
@@ -1163,8 +1514,7 @@
           </div>
         </div>
 
-        <!-- Active recipes shortcut row
-             RECIPES STUB: always shows placeholder until wrapper/recipes/ is built. -->
+        <!-- Active recipes shortcut row — wired to recipes/store.ts via SSE snapshot. -->
         <div class="card">
           <div class="card-hdr">
             <span class="card-title">Active recipes</span>
@@ -1172,7 +1522,6 @@
                onclick="showView('recipes');return false">Manage →</a>
           </div>
           <div id="recipes-list">
-            <!-- STUB: replace when wrapper/recipes/ is built -->
             <div class="recipe-empty">No recipes active yet. Set one up in Manage →</div>
           </div>
         </div>
@@ -1182,71 +1531,85 @@
       <!-- ── PLACEHOLDER VIEWS ─────────────────────────────────────────── -->
       <div class="view" id="view-skills">
 
-        <!-- ── ArmorClaw skills ────────────────────────────────────────── -->
-        <div class="card">
-          <div class="card-hdr"><span class="card-title">ArmorClaw skills</span></div>
-          <div id="bundled-skills-list">
-            <div style="padding:16px;font-size:13px;color:var(--ac-hint)">Loading skills…</div>
-          </div>
+        <!-- ── Skills sub-tabs ─────────────────────────────────────────── -->
+        <div class="import-tabs" style="margin-bottom:16px;">
+          <button class="import-tab active" id="skills-tab-browse" onclick="switchSkillsSection('browse')">Browse ClawHub</button>
+          <button class="import-tab" id="skills-tab-github" onclick="switchSkillsSection('github')">Install from GitHub</button>
+          <button class="import-tab" id="skills-tab-installed" onclick="switchSkillsSection('installed')">Installed Skills</button>
         </div>
 
-        <!-- ── Your skills ─────────────────────────────────────────────── -->
-        <div class="card">
-          <div class="card-hdr">
-            <span class="card-title">Your skills</span>
-            <span class="card-meta" id="user-skills-count"></span>
-          </div>
-          <div id="user-skills-list"></div>
-        </div>
-
-        <!-- ── Import a skill ─────────────────────────────────────────── -->
-        <div class="card">
-          <div class="card-hdr"><span class="card-title">Import a skill</span></div>
-          <div style="padding: 0 16px 8px;">
-            <div class="import-tabs">
-              <button class="import-tab active" id="tab-github"      onclick="switchImportTab('github')">GitHub URL</button>
-              <button class="import-tab"        id="tab-file"        onclick="switchImportTab('file')">Upload file</button>
-              <button class="import-tab"        id="tab-marketplace" onclick="switchImportTab('marketplace')">Marketplace</button>
+        <!-- ── Section 1: Browse ClawHub ───────────────────────────────── -->
+        <div class="skills-section active" id="skills-section-browse">
+          <div class="card">
+            <div class="card-hdr">
+              <span class="card-title">ClawHub Public Registry</span>
+              <button class="btn-ghost" onclick="loadClawHubSkills()" style="font-size:12px;">Refresh</button>
             </div>
+            <div id="clawhub-skills-list">
+              <div style="padding:16px;font-size:13px;color:var(--ac-hint)">Loading skills from ClawHub…</div>
+            </div>
+          </div>
+        </div>
 
-            <!-- GitHub URL panel -->
-            <div class="import-panel active" id="import-panel-github">
-              <div class="import-row">
-                <input class="import-url-input" id="import-url-input"
+        <!-- ── Section 2: Install from GitHub URL ──────────────────────── -->
+        <div class="skills-section" id="skills-section-github">
+          <div class="card">
+            <div class="card-hdr"><span class="card-title">Install from GitHub URL</span></div>
+            <div style="padding: 0 16px 16px;">
+              <div class="github-install-warning" style="
+                padding: 12px 16px; margin-bottom: 16px; border-radius: 8px;
+                background: var(--ac-red-light); border: 1px solid var(--ac-red);
+                font-size: 13px; color: var(--ac-red); line-height: 1.5;
+              ">
+                Installing skills from GitHub means running code written by someone outside the ArmorClaw community. Review the skill before installing.
+              </div>
+              <div class="import-row" style="margin-bottom:12px;">
+                <input class="import-url-input" id="github-install-url"
                   type="text" placeholder="https://github.com/user/repo/blob/main/skill.ts"
-                  oninput="clearImportReport('url')"
-                  onkeydown="if(event.key==='Enter')analyzeSkillUrl()">
-                <button class="btn-fetch" id="import-url-btn" onclick="analyzeSkillUrl()">Analyze</button>
+                  oninput="updateGithubInstallState()">
               </div>
-              <div id="import-url-error" class="import-error-msg" style="display:none;"></div>
-              <div id="import-url-report"></div>
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                <label style="font-size:13px;color:var(--ac-muted);">Type CONFIRM to enable install:</label>
+                <input type="text" id="github-confirm-input" placeholder="CONFIRM"
+                  style="background:var(--ac-surface2);border:0.5px solid var(--ac-border);border-radius:8px;padding:8px 12px;color:var(--ac-text);font-family:inherit;font-size:13px;width:120px;"
+                  oninput="updateGithubInstallState()">
+              </div>
+              <button class="btn-primary" id="github-install-btn" disabled onclick="installFromGithub()">
+                Install
+              </button>
+              <div id="github-install-error" class="import-error-msg" style="display:none;margin-top:8px;"></div>
+              <div id="github-install-success" style="display:none;margin-top:8px;padding:12px;border-radius:8px;background:var(--ac-teal-light);color:var(--ac-teal);font-size:13px;"></div>
             </div>
+          </div>
+        </div>
 
-            <!-- File upload panel -->
-            <div class="import-panel" id="import-panel-file">
-              <div class="upload-zone" id="upload-zone"
-                onclick="document.getElementById('import-file-input').click()"
-                ondragover="handleFileDragover(event)"
-                ondragleave="handleFileDragleave(event)"
-                ondrop="handleFileDrop(event)">
-                <div class="upload-zone-icon">📂</div>
-                <div class="upload-zone-label">Drop a .ts or .js file here, or click to browse</div>
-                <div class="upload-zone-hint">Only .ts and .js files are supported</div>
-              </div>
-              <input type="file" id="import-file-input" accept=".ts,.js" style="display:none"
-                onchange="if(this.files[0])analyzeSkillFile(this.files[0])">
-              <div id="import-file-error" class="import-error-msg" style="display:none;"></div>
-              <div id="import-file-report"></div>
+        <!-- ── Section 3: Installed Skills ─────────────────────────────── -->
+        <div class="skills-section" id="skills-section-installed">
+          <div class="card">
+            <div class="card-hdr">
+              <span class="card-title">Installed Skills</span>
+              <span class="card-meta" id="installed-skills-count"></span>
             </div>
+            <div id="installed-skills-list">
+              <div style="padding:16px;font-size:13px;color:var(--ac-hint)">No skills installed yet.</div>
+            </div>
+          </div>
 
-            <!-- Marketplace stub panel -->
-            <div class="import-panel" id="import-panel-marketplace">
-              <div class="marketplace-stub">
-                <div class="marketplace-stub-icon">🛒</div>
-                <div class="marketplace-stub-title">Marketplace coming soon</div>
-                <div class="marketplace-stub-desc">Verified skills curated by ArmorClaw — browse and install in one tap. Check back in a future update.</div>
-              </div>
+          <!-- ── ArmorClaw bundled skills ──────────────────────────────── -->
+          <div class="card" style="margin-top:16px;">
+            <div class="card-hdr"><span class="card-title">ArmorClaw bundled skills</span></div>
+            <div id="bundled-skills-list">
+              <div style="padding:16px;font-size:13px;color:var(--ac-hint)">Loading skills…</div>
             </div>
+          </div>
+
+          <!-- ── Your vibe-coded skills ───────────────────────────────── -->
+          <div class="card" style="margin-top:16px;">
+            <div class="card-hdr">
+              <span class="card-title">Your skills</span>
+              <span class="card-meta" id="user-skills-count"></span>
+            </div>
+            <div id="user-skills-list"></div>
           </div>
         </div>
 
@@ -1259,6 +1622,21 @@
           </div>
           <div id="bundled-recipes-list">
             <div class="recipe-empty">Loading…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="view" id="view-channels">
+        <div style="margin-bottom:16px;">
+          <h2 style="margin:0 0 4px; font-weight:500; font-size:18px; color:var(--ac-text);">Channels</h2>
+          <p style="font-size:13px; color:var(--ac-muted); margin:0;">
+            Connect messaging apps so you can talk to your agent from your phone.
+          </p>
+        </div>
+
+        <div class="card">
+          <div id="channels-list">
+            <div style="padding:16px; font-size:13px; color:var(--ac-hint);">Loading channels…</div>
           </div>
         </div>
       </div>
@@ -1349,7 +1727,7 @@
                 Resume
               </button>
             </div>
-            <!-- TOKEN BURN STUB: zeros until model adapter records TokenEvents -->
+            <!-- Token tracking notice — shown when no TokenEvents have been recorded yet -->
             <p class="tb-stub">
               Token tracking is active — spend will appear here once your agent starts running tasks.
             </p>
@@ -1514,53 +1892,15 @@
           </div>
         </div>
 
-        <!-- 3. Email and calendar -->
+        <!-- 3. Email and calendar (disabled for v1) -->
         <div class="card settings-card">
           <div class="card-hdr"><span class="card-title">Email &amp; Calendar</span></div>
-          <div class="svc-row">
-            <span class="svc-dot" id="svc-gmail-dot"></span>
-            <span class="svc-name">Gmail / Google Calendar</span>
-            <span class="svc-status" id="svc-gmail-status">Not connected</span>
-            <button class="btn-settings" style="margin-left:8px"
-                    onclick="window.open('http://127.0.0.1:7391','_blank')" type="button">
-              Set up in wizard
-            </button>
-          </div>
-          <div class="svc-row">
-            <span class="svc-dot" id="svc-outlook-dot"></span>
-            <span class="svc-name">Outlook / Microsoft 365</span>
-            <span class="svc-status" id="svc-outlook-status">Not connected</span>
-            <button class="btn-settings" style="margin-left:8px"
-                    onclick="window.open('http://127.0.0.1:7391','_blank')" type="button">
-              Set up in wizard
-            </button>
+          <div style="padding:8px 0; font-size:14px; color:var(--ac-muted);">
+            Email integration coming soon — Gmail and Outlook support will be available in a future update.
           </div>
         </div>
 
-        <!-- 4. CRM -->
-        <div class="card settings-card">
-          <div class="card-hdr"><span class="card-title">CRM</span></div>
-          <div class="svc-row">
-            <span class="svc-dot" id="svc-hubspot-dot"></span>
-            <span class="svc-name">HubSpot</span>
-            <span class="svc-status" id="svc-hubspot-status">Not connected</span>
-            <button class="btn-settings" style="margin-left:8px"
-                    onclick="window.open('http://127.0.0.1:7391','_blank')" type="button">
-              Set up in wizard
-            </button>
-          </div>
-          <div class="svc-row">
-            <span class="svc-dot" id="svc-airtable-dot"></span>
-            <span class="svc-name">Airtable</span>
-            <span class="svc-status" id="svc-airtable-status">Not connected</span>
-            <button class="btn-settings" style="margin-left:8px"
-                    onclick="window.open('http://127.0.0.1:7391','_blank')" type="button">
-              Set up in wizard
-            </button>
-          </div>
-        </div>
-
-        <!-- 5. Mobile setup -->
+        <!-- 4. Mobile setup -->
         <div class="card settings-card">
           <div class="card-hdr"><span class="card-title">Mobile setup</span></div>
           <div style="padding:14px 16px">
@@ -1607,7 +1947,70 @@
           </div>
         </div>
 
-        <!-- 8. Danger zone -->
+        <!-- 8. Memory -->
+        <div class="card settings-card">
+          <div class="card-hdr"><span class="card-title">Memory</span></div>
+          <div class="settings-row">
+            <div class="settings-row-label">Personal memory</div>
+            <div class="settings-row-body">
+              <p style="font-size:14px; color:var(--ac-text); margin-bottom:8px;">
+                ArmorClaw remembers facts you share across conversations.
+                Say "remember that..." to save something.
+              </p>
+              <div id="memory-preview" style="font-size:13px; color:var(--ac-muted); margin-bottom:8px; max-height:100px; overflow-y:auto; white-space:pre-wrap;"></div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn-settings" onclick="viewMemory()" type="button">View / edit</button>
+                <button class="btn-settings danger" onclick="clearMemory()" type="button">Clear memory</button>
+              </div>
+            </div>
+          </div>
+          <div class="settings-row" style="margin-top:12px;">
+            <div class="settings-row-label">Vector search</div>
+            <div class="settings-row-body">
+              <div id="vector-status" style="font-size:13px; color:var(--ac-muted); margin-bottom:8px;">Checking...</div>
+              <button class="btn-settings" onclick="reindexMemory()" type="button" id="reindex-btn">Reindex now</button>
+              <span class="settings-save-msg" id="reindex-msg" style="display:none;color:var(--ac-muted)"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 9. Subscription -->
+        <div class="card settings-card" id="subscription-card">
+          <div class="card-hdr"><span class="card-title">Subscription</span></div>
+          <div class="settings-row">
+            <div class="settings-row-label">Plan</div>
+            <div class="settings-row-body">
+              <div class="settings-row-val" id="s-plan-val">ArmorClaw v1</div>
+              <div style="display:flex; gap:8px; margin-top:8px;">
+                <button class="btn-settings" onclick="manageSubscription()" type="button">
+                  Manage subscription
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 10. Launch on startup -->
+        <div class="card settings-card">
+          <div class="card-hdr"><span class="card-title">Launch on startup</span></div>
+          <div class="settings-row">
+            <div class="settings-row-label">Auto-start</div>
+            <div class="settings-row-body">
+              <div style="display:flex; align-items:center; gap:12px;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px;">
+                  <input type="checkbox" id="startup-toggle" onchange="toggleStartup(this.checked)"
+                    style="width:18px; height:18px; accent-color:var(--ac-teal);">
+                  Start ArmorClaw automatically when you log in
+                </label>
+              </div>
+              <p class="settings-field-hint" style="margin-top:4px;">
+                ArmorClaw runs in the menu bar and keeps your agent available.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 9. Danger zone -->
         <div class="danger-card">
           <div class="card-hdr"><span class="card-title">Danger zone</span></div>
           <div class="danger-warning">
@@ -1630,6 +2033,132 @@
 
       </div>
 
+      <!-- ── Advanced view ──────────────────────────────────────────────── -->
+      <div class="view" id="view-advanced">
+
+        <!-- State A: Gateway offline -->
+        <div id="advanced-state-offline" style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:400px; text-align:center;">
+          <div style="margin-bottom:24px;">
+            <div style="width:64px; height:64px; border-radius:50%; background:var(--ac-surface2); display:flex; align-items:center; justify-content:center; margin:0 auto 16px;">
+              <span style="font-size:28px; color:var(--ac-muted);">&#9881;</span>
+            </div>
+            <h2 style="margin:0 0 8px; font-weight:500; font-size:18px; color:var(--ac-text);">
+              Advanced Mode requires your gateway to be running.
+            </h2>
+            <p id="advanced-offline-detail" style="margin:0 0 24px; font-size:14px; color:var(--ac-muted);">
+              Start your gateway to access the OpenClaw native control panel.
+            </p>
+            <button class="btn-primary" onclick="startGatewayFromAdvanced()" type="button"
+              style="padding:10px 24px; font-size:14px;" id="advanced-start-btn">
+              Start Gateway
+            </button>
+          </div>
+        </div>
+
+        <!-- State B: Gateway running -->
+        <div id="advanced-state-online" style="display:none; height:100%;">
+          <!-- Warning banner -->
+          <div id="advanced-warning" style="padding:12px 16px; background:var(--ac-amber-light); border:0.5px solid var(--ac-border-strong); border-radius:8px; margin-bottom:12px; display:flex; align-items:center; gap:12px;">
+            <span style="font-size:13px; color:var(--ac-amber); flex:1;">
+              You're viewing OpenClaw's native interface. Changes here are powerful and aren't
+              guided by ArmorClaw. We recommend backing up your config before making changes.
+            </span>
+            <button class="btn-settings" onclick="backupConfigFromAdvanced()" type="button"
+              style="font-size:12px; white-space:nowrap; border-color:var(--ac-amber); color:var(--ac-amber);">
+              Back up config now
+            </button>
+            <button onclick="document.getElementById('advanced-warning').style.display='none'" type="button"
+              style="background:none; border:none; cursor:pointer; color:var(--ac-amber); font-size:16px; padding:0 4px;">&#10005;</button>
+          </div>
+
+          <!-- Backup success toast -->
+          <div id="advanced-backup-toast" style="display:none; padding:10px 16px; background:var(--ac-teal-light); border:0.5px solid var(--ac-teal); border-radius:8px; margin-bottom:12px; font-size:13px; color:var(--ac-teal);">
+            <span id="advanced-backup-toast-msg"></span>
+          </div>
+
+          <!-- BrowserView placeholder — Electron overlays the BrowserView here -->
+          <div id="advanced-browserview-container" style="flex:1; min-height:500px; background:var(--ac-surface); border-radius:8px; border:0.5px solid var(--ac-border); display:flex; align-items:center; justify-content:center; position:relative;">
+            <span style="color:var(--ac-muted); font-size:14px;" id="advanced-browserview-placeholder">Loading OpenClaw control panel...</span>
+          </div>
+
+          <!-- Fallback: OpenClaw tools (for non-Electron contexts, e.g. Tailscale browser access) -->
+          <div id="advanced-fallback-tools" style="display:none; margin-top:16px;">
+
+            <!-- Full OpenClaw canvas link (shown when reachable on localhost) -->
+            <div id="advanced-canvas-card" class="card" style="display:none; padding:16px; margin-bottom:16px; border-color:var(--ac-teal);">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                <div>
+                  <div style="font-size:13px; font-weight:500; color:var(--ac-text); margin-bottom:4px;">OpenClaw control panel available</div>
+                  <div style="font-size:12px; color:var(--ac-muted);">Open the full native interface in a new tab — works when accessed from the same computer.</div>
+                </div>
+                <a id="advanced-canvas-link" href="#" target="_blank" rel="noopener"
+                  class="btn-primary" style="padding:8px 16px; font-size:13px; white-space:nowrap; text-decoration:none;">
+                  Open full panel
+                </a>
+              </div>
+            </div>
+
+            <!-- Gateway health summary -->
+            <div class="card" style="padding:16px; margin-bottom:16px;">
+              <div class="card-hdr" style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                <span class="card-title">Gateway health</span>
+                <button class="btn-settings" onclick="refreshAdvancedHealth()" type="button" style="font-size:12px;">Refresh</button>
+              </div>
+              <div id="advanced-health-display" style="font-size:13px; color:var(--ac-text);">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                  <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--ac-teal);"></span>
+                  <span>Gateway running on port 18789</span>
+                </div>
+                <div id="advanced-health-details" style="font-size:12px; color:var(--ac-muted);"></div>
+              </div>
+            </div>
+
+            <!-- Run OpenClaw command -->
+            <div class="card" style="padding:16px; margin-bottom:16px;">
+              <div class="card-hdr" style="margin-bottom:12px;">
+                <span class="card-title">Run OpenClaw command</span>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <code style="color:var(--ac-muted); font-size:13px; white-space:nowrap;">openclaw</code>
+                <input id="advanced-cmd-input" type="text" placeholder="channels list"
+                  style="flex:1; padding:8px 12px; border:0.5px solid var(--ac-border); border-radius:6px; font-family:'DM Mono',monospace; font-size:13px; background:var(--ac-surface); color:var(--ac-text);"
+                  onkeydown="if(event.key==='Enter')runAdvancedCommand()">
+                <button class="btn-primary" onclick="runAdvancedCommand()" type="button"
+                  style="padding:8px 16px; font-size:13px; white-space:nowrap;">
+                  Run
+                </button>
+              </div>
+              <pre id="advanced-cmd-output" style="display:none; margin-top:12px; padding:12px; background:var(--ac-surface2); border-radius:6px; font-family:'DM Mono',monospace; font-size:12px; color:var(--ac-text); overflow-x:auto; white-space:pre-wrap; max-height:400px; overflow-y:auto;"></pre>
+              <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:4px;">
+                <button onclick="fillCmd('health')" class="btn-settings" style="font-size:11px;">health</button>
+                <button onclick="fillCmd('channels list')" class="btn-settings" style="font-size:11px;">channels list</button>
+                <button onclick="fillCmd('channels status')" class="btn-settings" style="font-size:11px;">channels status</button>
+                <button onclick="fillCmd('models list')" class="btn-settings" style="font-size:11px;">models list</button>
+                <button onclick="fillCmd('doctor')" class="btn-settings" style="font-size:11px;">doctor</button>
+                <button onclick="fillCmd('skills list')" class="btn-settings" style="font-size:11px;">skills list</button>
+                <button onclick="fillCmd('cron list')" class="btn-settings" style="font-size:11px;">cron list</button>
+                <button onclick="fillCmd('memory status')" class="btn-settings" style="font-size:11px;">memory status</button>
+                <button onclick="fillCmd('update --dry-run')" class="btn-settings" style="font-size:11px;">update check</button>
+                <button onclick="fillCmd('--version')" class="btn-settings" style="font-size:11px;">version</button>
+              </div>
+            </div>
+
+            <!-- OpenClaw config viewer -->
+            <div class="card" style="padding:16px;">
+              <div class="card-hdr" style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                <span class="card-title">OpenClaw configuration</span>
+                <button class="btn-settings" onclick="openConfigFile()" type="button" style="font-size:12px;">Open in editor</button>
+              </div>
+              <pre id="advanced-config-display" style="padding:12px; background:var(--ac-surface2); border-radius:6px; font-family:'DM Mono',monospace; font-size:12px; color:var(--ac-text); overflow-x:auto; white-space:pre-wrap; max-height:300px; overflow-y:auto;">Loading...</pre>
+              <div style="margin-top:8px; font-size:12px; color:var(--ac-hint);">
+                <span id="advanced-config-path"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
     </div><!-- /page -->
   </main>
 </div><!-- /app -->
@@ -1641,9 +2170,11 @@ const NAV = [
   { id: 'home',       label: 'Home',       icon: '⊕' },
   { id: 'skills',     label: 'Skills',     icon: '⚡' },
   { id: 'recipes',    label: 'Recipes',    icon: '🗓' },
+  { id: 'channels',   label: 'Channels',   icon: '📡' },
   { id: 'security',   label: 'Security',   icon: '🔒' },
   { id: 'token-burn', label: 'Token Burn', icon: '📊' },
   { id: 'settings',   label: 'Settings',   icon: '⚙' },
+  { id: 'advanced',   label: 'Advanced',   icon: '🔧' },
 ];
 
 let activeView = 'home';
@@ -1653,11 +2184,16 @@ function buildNav(containerId) {
   if (!el) return;
   el.innerHTML = '';
   for (const item of NAV) {
-    const btn = document.createElement('button');
+    // Use <div role="button"> instead of <button> so the browser UA never
+    // injects ButtonText system color — the persistent sidebar visibility bug.
+    const btn = document.createElement('div');
     btn.className = 'nav-item' + (item.id === activeView ? ' active' : '');
     btn.dataset.view = item.id;
+    btn.setAttribute('role', 'button');
+    btn.setAttribute('tabindex', '0');
     btn.innerHTML = `<span class="nav-icon">${item.icon}</span><span>${item.label}</span>`;
     btn.onclick = () => { showView(item.id); closeDrawer(); };
+    btn.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showView(item.id); closeDrawer(); } };
     el.appendChild(btn);
   }
 }
@@ -1667,6 +2203,207 @@ function showView(id) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById(`view-${id}`)?.classList.add('active');
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === id));
+  // Stop Advanced polling when leaving, start when entering
+  if (id === 'advanced') {
+    loadAdvancedView();
+    // Notify Electron to show BrowserView
+    notifyElectronAdvancedTab(true);
+  } else {
+    if (advancedPollTimer) {
+      clearInterval(advancedPollTimer);
+      advancedPollTimer = null;
+    }
+    // Notify Electron to hide BrowserView
+    notifyElectronAdvancedTab(false);
+  }
+}
+
+// ── Advanced view ────────────────────────────────────────────────────────────
+
+let advancedPollTimer = null;
+let advancedGatewayOnline = false;
+
+/** Notify Electron main process about Advanced tab visibility. */
+function notifyElectronAdvancedTab(visible) {
+  // If running inside Electron, window.__armorclawIPC will be set.
+  // Otherwise (browser access via Tailscale), fall back to config/command tools.
+  if (window.__armorclawIPC) {
+    window.__armorclawIPC.advancedTabVisible(visible, advancedGatewayOnline);
+  }
+}
+
+/** Probe gateway and update State A / State B visibility. */
+async function pollAdvancedGatewayStatus() {
+  try {
+    const res = await fetch('/api/advanced/gateway-probe');
+    const data = await res.json();
+    const wasOnline = advancedGatewayOnline;
+    advancedGatewayOnline = data.reachable === true;
+
+    if (advancedGatewayOnline) {
+      document.getElementById('advanced-state-offline').style.display = 'none';
+      document.getElementById('advanced-state-online').style.display = '';
+      // Show fallback tools when not in Electron (BrowserView unavailable)
+      if (!window.__armorclawIPC) {
+        document.getElementById('advanced-fallback-tools').style.display = '';
+        document.getElementById('advanced-browserview-container').style.display = 'none';
+        loadAdvancedFallbackTools();
+      } else {
+        document.getElementById('advanced-fallback-tools').style.display = 'none';
+        document.getElementById('advanced-browserview-container').style.display = '';
+        document.getElementById('advanced-browserview-placeholder').textContent = 'OpenClaw control panel is displayed above by your desktop app.';
+      }
+      // Notify Electron about transition to online
+      if (!wasOnline && activeView === 'advanced') {
+        notifyElectronAdvancedTab(true);
+      }
+    } else {
+      document.getElementById('advanced-state-offline').style.display = '';
+      document.getElementById('advanced-state-online').style.display = 'none';
+      if (wasOnline) {
+        document.getElementById('advanced-offline-detail').textContent = 'Gateway disconnected. Start it again to continue.';
+        // Notify Electron to hide BrowserView
+        if (activeView === 'advanced') {
+          notifyElectronAdvancedTab(false);
+        }
+      }
+    }
+  } catch {
+    advancedGatewayOnline = false;
+    document.getElementById('advanced-state-offline').style.display = '';
+    document.getElementById('advanced-state-online').style.display = 'none';
+  }
+}
+
+async function loadAdvancedView() {
+  // Start polling gateway status every 2s while view is active
+  await pollAdvancedGatewayStatus();
+  if (advancedPollTimer) clearInterval(advancedPollTimer);
+  advancedPollTimer = setInterval(pollAdvancedGatewayStatus, 2000);
+}
+
+/** Fetch gateway health via the `health` command and display it. */
+async function refreshAdvancedHealth() {
+  const el = document.getElementById('advanced-health-details');
+  if (!el) return;
+  el.textContent = 'Checking...';
+  try {
+    const res = await fetch('/api/advanced/run-command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: 'health' })
+    });
+    const data = await res.json();
+    if (data.ok && data.output) {
+      el.textContent = data.output;
+    } else {
+      el.textContent = data.message || 'Could not fetch health.';
+    }
+  } catch {
+    el.textContent = 'Could not reach gateway.';
+  }
+}
+
+/** Load config viewer, command runner, health summary, and canvas link (non-Electron fallback). */
+async function loadAdvancedFallbackTools() {
+  refreshAdvancedHealth();
+
+  // Probe whether the OpenClaw canvas is reachable and surface a link if so
+  try {
+    const res = await fetch('/api/advanced/control-ui-url');
+    const data = await res.json();
+    const card = document.getElementById('advanced-canvas-card');
+    const link = document.getElementById('advanced-canvas-link');
+    if (card && link && data.reachable && data.url) {
+      link.href = data.url;
+      card.style.display = '';
+    }
+  } catch {
+    // Canvas unreachable — leave card hidden
+  }
+
+  try {
+    const res = await fetch('/api/advanced/config');
+    const data = await res.json();
+    const configEl = document.getElementById('advanced-config-display');
+    if (configEl) configEl.textContent = JSON.stringify(data.config, null, 2);
+    const pathEl = document.getElementById('advanced-config-path');
+    if (pathEl) pathEl.textContent = data.path;
+  } catch {
+    const configEl = document.getElementById('advanced-config-display');
+    if (configEl) configEl.textContent = 'Could not load config.';
+  }
+}
+
+async function openConfigFile() {
+  await fetch('/api/advanced/open-config', { method: 'POST' });
+}
+
+async function startGatewayFromAdvanced() {
+  const btn = document.getElementById('advanced-start-btn');
+  const detail = document.getElementById('advanced-offline-detail');
+  if (btn) btn.disabled = true;
+  if (detail) detail.textContent = 'Starting gateway...';
+  try {
+    const res = await fetch('/api/advanced/start-gateway', { method: 'POST' });
+    const data = await res.json();
+    if (!data.ok) {
+      if (detail) detail.textContent = 'Failed to start: ' + data.message;
+      if (btn) btn.disabled = false;
+      return;
+    }
+    if (detail) detail.textContent = 'Starting (PID ' + data.pid + ')... waiting for it to come online.';
+    // The 2s poll timer will pick up the online state automatically
+  } catch (err) {
+    if (detail) detail.textContent = 'Failed to start: ' + err.message;
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function backupConfigFromAdvanced() {
+  const toast = document.getElementById('advanced-backup-toast');
+  const msg = document.getElementById('advanced-backup-toast-msg');
+  try {
+    const res = await fetch('/api/advanced/backup-config', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      if (msg) msg.textContent = 'Config backed up to: ' + data.path;
+      if (toast) { toast.style.display = ''; setTimeout(() => { toast.style.display = 'none'; }, 8000); }
+    } else {
+      if (msg) msg.textContent = 'Backup failed: ' + data.message;
+      if (toast) { toast.style.display = ''; toast.style.borderColor = 'var(--ac-red)'; toast.style.color = 'var(--ac-red)'; }
+    }
+  } catch (err) {
+    if (msg) msg.textContent = 'Backup failed: ' + err.message;
+    if (toast) { toast.style.display = ''; toast.style.borderColor = 'var(--ac-red)'; toast.style.color = 'var(--ac-red)'; }
+  }
+}
+
+function fillCmd(cmd) {
+  const el = document.getElementById('advanced-cmd-input');
+  if (el) { el.value = cmd; el.focus(); }
+}
+
+async function runAdvancedCommand() {
+  const input = document.getElementById('advanced-cmd-input');
+  const output = document.getElementById('advanced-cmd-output');
+  const cmd = input ? input.value.trim() : '';
+  if (!cmd) return;
+
+  if (!confirm('Run command:\n\nopenclaw ' + cmd + '\n\nProceed?')) return;
+
+  if (output) { output.style.display = ''; output.textContent = 'Running...'; }
+  try {
+    const res = await fetch('/api/advanced/run-command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: cmd })
+    });
+    const data = await res.json();
+    if (output) output.textContent = data.ok ? (data.output || '(no output)') : 'Error: ' + data.message;
+  } catch (err) {
+    if (output) output.textContent = 'Error: ' + err.message;
+  }
 }
 
 // ── Drawer (mobile) ─────────────────────────────────────────────────────────────
@@ -1707,6 +2444,7 @@ function setLive(on) {
 // ── Sync ─────────────────────────────────────────────────────────────────────────
 function syncUI(s) {
   syncStatus(s);
+  syncApprovals(s);
   syncChannelBtns(s);
   syncUndo(s);
   syncBudget(s);
@@ -1716,6 +2454,7 @@ function syncUI(s) {
   syncSecurity(s);
   syncSettings(s);
   syncSkills(s);
+  syncChannelsView();
 }
 
 // Agent status pill + subline + controls
@@ -1745,6 +2484,42 @@ function syncStatus(s) {
         ? `<button class="btn-agent resume" onclick="resumeAgent()" type="button">Resume</button>`
         : '';
   }
+}
+
+// Pending approvals
+function syncApprovals(s) {
+  const body = document.getElementById('approvals-body');
+  const card = body?.closest('.approvals-card');
+  if (!body) return;
+
+  const items = s.pendingApprovals || [];
+  if (items.length === 0) {
+    body.innerHTML = '<div class="approvals-zero"><span class="approvals-zero-icon">\u2713</span><span>Nothing waiting for you.</span></div>';
+    if (card) card.style.display = '';
+    return;
+  }
+
+  if (card) card.style.display = '';
+  body.innerHTML = items.map(a =>
+    '<div class="approval-item">' +
+      '<div class="approval-info">' +
+        '<div class="approval-name">' + escHtml(a.displayName) + '</div>' +
+        '<div class="approval-detail">Requested ' + fmtTime(a.requestedAt) + '</div>' +
+      '</div>' +
+      '<div class="approval-actions">' +
+        '<button class="btn-approve" onclick="approveAction(\'' + escAttr(a.id) + '\')">Approve</button>' +
+        '<button class="btn-reject" onclick="rejectAction(\'' + escAttr(a.id) + '\')">Reject</button>' +
+      '</div>' +
+    '</div>'
+  ).join('');
+}
+
+async function approveAction(id) {
+  try { await fetch('/api/approvals/' + encodeURIComponent(id) + '/approve', { method: 'POST' }); } catch { /* ignore */ }
+}
+
+async function rejectAction(id) {
+  try { await fetch('/api/approvals/' + encodeURIComponent(id) + '/reject', { method: 'POST' }); } catch { /* ignore */ }
 }
 
 // "Open in [Channel]" buttons — full-width card between approvals and budget
@@ -1783,7 +2558,6 @@ function syncUndo(s) {
     const labels = {
       'email-draft': 'Email draft returned to pending',
       'file-write':  'File change made',
-      'crm-write':   'CRM record updated',
     };
     desc.textContent =
       `${labels[s.undo.actionType] || 'Action completed'} — ${s.undo.skill || 'unknown skill'}`;
@@ -2064,8 +2838,6 @@ function syncSettings(s) {
   const services = [
     { key: 'gmail',    dotId: 'svc-gmail-dot',    statusId: 'svc-gmail-status',    label: 'Connected' },
     { key: 'outlook',  dotId: 'svc-outlook-dot',  statusId: 'svc-outlook-status',  label: 'Connected' },
-    { key: 'hubspot',  dotId: 'svc-hubspot-dot',  statusId: 'svc-hubspot-status',  label: 'Connected' },
-    { key: 'airtable', dotId: 'svc-airtable-dot', statusId: 'svc-airtable-status', label: 'Connected' },
   ];
   for (const item of services) {
     const dot    = document.getElementById(item.dotId);
@@ -2118,6 +2890,91 @@ function maskKey(key) {
   if (key.length <= 8) return '•'.repeat(key.length);
   return key.slice(0, 4) + '•'.repeat(Math.min(key.length - 8, 20)) + key.slice(-4);
 }
+
+// ── Inline chat removed — use ⌘⇧Space floating window instead ───────────────
+
+// ── Subscription ─────────────────────────────────────────────────────────────
+
+function manageSubscription() {
+  // Placeholder — real Stripe Customer Portal URL added when Stripe is set up
+  const portalUrl = 'https://armorclaw.ai/account';
+  window.open(portalUrl, '_blank');
+}
+
+// ── Memory ───────────────────────────────────────────────────────────────────
+
+async function loadMemory() {
+  try {
+    const res = await fetch('/api/memory');
+    const data = await res.json();
+    const preview = document.getElementById('memory-preview');
+    if (preview) {
+      const lines = (data.content || '').split('\n').filter(l => l.trim() && !l.startsWith('#') && !l.startsWith('Things I know') && !l.startsWith('or remove') && !l.startsWith('The agent'));
+      preview.textContent = lines.length ? lines.slice(-5).join('\n') : 'No memories yet.';
+    }
+  } catch { /* ignore */ }
+
+  // Vector memory status
+  try {
+    const res = await fetch('/api/memory/vector-status');
+    const data = await res.json();
+    const el = document.getElementById('vector-status');
+    if (el) el.textContent = data.available ? data.status : 'Not available — vector search requires the gateway to be running.';
+  } catch { /* ignore */ }
+}
+
+async function viewMemory() {
+  await fetch('/api/memory/open', { method: 'POST' });
+}
+
+async function clearMemory() {
+  if (!confirm('Clear all memories? This cannot be undone.')) return;
+  await fetch('/api/memory/clear', { method: 'POST' });
+  loadMemory();
+}
+
+async function reindexMemory() {
+  const btn = document.getElementById('reindex-btn');
+  const msg = document.getElementById('reindex-msg');
+  if (btn) btn.disabled = true;
+  if (msg) { msg.style.display = ''; msg.textContent = 'Reindexing...'; }
+  try {
+    const res = await fetch('/api/memory/reindex', { method: 'POST' });
+    const data = await res.json();
+    if (msg) msg.textContent = data.ok ? 'Done' : data.message;
+  } catch (err) {
+    if (msg) msg.textContent = 'Failed';
+  }
+  if (btn) btn.disabled = false;
+  loadMemory();
+}
+
+// Load memory on page init
+loadMemory();
+
+// ── Launch on startup toggle ──────────────────────────────────────────────────
+
+async function loadStartupSetting() {
+  try {
+    const res = await fetch('/api/settings/launch-on-startup');
+    const data = await res.json();
+    const el = document.getElementById('startup-toggle');
+    if (el) el.checked = data.enabled;
+  } catch { /* ignore */ }
+}
+
+async function toggleStartup(enabled) {
+  try {
+    await fetch('/api/settings/launch-on-startup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled })
+    });
+  } catch { /* ignore */ }
+}
+
+// Load on page init
+loadStartupSetting();
 
 function toggleSettingsForm(id) {
   const el = document.getElementById(id);
@@ -2397,8 +3254,6 @@ const PERM_LABELS = {
   'send:email':        'Send email',
   'read:calendar':     'Read calendar',
   'write:calendar':    'Edit calendar',
-  'read:crm':          'Read CRM records',
-  'write:crm':         'Update CRM records',
   'browser:sandboxed': 'Control browser (sandboxed)',
   'network:outbound':  'Make network requests',
 };
@@ -2536,7 +3391,6 @@ function syncSecurity(s) {
 
 const SKILL_ICONS = {
   'email-calendar': '📧',
-  'crm-leadgen':    '📊',
   'secure-files':   '📁',
   'browser':        '🌐',
 };
@@ -2582,6 +3436,11 @@ function loadBundledSkills() {
 
 // Load bundled skills when the page loads
 loadBundledSkills();
+// Pre-load ClawHub skills for the Browse tab
+let _clawHubLoaded = false;
+loadClawHubSkills();
+// Load installed skills
+loadInstalledSkills();
 
 /** Pending install — one slot: { code, filename, source: 'url'|'file' } */
 let _pendingInstall = null;
@@ -2612,6 +3471,206 @@ function syncSkills(s) {
       </div>
     </div>`;
   }).join('');
+}
+
+// ── Skills tab: section switching ──────────────────────────────────────────
+
+function switchSkillsSection(which) {
+  ['browse', 'github', 'installed'].forEach(s => {
+    document.getElementById('skills-tab-' + s)?.classList.toggle('active', s === which);
+    document.getElementById('skills-section-' + s)?.classList.toggle('active', s === which);
+  });
+  if (which === 'browse') loadClawHubSkills();
+  if (which === 'installed') loadInstalledSkills();
+}
+
+// ── ClawHub browse ────────────────────────────────────────────────────────
+
+const CAPABILITY_LABELS = {
+  'read:files': 'Read files on your computer',
+  'write:files': 'Write files on your computer',
+  'read:email': 'Read your emails',
+  'send:email': 'Send emails on your behalf',
+  'read:calendar': 'Read your calendar',
+  'write:calendar': 'Create calendar events',
+  'browser:sandboxed': 'Control a sandboxed browser',
+  'network:outbound': 'Make network requests',
+};
+
+function loadClawHubSkills() {
+  const list = document.getElementById('clawhub-skills-list');
+  if (!list) return;
+  if (!_clawHubLoaded) {
+    list.innerHTML = '<div style="padding:16px;font-size:13px;color:var(--ac-hint)">Loading skills from ClawHub…</div>';
+  }
+  fetch('/api/skills/clawhub')
+    .then(r => r.json())
+    .then(data => {
+      _clawHubLoaded = true;
+      const skills = data.skills || [];
+      if (skills.length === 0) {
+        list.innerHTML = '<div style="padding:16px;font-size:13px;color:var(--ac-hint)">No skills found on ClawHub. The registry may be offline or empty.</div>';
+        return;
+      }
+      list.innerHTML = skills.map((s, idx) => {
+        const caps = (s.capabilities || []);
+        const capBadges = caps.map(c => `<span class="cap-badge">${escHtml(CAPABILITY_LABELS[c] || c)}</span>`).join('');
+        const capWarnings = caps.map(c => CAPABILITY_LABELS[c] || c).join(', ');
+        const warningText = caps.length > 0
+          ? `This skill can: ${capWarnings}.`
+          : 'This skill has not declared specific capabilities.';
+        return `<div class="clawhub-card" id="clawhub-card-${idx}">
+          <div class="clawhub-card-name">${escHtml(s.name)}</div>
+          <div class="clawhub-card-desc">${escHtml(s.description)}</div>
+          ${capBadges ? `<div class="clawhub-card-caps">${capBadges}</div>` : ''}
+          <div class="clawhub-warning">${escHtml(warningText)}</div>
+          <div class="clawhub-confirm-row">
+            <input type="checkbox" id="clawhub-understand-${idx}" onchange="updateClawHubInstallBtn(${idx})">
+            <label for="clawhub-understand-${idx}">I understand</label>
+          </div>
+          <button class="btn-primary" id="clawhub-install-${idx}" disabled
+            onclick='installClawHubSkill(${JSON.stringify(s).replace(/'/g, "&#39;")}, ${idx})'>
+            Install
+          </button>
+          <span id="clawhub-msg-${idx}" style="margin-left:8px;font-size:12px;"></span>
+        </div>`;
+      }).join('');
+    })
+    .catch(() => {
+      list.innerHTML = '<div style="padding:16px;font-size:13px;color:var(--ac-red)">Failed to load ClawHub skills.</div>';
+    });
+}
+
+function updateClawHubInstallBtn(idx) {
+  const cb = document.getElementById('clawhub-understand-' + idx);
+  const btn = document.getElementById('clawhub-install-' + idx);
+  if (cb && btn) btn.disabled = !cb.checked;
+}
+
+async function installClawHubSkill(skill, idx) {
+  const btn = document.getElementById('clawhub-install-' + idx);
+  const msg = document.getElementById('clawhub-msg-' + idx);
+  if (btn) btn.disabled = true;
+  if (msg) { msg.textContent = 'Installing…'; msg.style.color = 'var(--ac-muted)'; }
+  try {
+    const res = await fetch('/api/skills/clawhub/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ skill }),
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      if (msg) { msg.textContent = 'Installed'; msg.style.color = 'var(--ac-teal)'; }
+    } else {
+      if (msg) { msg.textContent = data.message || 'Install failed'; msg.style.color = 'var(--ac-red)'; }
+      if (btn) btn.disabled = false;
+    }
+  } catch {
+    if (msg) { msg.textContent = 'Network error'; msg.style.color = 'var(--ac-red)'; }
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ── GitHub URL install ────────────────────────────────────────────────────
+
+function updateGithubInstallState() {
+  const url = (document.getElementById('github-install-url')?.value || '').trim();
+  const confirm = (document.getElementById('github-confirm-input')?.value || '').trim();
+  const btn = document.getElementById('github-install-btn');
+  if (btn) btn.disabled = !(url && confirm === 'CONFIRM');
+  // Clear messages on edit
+  const errEl = document.getElementById('github-install-error');
+  const succEl = document.getElementById('github-install-success');
+  if (errEl) errEl.style.display = 'none';
+  if (succEl) succEl.style.display = 'none';
+}
+
+async function installFromGithub() {
+  const url = (document.getElementById('github-install-url')?.value || '').trim();
+  const confirm = (document.getElementById('github-confirm-input')?.value || '').trim();
+  const btn = document.getElementById('github-install-btn');
+  const errEl = document.getElementById('github-install-error');
+  const succEl = document.getElementById('github-install-success');
+  if (errEl) errEl.style.display = 'none';
+  if (succEl) succEl.style.display = 'none';
+  if (!url || confirm !== 'CONFIRM') return;
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch('/api/skills/github/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, confirm }),
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      if (succEl) {
+        succEl.textContent = `Skill installed successfully at ${data.dest}`;
+        succEl.style.display = 'block';
+      }
+      // Clear inputs
+      const urlInput = document.getElementById('github-install-url');
+      const confirmInput = document.getElementById('github-confirm-input');
+      if (urlInput) urlInput.value = '';
+      if (confirmInput) confirmInput.value = '';
+    } else {
+      if (errEl) {
+        errEl.textContent = data.message || 'Install failed';
+        errEl.style.display = 'block';
+      }
+    }
+  } catch {
+    if (errEl) {
+      errEl.textContent = 'Network error — check your connection and try again.';
+      errEl.style.display = 'block';
+    }
+  }
+  if (btn) btn.disabled = true; // Re-disable since inputs are cleared
+}
+
+// ── Installed skills ──────────────────────────────────────────────────────
+
+function loadInstalledSkills() {
+  const list = document.getElementById('installed-skills-list');
+  const countEl = document.getElementById('installed-skills-count');
+  if (!list) return;
+  fetch('/api/skills/installed')
+    .then(r => r.json())
+    .then(data => {
+      const skills = data.skills || [];
+      if (countEl) countEl.textContent = skills.length ? `${skills.length} installed` : '';
+      if (skills.length === 0) {
+        list.innerHTML = '<div style="padding:16px;font-size:13px;color:var(--ac-hint)">No skills installed yet. Browse ClawHub or install from GitHub.</div>';
+        return;
+      }
+      list.innerHTML = skills.map(s => `
+        <div class="installed-skill-card">
+          <div class="installed-skill-info">
+            <div class="installed-skill-name">${escHtml(s.name)}</div>
+            <div class="installed-skill-desc">${escHtml(s.description)}</div>
+            <div class="installed-skill-meta">Source: ${escHtml(s.source)} ${s.enabled ? '' : '(disabled)'}</div>
+          </div>
+          <div class="installed-skill-actions">
+            <button class="toggle-switch ${s.enabled ? 'on' : ''}"
+              title="${s.enabled ? 'Disable' : 'Enable'}"
+              onclick="toggleInstalledSkill('${escAttr(s.id)}')"></button>
+            <button class="btn-remove" onclick="removeInstalledSkill('${escAttr(s.id)}')">Remove</button>
+          </div>
+        </div>
+      `).join('');
+    })
+    .catch(() => {
+      list.innerHTML = '<div style="padding:16px;font-size:13px;color:var(--ac-red)">Failed to load installed skills.</div>';
+    });
+}
+
+async function toggleInstalledSkill(id) {
+  await fetch(`/api/skills/installed/${encodeURIComponent(id)}/toggle`, { method: 'POST' });
+  loadInstalledSkills();
+}
+
+async function removeInstalledSkill(id) {
+  await fetch(`/api/skills/installed/${encodeURIComponent(id)}/remove`, { method: 'POST' });
+  loadInstalledSkills();
 }
 
 function switchImportTab(which) {
@@ -2831,12 +3890,616 @@ function fmtTime(iso) {
   } catch { return ''; }
 }
 
+// ── Channels view ───────────────────────────────────────────────────────────
+
+let channelsData = null;
+let channelsLoaded = false;
+let tgSetupOpen = false;
+let tgValidated = false;
+let tgBotUsername = '';
+
+async function syncChannelsView() {
+  if (channelsLoaded) return; // only fetch once, refresh via button
+  await loadChannels();
+}
+
+async function loadChannels() {
+  try {
+    const res = await fetch('/api/channels');
+    const data = await res.json();
+    if (data.ok) {
+      channelsData = data.channels;
+      channelsLoaded = true;
+      renderChannelsList();
+    }
+  } catch { /* silent */ }
+}
+
+function renderChannelsList() {
+  const el = document.getElementById('channels-list');
+  if (!el || !channelsData) return;
+
+  el.innerHTML = channelsData.map(ch => {
+    const badgeClass = ch.status === 'active' ? 'active'
+      : ch.status === 'coming_soon' ? 'coming-soon'
+      : ch.status === 'error' ? 'error'
+      : 'not-configured';
+    const badgeLabel = ch.status === 'active' ? 'Active'
+      : ch.status === 'coming_soon' ? 'Coming soon'
+      : ch.status === 'error' ? 'Error'
+      : 'Not configured';
+    const canConfigure = ch.configurable;
+    const isActive = ch.status === 'active';
+
+    return `<div class="ch-row" id="ch-row-${escAttr(ch.id)}">
+      <div class="ch-icon">${ch.icon}</div>
+      <div class="ch-info">
+        <div class="ch-name">${escHtml(ch.name)}</div>
+        <div class="ch-desc">${escHtml(ch.description)}</div>
+      </div>
+      <div class="ch-right">
+        <span class="ch-badge ${badgeClass}">${badgeLabel}</span>
+        ${canConfigure
+          ? `<button class="btn-configure" onclick="toggleChannelSetup('${escAttr(ch.id)}')" type="button">
+               ${isActive ? 'Reconfigure' : 'Configure'}
+             </button>`
+          : `<button class="btn-configure" disabled type="button">Configure</button>`}
+      </div>
+    </div>
+    ${ch.id === 'telegram' ? `<div class="ch-setup" id="ch-setup-telegram">${buildTelegramSetup()}</div>` : ''}`;
+  }).join('');
+}
+
+function buildTelegramSetup() {
+  return `<div class="ch-setup-inner">
+    <div class="ch-step">
+      <div class="ch-step-title">
+        <span class="ch-step-num">1</span>
+        Create a Telegram Bot
+      </div>
+      <div class="ch-step-body">
+        Open Telegram and message <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>.
+        BotFather is Telegram's official bot that creates new bots. Send it the message
+        <code style="background:var(--ac-surface);padding:2px 6px;border-radius:4px;font-size:12px;">/newbot</code>
+        and follow the prompts. It will give you a bot token when you're done.
+      </div>
+    </div>
+
+    <div class="ch-step">
+      <div class="ch-step-title">
+        <span class="ch-step-num">2</span>
+        Enter your Bot Token
+      </div>
+      <div class="ch-step-body">
+        Paste the token BotFather gave you below.
+        <input type="text" class="ch-field" id="tg-token-input"
+          placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+          oninput="tgValidated=false;tgBotUsername='';updateTgSaveState();">
+        <div class="ch-field-hint">
+          Your bot token is like a password — ArmorClaw stores it locally on your Mac and never sends it anywhere except Telegram's servers.
+        </div>
+        <div class="ch-validate-row">
+          <button class="btn-primary" id="tg-validate-btn" onclick="validateTgToken()" type="button"
+            style="padding:6px 14px; font-size:12.5px; min-height:34px;">
+            Validate token
+          </button>
+          <span class="ch-validate-msg" id="tg-validate-msg"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ch-step">
+      <div class="ch-step-title">
+        <span class="ch-step-num">3</span>
+        Set your Telegram username as the owner
+      </div>
+      <div class="ch-step-body">
+        Enter your personal Telegram username (the one you use, not the bot's). This prevents anyone else from messaging your agent.
+        <input type="text" class="ch-field" id="tg-owner-input"
+          placeholder="@yourusername"
+          style="font-family:'Plus Jakarta Sans',sans-serif;"
+          oninput="updateTgSaveState();">
+      </div>
+    </div>
+
+    <div class="ch-step" style="border-bottom:none; padding-bottom:0;">
+      <div class="ch-step-title">
+        <span class="ch-step-num">4</span>
+        Save and connect
+      </div>
+      <div class="ch-step-body">
+        Once your token is validated and username is set, save the config and restart your gateway.
+        <div class="ch-save-row">
+          <button class="btn-primary" id="tg-save-btn" onclick="saveTgConfig()" type="button" disabled>
+            Save channel config
+          </button>
+          <button class="btn-ghost" id="tg-restart-btn" onclick="restartGateway()" type="button" style="display:none;">
+            Restart Gateway
+          </button>
+          <span class="ch-save-msg" id="tg-save-msg"></span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function toggleChannelSetup(channelId) {
+  if (channelId !== 'telegram') return;
+  const panel = document.getElementById('ch-setup-telegram');
+  if (!panel) return;
+  tgSetupOpen = !tgSetupOpen;
+  panel.classList.toggle('open', tgSetupOpen);
+}
+
+async function validateTgToken() {
+  const input = document.getElementById('tg-token-input');
+  const msg = document.getElementById('tg-validate-msg');
+  const btn = document.getElementById('tg-validate-btn');
+  if (!input || !msg || !btn) return;
+
+  const token = input.value.trim();
+  if (!token) { msg.className = 'ch-validate-msg error'; msg.textContent = 'Enter a token first.'; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Validating…';
+  msg.textContent = '';
+
+  try {
+    const res = await fetch('/api/channels/telegram/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      tgValidated = true;
+      tgBotUsername = data.username || '';
+      msg.className = 'ch-validate-msg success';
+      msg.textContent = 'Token is valid! Bot: @' + tgBotUsername;
+    } else {
+      tgValidated = false;
+      tgBotUsername = '';
+      msg.className = 'ch-validate-msg error';
+      msg.textContent = data.error || 'Validation failed.';
+    }
+  } catch {
+    tgValidated = false;
+    msg.className = 'ch-validate-msg error';
+    msg.textContent = 'Could not reach the server.';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Validate token';
+  updateTgSaveState();
+}
+
+function updateTgSaveState() {
+  const saveBtn = document.getElementById('tg-save-btn');
+  if (!saveBtn) return;
+  const owner = (document.getElementById('tg-owner-input')?.value || '').trim();
+  saveBtn.disabled = !tgValidated || !owner;
+}
+
+async function saveTgConfig() {
+  const tokenEl = document.getElementById('tg-token-input');
+  const ownerEl = document.getElementById('tg-owner-input');
+  const msg = document.getElementById('tg-save-msg');
+  const saveBtn = document.getElementById('tg-save-btn');
+  const restartBtn = document.getElementById('tg-restart-btn');
+  if (!tokenEl || !ownerEl || !msg || !saveBtn) return;
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+  msg.textContent = '';
+
+  try {
+    const res = await fetch('/api/channels/telegram/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: tokenEl.value.trim(),
+        username: ownerEl.value.trim()
+      })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      msg.className = 'ch-save-msg success';
+      msg.textContent = 'Saved! Restart your gateway for changes to take effect.';
+      if (restartBtn) restartBtn.style.display = '';
+      // Refresh channels list to show new status
+      channelsLoaded = false;
+      await loadChannels();
+    } else {
+      msg.className = 'ch-save-msg error';
+      msg.textContent = data.message || 'Save failed.';
+    }
+  } catch {
+    msg.className = 'ch-save-msg error';
+    msg.textContent = 'Could not reach the server.';
+  }
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save channel config';
+}
+
+async function restartGateway() {
+  const msg = document.getElementById('tg-save-msg');
+  const btn = document.getElementById('tg-restart-btn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = 'Restarting…';
+  try {
+    const res = await fetch('/api/channels/gateway/restart', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      if (msg) { msg.className = 'ch-save-msg success'; msg.textContent = 'Gateway restarting (PID ' + data.pid + '). Give it a few seconds.'; }
+    } else {
+      if (msg) { msg.className = 'ch-save-msg error'; msg.textContent = data.message || 'Restart failed.'; }
+    }
+  } catch {
+    if (msg) { msg.className = 'ch-save-msg error'; msg.textContent = 'Could not reach the server.'; }
+  }
+  btn.disabled = false;
+  btn.textContent = 'Restart Gateway';
+}
+
 function escHtml(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 function escAttr(s) { return escHtml(s); }
+
+// ── Inline chat — gateway WebSocket ──────────────────────────────────────────
+//
+// Ported from wrapper/launcher/chat/chat.html. Uses the same OpenClaw
+// gateway frame protocol: connect.challenge → connect req → chat.send.
+//
+
+const CHAT_SESSION_KEY = 'armorclaw-dashboard-' + Date.now();
+
+let chatDebugLog = [];
+function chatDbg(msg) {
+  const ts = new Date().toISOString().slice(11,23);
+  chatDebugLog.push(ts + ' ' + msg);
+  if (chatDebugLog.length > 50) chatDebugLog.shift();
+  const panel = document.getElementById('chat-debug');
+  if (panel) panel.textContent = chatDebugLog.slice(-10).join('\n');
+}
+
+// Triple-click header toggles debug panel
+let chatClickCount = 0, chatClickTimer = null;
+document.getElementById('chat-panel-hdr')?.addEventListener('click', () => {
+  chatClickCount++;
+  if (chatClickTimer) clearTimeout(chatClickTimer);
+  chatClickTimer = setTimeout(() => { chatClickCount = 0; }, 400);
+  if (chatClickCount >= 3) {
+    const p = document.getElementById('chat-debug');
+    if (p) p.style.display = p.style.display === 'none' ? '' : 'none';
+    chatClickCount = 0;
+  }
+});
+
+let chatGatewayUrl = 'ws://127.0.0.1:18789';
+let chatGatewayToken = '';
+let chatWs = null;
+let chatConnected = false;
+let chatAuthenticated = false;
+let chatResponding = false;
+let chatPendingId = null;
+let chatResponseBuffer = '';
+let chatMsgIdCounter = 0;
+let chatConnectId = null;
+let chatChallengeNonce = null;
+
+// Retry state
+let chatRetryAttempts = 0;
+const CHAT_MAX_RETRIES = 10;
+const CHAT_BASE_DELAY = 3000;
+const CHAT_MAX_DELAY = 30000;
+let chatRetryTimer = null;
+
+function chatRetryDelay() {
+  return Math.min(CHAT_BASE_DELAY * Math.pow(2, chatRetryAttempts), CHAT_MAX_DELAY);
+}
+
+function chatSetConnStatus(connected) {
+  const dot = document.getElementById('chat-conn-dot');
+  const label = document.getElementById('chat-conn-label');
+  if (dot) dot.classList.toggle('connected', connected);
+  if (label) {
+    label.classList.toggle('connected', connected);
+    label.textContent = connected ? 'Connected' : 'Connecting...';
+  }
+}
+
+async function chatFetchConfig() {
+  try {
+    const res = await fetch('/api/chat/gateway-config');
+    if (res.status === 503) { chatDbg('config: 503 — token not ready'); return false; }
+    if (!res.ok) { chatDbg('config: HTTP ' + res.status); return false; }
+    const data = await res.json();
+    if (data.wsUrl) chatGatewayUrl = data.wsUrl;
+    if (data.token) chatGatewayToken = data.token;
+    chatDbg('config: url=' + chatGatewayUrl + ' token=' + (chatGatewayToken ? chatGatewayToken.slice(0,8) + '...' : 'NONE'));
+    return Boolean(chatGatewayToken);
+  } catch (err) {
+    chatDbg('config fetch failed: ' + (err.message || err));
+    return false;
+  }
+}
+
+async function chatWaitForGateway() {
+  chatDbg('waiting for gateway token');
+  for (let i = 0; i < 30; i++) {
+    const ok = await chatFetchConfig();
+    if (ok && chatGatewayToken) { chatDbg('token ready after ' + (i+1) + 's'); return true; }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  chatDbg('no token after 30s');
+  return false;
+}
+
+function chatScheduleRetry() {
+  if (chatRetryAttempts >= CHAT_MAX_RETRIES) {
+    chatDbg('max retries reached');
+    chatAddMsg('system', 'Could not connect. Check the gateway and refresh.');
+    return;
+  }
+  const delay = chatRetryDelay();
+  chatDbg('retry ' + (chatRetryAttempts + 1) + '/' + CHAT_MAX_RETRIES + ' in ' + delay + 'ms');
+  chatRetryTimer = setTimeout(async () => {
+    await chatFetchConfig();
+    chatConnect();
+  }, delay);
+  chatRetryAttempts++;
+}
+
+function chatResetRetry() {
+  chatRetryAttempts = 0;
+  if (chatRetryTimer) { clearTimeout(chatRetryTimer); chatRetryTimer = null; }
+}
+
+function chatConnect() {
+  if (chatWs && (chatWs.readyState === WebSocket.CONNECTING || chatWs.readyState === WebSocket.OPEN)) {
+    chatDbg('already connecting/connected');
+    return;
+  }
+
+  chatAuthenticated = false;
+  chatConnectId = null;
+  chatSetConnStatus(false);
+  chatDbg('connecting to ' + chatGatewayUrl);
+
+  try {
+    chatWs = new WebSocket(chatGatewayUrl);
+  } catch (err) {
+    chatDbg('WebSocket constructor threw: ' + (err.message || err));
+    chatScheduleRetry();
+    return;
+  }
+
+  chatWs.onopen = () => {
+    chatConnected = true;
+    chatDbg('WS open — waiting for challenge');
+  };
+
+  chatWs.onmessage = (evt) => {
+    const raw = typeof evt.data === 'string' ? evt.data : '';
+    chatDbg('recv: ' + raw.slice(0, 120));
+    try { chatHandleMessage(JSON.parse(raw)); }
+    catch (err) { chatDbg('parse error: ' + (err.message || err)); }
+  };
+
+  chatWs.onclose = (evt) => {
+    chatDbg('WS closed: code=' + evt.code);
+    chatConnected = false;
+    chatAuthenticated = false;
+    chatSetConnStatus(false);
+    chatScheduleRetry();
+  };
+
+  chatWs.onerror = () => { chatDbg('WS error event'); };
+}
+
+function chatSendConnectAuth() {
+  if (!chatWs || chatWs.readyState !== WebSocket.OPEN) return;
+  chatConnectId = 'connect-' + (++chatMsgIdCounter);
+  const frame = {
+    type: 'req', id: chatConnectId, method: 'connect',
+    params: {
+      minProtocol: 3,
+      maxProtocol: 3,
+      client: { id: 'webchat-ui', displayName: 'ArmorClaw Dashboard Chat', version: '0.1.0', platform: 'web', mode: 'webchat' },
+      auth: chatGatewayToken ? { token: chatGatewayToken } : undefined,
+    }
+  };
+  chatDbg('sending connect');
+  chatWs.send(JSON.stringify(frame));
+}
+
+function chatHandleMessage(data) {
+  // Events
+  if (data.type === 'event') {
+    if (data.event === 'connect.challenge') {
+      chatChallengeNonce = data.payload?.nonce || null;
+      chatDbg('challenge received');
+      chatSendConnectAuth();
+      return;
+    }
+    if (data.event === 'stream.text.delta') {
+      const text = data.payload?.delta ?? '';
+      if (text) {
+        chatResponseBuffer += text;
+        chatUpdateLastAgent(chatResponseBuffer);
+        document.getElementById('chat-typing').classList.remove('visible');
+      }
+      return;
+    }
+    if (data.event === 'agent.turn.complete' || data.event === 'chat.turn.complete') {
+      chatResponding = false;
+      document.getElementById('chat-typing').classList.remove('visible');
+      const el = document.querySelector('.chat-msg.agent.streaming');
+      if (el) el.classList.remove('streaming');
+      if (!chatResponseBuffer && el) {
+        const text = data.payload?.text ?? data.payload?.message ?? '';
+        if (text) chatUpdateLastAgent(text);
+      }
+      return;
+    }
+    if (data.payload?.text) {
+      chatResponseBuffer += data.payload.text;
+      if (!document.querySelector('.chat-msg.agent.streaming')) {
+        chatAddMsg('agent', chatResponseBuffer, true);
+      } else {
+        chatUpdateLastAgent(chatResponseBuffer);
+      }
+      document.getElementById('chat-typing').classList.remove('visible');
+    }
+    return;
+  }
+
+  // Responses
+  if (data.type === 'res') {
+    if (data.id === chatConnectId) {
+      if (data.error) {
+        chatDbg('connect FAILED: ' + (data.error.message || JSON.stringify(data.error)));
+        chatAddMsg('system', 'Authentication failed. Retrying...');
+        // Close the WebSocket so the onclose handler fires and schedules a retry.
+        // Don't call chatScheduleRetry() directly here — onclose handles it and
+        // avoids double-scheduling if the socket is already closing.
+        chatWs?.close();
+      } else {
+        chatDbg('connect SUCCESS');
+        chatAuthenticated = true;
+        chatResetRetry();
+        chatSetConnStatus(true);
+        document.getElementById('chat-send-btn').disabled = false;
+        // Remove connecting messages
+        document.querySelectorAll('.chat-msg.system').forEach(el => {
+          if (el.textContent?.includes('Connecting') || el.textContent?.includes('Retrying')) el.remove();
+        });
+        const msgs = document.getElementById('chat-messages');
+        if (msgs && msgs.children.length === 0) {
+          chatAddMsg('system', 'Connected. Ask me anything.');
+        }
+      }
+      return;
+    }
+    if (data.id === chatPendingId) {
+      chatResponding = false;
+      document.getElementById('chat-typing').classList.remove('visible');
+      if (data.error) {
+        const el = document.querySelector('.chat-msg.agent.streaming');
+        if (el && !chatResponseBuffer) el.remove();
+        chatAddMsg('agent', 'Something went wrong: ' + (data.error.message || 'Unknown error'));
+      } else {
+        const text = data.result?.message ?? data.result?.text ?? '';
+        if (text && !chatResponseBuffer) chatUpdateLastAgent(text);
+        const el = document.querySelector('.chat-msg.agent.streaming');
+        if (el) el.classList.remove('streaming');
+      }
+      chatResponseBuffer = '';
+      chatPendingId = null;
+      return;
+    }
+  }
+}
+
+function chatSendToGateway(message) {
+  if (!chatWs || chatWs.readyState !== WebSocket.OPEN || !chatAuthenticated) {
+    chatAddMsg('system', 'Not connected. Retrying...');
+    chatResetRetry();
+    chatFetchConfig().then(() => chatConnect());
+    return;
+  }
+  const id = 'chat-' + (++chatMsgIdCounter);
+  chatPendingId = id;
+  chatResponseBuffer = '';
+  chatResponding = true;
+  document.getElementById('chat-typing').classList.add('visible');
+  chatAddMsg('agent', '', true);
+  chatScrollBottom();
+
+  chatWs.send(JSON.stringify({
+    type: 'req', id: id, method: 'chat.send',
+    params: { sessionKey: CHAT_SESSION_KEY, message: message }
+  }));
+  chatDbg('sent chat.send id=' + id);
+}
+
+// ── Chat UI helpers ──────────────────────────────────────────────────────────
+
+function chatAddMsg(type, text, streaming) {
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + type;
+  if (streaming) div.classList.add('streaming');
+
+  if (type === 'agent' && !streaming) {
+    div.innerHTML = '<div class="chat-agent-hdr"><span class="chat-agent-badge">🦞</span><span class="chat-agent-name">ArmorClaw</span></div>' + escHtml(text);
+  } else if (type === 'agent' && streaming) {
+    div.innerHTML = '<div class="chat-agent-hdr"><span class="chat-agent-badge">🦞</span><span class="chat-agent-name">ArmorClaw</span></div><span class="chat-agent-text"></span>';
+  } else {
+    div.textContent = text;
+  }
+  container.appendChild(div);
+  chatScrollBottom();
+}
+
+function chatUpdateLastAgent(text) {
+  const msgs = document.querySelectorAll('.chat-msg.agent.streaming');
+  const last = msgs[msgs.length - 1];
+  if (last) {
+    const textEl = last.querySelector('.chat-agent-text');
+    if (textEl) textEl.textContent = text;
+    document.getElementById('chat-typing').classList.remove('visible');
+    chatScrollBottom();
+  }
+}
+
+function chatScrollBottom() {
+  const c = document.getElementById('chat-messages');
+  c.scrollTop = c.scrollHeight;
+}
+
+function chatAutoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 80) + 'px';
+}
+
+// Send on Enter, newline on Shift+Enter
+document.getElementById('chat-input')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    chatSendMessage();
+  }
+});
+
+document.getElementById('chat-input')?.addEventListener('input', function() {
+  chatAutoResize(this);
+});
+
+document.getElementById('chat-send-btn')?.addEventListener('click', () => chatSendMessage());
+
+function chatSendMessage() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  chatAddMsg('user', text);
+  input.value = '';
+  input.style.height = 'auto';
+  chatSendToGateway(text);
+}
+
+// ── Chat init ────────────────────────────────────────────────────────────────
+chatWaitForGateway().then((ready) => {
+  if (ready) {
+    chatConnect();
+  } else {
+    chatDbg('gateway not available');
+    chatAddMsg('system', 'Gateway offline. Start it from the Advanced view.');
+    chatScheduleRetry();
+  }
+});
 
 // ── Boot ────────────────────────────────────────────────────────────────────────
 buildNav('sidebar-nav');

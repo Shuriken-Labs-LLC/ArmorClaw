@@ -35,8 +35,6 @@ const PERMISSION_LEVELS: ReadonlyArray<string> = [
   "send:email",
   "read:calendar",
   "write:calendar",
-  "read:crm",
-  "write:crm",
   "browser:sandboxed",
   "network:outbound",
 ];

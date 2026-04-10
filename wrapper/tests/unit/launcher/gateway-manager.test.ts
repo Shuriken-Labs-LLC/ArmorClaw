@@ -6,7 +6,12 @@
 
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { GatewayManager } from "../../../launcher/gateway-manager.ts";
+import {
+  findNodePath,
+  GatewayManager,
+  getRepoRoot,
+  nodeNotFoundMessage,
+} from "../../../launcher/gateway-manager.ts";
 import type { AgentState, GatewayStatus } from "../../../launcher/gateway-manager.ts";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -245,5 +250,71 @@ describe("pause / resume", () => {
     const mgr = new GatewayManager({ checkHealth: async () => null });
     const result = mgr.resume();
     expect(result).toBeInstanceOf(Promise);
+  });
+});
+
+// ── findNodePath ──────────────────────────────────────────────────────────────
+
+describe("findNodePath", () => {
+  it("returns a string path to a node binary", () => {
+    // On the test machine, node must be installed (we're running tests with it)
+    const nodePath = findNodePath();
+    expect(typeof nodePath).toBe("string");
+    expect(nodePath.length).toBeGreaterThan(0);
+  });
+
+  it("returned path contains 'node'", () => {
+    const nodePath = findNodePath();
+    expect(nodePath.toLowerCase()).toContain("node");
+  });
+});
+
+// ── nodeNotFoundMessage ───────────────────────────────────────────────────────
+
+describe("nodeNotFoundMessage", () => {
+  it("returns a non-empty string", () => {
+    const msg = nodeNotFoundMessage();
+    expect(msg.length).toBeGreaterThan(0);
+  });
+
+  it("mentions nodejs.org", () => {
+    expect(nodeNotFoundMessage()).toContain("nodejs.org");
+  });
+
+  it("mentions Node.js 22", () => {
+    expect(nodeNotFoundMessage()).toContain("Node.js 22");
+  });
+});
+
+// ── getRepoRoot ───────────────────────────────────────────────────────────────
+
+describe("getRepoRoot", () => {
+  it("returns a non-empty string", () => {
+    const root = getRepoRoot();
+    expect(typeof root).toBe("string");
+    expect(root.length).toBeGreaterThan(0);
+  });
+
+  it("returns an absolute path", () => {
+    const root = getRepoRoot();
+    // On Unix starts with /, on Windows starts with drive letter
+    expect(root.startsWith("/") || /^[A-Z]:\\/i.test(root)).toBe(true);
+  });
+});
+
+// ── nodeNotFoundError on manager ──────────────────────────────────────────────
+
+describe("GatewayManager nodeNotFoundError", () => {
+  it("is null when node is found", () => {
+    const mgr = new GatewayManager({ checkHealth: async () => null });
+    expect(mgr.nodeNotFoundError).toBeNull();
+  });
+
+  it("is null when nodePath is injected", () => {
+    const mgr = new GatewayManager({
+      checkHealth: async () => null,
+      nodePath: "/usr/bin/node",
+    });
+    expect(mgr.nodeNotFoundError).toBeNull();
   });
 });

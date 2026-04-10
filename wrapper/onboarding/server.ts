@@ -619,7 +619,7 @@ export async function launchGateway(): Promise<LaunchResult> {
     `${oc} config set gateway.mode local`,
     `${oc} config set gateway.controlUi.allowedOrigins '["*"]'`,
     `${oc} config set plugins.load.paths '["${actualWrapper}"]'`,
-    `${oc} config set plugins.allow '["armorclaw"]'`,
+    `${oc} config set plugins.allow '["wrapper"]'`,
   ];
 
   // memory.paths was removed — OpenClaw's current schema does not expose a

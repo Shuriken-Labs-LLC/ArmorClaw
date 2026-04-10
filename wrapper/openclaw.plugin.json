@@ -1,5 +1,5 @@
 {
-  "id": "armorclaw",
+  "id": "wrapper",
   "name": "ArmorClaw",
   "version": "2026.3.14",
   "description": "Security layer: injection filter, permission engine, audit logger",

@@ -12,7 +12,7 @@ import { registerPermissionFilter } from "./security/permissions.ts";
 // export and calls register(api) at daemon startup.
 
 const armorClawPlugin = {
-  id: "armorclaw",
+  id: "wrapper",
   name: "ArmorClaw",
   description:
     "Hardened security layer: injection filter, permission engine, and audit logger for every tool call.",

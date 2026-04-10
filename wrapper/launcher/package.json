@@ -2,16 +2,27 @@
   "name": "armorclaw-launcher",
   "version": "0.1.0",
   "description": "ArmorClaw desktop launcher — system tray app",
+  "author": "ArmorClaw <hello@armorclaw.ai>",
   "type": "module",
-  "main": "main.ts",
+  "main": "dist-src/launcher/main.js",
   "scripts": {
-    "build:all": "electron-builder --mac --win",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
-    "start": "electron --experimental-strip-types ."
+    "build:all": "npm run build:ts && electron-builder --mac --win",
+    "build:mac": "npm run build:ts && electron-builder --mac",
+    "build:ts": "tsc; node scripts/copy-wizard-public.mjs",
+    "build:win": "npm run build:ts && electron-builder --win",
+    "start": "npm run build:ts && electron .",
+    "test:smoke": "node --experimental-strip-types ../tests/smoke/dashboard-smoke.test.ts"
+  },
+  "dependencies": {
+    "croner": "^10.0.1",
+    "electron-updater": "^6.8.3",
+    "express": "^5.1.0",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
+    "@types/express": "^5.0.0",
     "electron": "^35.0.0",
-    "electron-builder": "^26.0.0"
+    "electron-builder": "^26.0.0",
+    "typescript": "^5.8.0"
   }
 }

@@ -49,6 +49,12 @@ vi.mock("../../../lib/skill-registry.ts", () => ({
   getAllSkills: vi.fn(() => []),
 }));
 
+vi.mock("../../../security/permissions.ts", () => ({
+  getPendingApprovals: vi.fn(() => []),
+  resolveApproval: vi.fn(() => true),
+  onApprovalChange: vi.fn(() => () => {}),
+}));
+
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn(() => {
     throw new Error("ENOENT");

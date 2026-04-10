@@ -203,7 +203,7 @@ export class PlaywrightBrowserAdapter implements IBrowserAdapter {
 
   async getCookies(domain?: string): Promise<CookieInfo[]> {
     const ctx = await this.getContext();
-    const all = await ctx.cookies(domain ? undefined : undefined);
+    const all = await ctx.cookies(domain ? [domain] : undefined);
     const filtered = domain ? all.filter((c) => c.domain.includes(domain)) : all;
     return filtered.map((c) => ({
       name: c.name,

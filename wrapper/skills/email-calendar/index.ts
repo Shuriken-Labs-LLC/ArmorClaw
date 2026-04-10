@@ -53,8 +53,8 @@ export const PERMISSION_MANIFEST = [
  * @param preference  Optional override from the input.
  */
 export function resolveAdapter(preference?: "gmail" | "outlook"): IEmailCalendarAdapter {
-  const hasGmail = Boolean(process.env["GOOGLE_CLIENT_ID"]);
-  const hasOutlook = Boolean(process.env["MICROSOFT_CLIENT_ID"]);
+  const hasGmail = Boolean(process.env["GOOGLE_OAUTH_CLIENT_ID"]);
+  const hasOutlook = Boolean(process.env["MICROSOFT_OAUTH_CLIENT_ID"]);
 
   if (preference === "outlook" && hasOutlook) {
     return new OutlookAdapter();
