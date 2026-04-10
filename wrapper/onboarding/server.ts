@@ -627,22 +627,10 @@ export async function launchGateway(): Promise<LaunchResult> {
   // memory module matures. Attempting to set it causes a config validation
   // error on every launch, so we skip it until the key lands in upstream.
 
-  // If a Telegram bot token was configured in the wizard, set the channel
-  // policy so the bot responds to the owner immediately.
-  // Note: `openclaw channels add --channel telegram` is not supported in the
-  // current OpenClaw build — "Unknown channel: telegram". We write the token
-  // to .env (TELEGRAM_BOT_TOKEN) as a fallback, which the gateway picks up,
-  // and set allowFrom/dmPolicy via config set which do work.
-  const state = getState();
-  const telegramToken = process.env["TELEGRAM_BOT_TOKEN"]?.trim();
-  if (state.connectedChannels.includes("telegram") || telegramToken) {
-    configCommands.push(
-      `${oc} config set channels.telegram.allowFrom '["*"]'`,
-      // dmPolicy removed — allowFrom '["*"]' already permits all senders,
-      // and setting dmPolicy triggers a gateway reload that regenerates the
-      // auth token (cascade). Default pairing policy is fine with wildcard allowFrom.
-    );
-  }
+  // Telegram: bot token is written to .env as TELEGRAM_BOT_TOKEN (wizard
+  // fallback path). The gateway reads it from there. Do NOT use config set
+  // for any channels.telegram.* key — every write to openclaw.json triggers
+  // the gateway to reload and regenerate gateway.auth.token (token cascade).
 
   let configErrors = 0;
   for (const cmd of configCommands) {
