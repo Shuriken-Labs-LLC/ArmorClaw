@@ -617,7 +617,6 @@
     }
     .ch-badge.active { background: var(--ac-teal-light); color: var(--ac-teal); }
     .ch-badge.not-configured { background: var(--ac-surface2); color: var(--ac-muted); }
-    .ch-badge.coming-soon { background: var(--ac-purple-light); color: var(--ac-purple); }
     .ch-badge.error { background: var(--ac-red-light); color: var(--ac-red); }
     .btn-configure {
       padding: 6px 14px; border-radius: 8px;
@@ -2460,6 +2459,7 @@ function syncUI(s) {
 }
 
 // Agent status pill + subline + controls
+let _lastAgentStatus = '';
 function syncStatus(s) {
   const pill     = document.getElementById('status-pill');
   const txt      = document.getElementById('status-text');
@@ -2468,6 +2468,9 @@ function syncStatus(s) {
   if (!pill) return;
 
   const st = s.agentStatus;
+  if (st === _lastAgentStatus) return; // skip DOM writes when unchanged
+  _lastAgentStatus = st;
+
   pill.className = `status-pill ${st}`;
   txt.textContent = st === 'running' ? 'Running' : st === 'paused' ? 'Paused' : 'Error';
 
@@ -2489,12 +2492,17 @@ function syncStatus(s) {
 }
 
 // Pending approvals
+let _lastApprovalIds = '';
 function syncApprovals(s) {
   const body = document.getElementById('approvals-body');
   const card = body?.closest('.approvals-card');
   if (!body) return;
 
   const items = s.pendingApprovals || [];
+  const ids = items.map(a => a.id).join(',');
+  if (ids === _lastApprovalIds) return; // skip DOM writes when unchanged
+  _lastApprovalIds = ids;
+
   if (items.length === 0) {
     body.innerHTML = '<div class="approvals-zero"><span class="approvals-zero-icon">\u2713</span><span>Nothing waiting for you.</span></div>';
     if (card) card.style.display = '';
@@ -2525,11 +2533,15 @@ async function rejectAction(id) {
 }
 
 // "Open in [Channel]" buttons — full-width card between approvals and budget
+let _lastChannelIds = '';
 function syncChannelBtns(s) {
   const card = document.getElementById('chat-card');
   const btns = document.getElementById('chat-card-btns');
   if (!card || !btns) return;
   const channels = s.channels || [];
+  const ids = channels.map(ch => ch.id + ':' + ch.status).join(',');
+  if (ids === _lastChannelIds) return;
+  _lastChannelIds = ids;
   if (channels.length === 0) { card.style.display = 'none'; return; }
   card.style.display = '';
   btns.innerHTML = channels.map(ch =>
@@ -2579,6 +2591,7 @@ function syncUndo(s) {
 }
 
 // Token burn widget
+let _lastBudgetKey = '';
 function syncBudget(s) {
   const sentence = document.getElementById('budget-sentence');
   const bar      = document.getElementById('budget-bar');
@@ -2586,6 +2599,10 @@ function syncBudget(s) {
   if (!sentence || !bar) return;
 
   const b   = s.budget || { spentThisMonthUSD: 0, monthlyBudgetUSD: 20, percentUsed: 0, isHardStopped: false };
+  const key = b.spentThisMonthUSD + ':' + b.monthlyBudgetUSD + ':' + b.isHardStopped;
+  if (key === _lastBudgetKey) return;
+  _lastBudgetKey = key;
+
   const pct = Math.min(b.percentUsed || 0, 100);
 
   sentence.textContent =
@@ -2598,12 +2615,17 @@ function syncBudget(s) {
 }
 
 // Activity feed — translate audit log entries to plain English
+let _lastFeedKey = '';
 function syncFeed(s) {
   const list  = document.getElementById('feed-list');
   const count = document.getElementById('feed-count');
   if (!list) return;
 
   const entries = s.feed || [];
+  // Build a lightweight fingerprint to skip DOM rebuild when feed is unchanged
+  const feedKey = entries.length + ':' + (entries[0]?.timestamp || '') + ':' + (entries[entries.length - 1]?.timestamp || '');
+  if (feedKey === _lastFeedKey) return;
+  _lastFeedKey = feedKey;
   if (count) count.textContent = entries.length > 0 ? `${entries.length}` : '';
 
   if (entries.length === 0) {
@@ -3927,11 +3949,9 @@ function renderChannelsList() {
 
   el.innerHTML = channelsData.map(ch => {
     const badgeClass = ch.status === 'active' ? 'active'
-      : ch.status === 'coming_soon' ? 'coming-soon'
       : ch.status === 'error' ? 'error'
       : 'not-configured';
     const badgeLabel = ch.status === 'active' ? 'Active'
-      : ch.status === 'coming_soon' ? 'Coming soon'
       : ch.status === 'error' ? 'Error'
       : 'Not configured';
     const canConfigure = ch.configurable;

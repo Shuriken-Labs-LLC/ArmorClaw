@@ -735,7 +735,7 @@ export interface ChannelType {
   name: string;
   description: string;
   icon: string;
-  status: "active" | "not_configured" | "error" | "coming_soon";
+  status: "active" | "not_configured" | "error";
   configurable: boolean;
 }
 
@@ -759,30 +759,6 @@ export function getChannelTypes(): ChannelType[] {
       icon: "✈️",
       status: tgStatus,
       configurable: true,
-    },
-    {
-      id: "whatsapp",
-      name: "WhatsApp",
-      description: "Chat with your agent on WhatsApp. Requires a WhatsApp Business API number.",
-      icon: "💬",
-      status: "coming_soon",
-      configurable: false,
-    },
-    {
-      id: "googlechat",
-      name: "Google Chat",
-      description: "Connect your agent to Google Chat for workspace messaging.",
-      icon: "🟢",
-      status: "coming_soon",
-      configurable: false,
-    },
-    {
-      id: "imessage",
-      name: "iMessage (BlueBubbles)",
-      description: "Use BlueBubbles to connect your agent to iMessage on your Mac.",
-      icon: "🍎",
-      status: "coming_soon",
-      configurable: false,
     },
   ];
 }
