@@ -43,6 +43,8 @@ import {
   onApprovalChange,
 } from "../security/permissions.ts";
 import type { PendingToolApproval } from "../security/permissions.ts";
+import { calculateCost } from "../token-tracker/pricing.ts";
+import type { Provider } from "../token-tracker/pricing.ts";
 import {
   getBudgetStatus,
   getDailyHistory,
@@ -50,6 +52,7 @@ import {
   getMonthTokens,
   getRecentEvents,
   getTodayTokens,
+  recordTokenEvent,
   resumeFromHardStop,
   setBudgetMonthlyUSD,
 } from "../token-tracker/store.ts";
@@ -1006,6 +1009,47 @@ export function createApp(): express.Application {
     resumeFromHardStop();
     notifyListeners();
     res.json({ ok: true });
+  });
+
+  // ── Token tracking: record usage from gateway chat ──
+  // The gateway handles model calls directly; this endpoint lets the chat UI
+  // report token usage after each chat.final so ArmorClaw's budget tracker
+  // and cost display stay accurate.
+  app.post("/api/tokens/record", (req, res) => {
+    const body = req.body as {
+      provider?: string;
+      model?: string;
+      skill?: string;
+      inputTokens?: number;
+      outputTokens?: number;
+    };
+    const provider = (body.provider ?? "anthropic") as Provider;
+    const model = body.model ?? "unknown";
+    const skill = body.skill ?? "chat";
+    const inputTokens = typeof body.inputTokens === "number" ? body.inputTokens : 0;
+    const outputTokens = typeof body.outputTokens === "number" ? body.outputTokens : 0;
+
+    if (inputTokens === 0 && outputTokens === 0) {
+      res.json({ ok: true, recorded: false });
+      return;
+    }
+
+    const estimatedCostUSD = calculateCost(provider, model, inputTokens, outputTokens);
+
+    const event: TokenEvent = {
+      timestamp: new Date().toISOString(),
+      provider,
+      model,
+      skill,
+      inputTokens,
+      outputTokens,
+      estimatedCostUSD,
+    };
+
+    // Fire-and-forget — never block the response on token tracking
+    void recordTokenEvent(event);
+    notifyListeners();
+    res.json({ ok: true, recorded: true, estimatedCostUSD });
   });
 
   // ── Settings: model provider ──

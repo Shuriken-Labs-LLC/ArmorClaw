@@ -4195,6 +4195,7 @@ let chatAuthenticated = false;
 let chatResponding = false;
 let chatPendingId = null;
 let chatResponseBuffer = '';
+let chatLastUserMessage = '';
 let chatMsgIdCounter = 0;
 let chatConnectId = null;
 let chatChallengeNonce = null;
@@ -4355,6 +4356,9 @@ function chatHandleMessage(data) {
           if (textEl) textEl.textContent = text;
         }
         if (el) el.classList.remove('streaming');
+        // Record token usage for this chat turn
+        const finalText = chatResponseBuffer || text;
+        chatRecordUsage(chatLastUserMessage, finalText, data.payload?.runId);
         chatResponseBuffer = '';
         chatPendingId = null;
         return;
@@ -4376,6 +4380,9 @@ function chatHandleMessage(data) {
 
   // Responses
   if (data.type === 'res') {
+    // Check if this is a usage.cost response first
+    if (chatHandleUsageResponse(data)) return;
+
     if (data.id === chatConnectId) {
       if (data.error) {
         chatDbg('connect FAILED: ' + (data.error.message || JSON.stringify(data.error)));
@@ -4438,6 +4445,7 @@ function chatSendToGateway(message) {
   const id = 'chat-' + (++chatMsgIdCounter);
   chatPendingId = id;
   chatResponseBuffer = '';
+  chatLastUserMessage = message;
   chatResponding = true;
   document.getElementById('chat-typing').classList.add('visible');
   chatAddMsg('agent', '', true);
@@ -4478,6 +4486,101 @@ function chatUpdateLastAgent(text) {
     document.getElementById('chat-typing').classList.remove('visible');
     chatScrollBottom();
   }
+}
+
+// ── Token tracking ──────────────────────────────────────────────────────────
+// After each chat completion, query the gateway for usage data and report it
+// to ArmorClaw's token tracker so the budget widget stays accurate.
+
+let chatLastSessionTokens = { input: 0, output: 0 };
+let chatUsagePendingCallbacks = {};
+
+function chatRecordUsage(inputText, outputText, runId) {
+  // Query the gateway for session usage via the existing WebSocket
+  if (chatWs && chatWs.readyState === WebSocket.OPEN && chatAuthenticated) {
+    const usageId = 'usage-' + (++chatMsgIdCounter);
+    chatUsagePendingCallbacks[usageId] = { inputText, outputText };
+
+    chatWs.send(JSON.stringify({
+      type: 'req', id: usageId, method: 'usage.cost',
+      params: { days: 1 }
+    }));
+    chatDbg('sent usage.cost query id=' + usageId);
+
+    // Timeout: if no response in 3s, fall back to estimation
+    setTimeout(() => {
+      if (chatUsagePendingCallbacks[usageId]) {
+        chatDbg('usage query timed out — using estimation');
+        delete chatUsagePendingCallbacks[usageId];
+        chatRecordEstimatedUsage(inputText, outputText);
+      }
+    }, 3000);
+  } else {
+    chatRecordEstimatedUsage(inputText, outputText);
+  }
+}
+
+function chatHandleUsageResponse(data) {
+  const cb = chatUsagePendingCallbacks[data.id];
+  if (!cb) return false;
+  delete chatUsagePendingCallbacks[data.id];
+
+  try {
+    const payload = data.payload ?? data.result ?? {};
+    // usage.cost returns aggregate data — extract the totals
+    const totals = payload.totals ?? payload;
+    const inputTokens = totals.inputTokens ?? totals.input_tokens ?? 0;
+    const outputTokens = totals.outputTokens ?? totals.output_tokens ?? 0;
+
+    // Calculate delta from last known session totals
+    const deltaInput = Math.max(0, inputTokens - chatLastSessionTokens.input);
+    const deltaOutput = Math.max(0, outputTokens - chatLastSessionTokens.output);
+    chatLastSessionTokens.input = inputTokens;
+    chatLastSessionTokens.output = outputTokens;
+
+    if (deltaInput > 0 || deltaOutput > 0) {
+      chatDbg('usage from gateway: in=' + deltaInput + ' out=' + deltaOutput);
+      chatPostTokenEvent(deltaInput, deltaOutput);
+    } else {
+      // Delta was zero — fall back to estimation for this message
+      chatDbg('usage delta zero — falling back to estimation');
+      chatRecordEstimatedUsage(cb.inputText, cb.outputText);
+    }
+  } catch (err) {
+    chatDbg('usage parse error: ' + (err.message || err));
+    chatRecordEstimatedUsage(cb.inputText, cb.outputText);
+  }
+  return true;
+}
+
+function chatRecordEstimatedUsage(inputText, outputText) {
+  // Rough estimation: ~4 chars per token for English text
+  const inputTokens = Math.ceil((inputText || '').length / 4) + 50; // +50 for system prompt overhead
+  const outputTokens = Math.ceil((outputText || '').length / 4);
+  if (inputTokens > 0 || outputTokens > 0) {
+    chatDbg('estimated tokens: in=' + inputTokens + ' out=' + outputTokens);
+    chatPostTokenEvent(inputTokens, outputTokens);
+  }
+}
+
+function chatPostTokenEvent(inputTokens, outputTokens) {
+  // Extract model from gateway config (set during chatFetchConfig)
+  const model = 'claude-sonnet-4-6'; // matches agents.defaults.model in openclaw.json
+  fetch('/api/tokens/record', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      provider: 'anthropic',
+      model: model,
+      skill: 'chat',
+      inputTokens: inputTokens,
+      outputTokens: outputTokens,
+    })
+  }).then(res => res.json()).then(data => {
+    chatDbg('token recorded: $' + (data.estimatedCostUSD ?? 0).toFixed(4));
+  }).catch(err => {
+    chatDbg('token record failed: ' + (err.message || err));
+  });
 }
 
 function chatScrollBottom() {
