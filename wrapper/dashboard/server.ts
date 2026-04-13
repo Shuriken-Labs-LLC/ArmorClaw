@@ -58,6 +58,7 @@ import {
 } from "../token-tracker/store.ts";
 import type { DailyTotal, TokenEvent } from "../token-tracker/store.ts";
 import { getCurrentUndo, executeUndo } from "../undo/registry.ts";
+import { getOpenClawVersionStatus, startVersionCheckInterval } from "./openclaw-version-check.ts";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -886,6 +887,9 @@ export function createApp(): express.Application {
 
   // Push SSE updates when the permission engine queues a new approval
   onApprovalChange(() => notifyListeners());
+
+  // Start background OpenClaw version polling (every 6 hours)
+  startVersionCheckInterval();
 
   // Serve static files from public/ (favicon, etc.)
   const publicDir = join(import.meta.dirname, "public");
@@ -1829,6 +1833,12 @@ export function createApp(): express.Application {
       });
     });
     res.json({ ok: true, reachable });
+  });
+
+  // ── OpenClaw update check ──
+  app.get("/api/advanced/openclaw-update", (_req, res) => {
+    const status = getOpenClawVersionStatus();
+    res.json({ ok: true, ...status });
   });
 
   return app;

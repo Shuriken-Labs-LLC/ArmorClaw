@@ -2072,6 +2072,25 @@
               style="background:none; border:none; cursor:pointer; color:var(--ac-amber); font-size:16px; padding:0 4px;">&#10005;</button>
           </div>
 
+          <!-- OpenClaw update banner (hidden by default) -->
+          <div id="advanced-update-banner" style="display:none; padding:12px 16px; background:var(--ac-amber-light); border:0.5px solid var(--ac-amber); border-radius:8px; margin-bottom:12px;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span style="font-size:13px; color:var(--ac-amber); flex:1;">
+                OpenClaw <span id="advanced-update-version"></span> is available
+                (you have <span id="advanced-update-current"></span>).
+                Update from the command runner below, or
+                <a id="advanced-update-link" href="#" target="_blank" rel="noopener"
+                  style="color:var(--ac-amber); text-decoration:underline;">view the release</a>.
+              </span>
+              <button onclick="fillCmd('update')" class="btn-settings" type="button"
+                style="font-size:12px; white-space:nowrap; border-color:var(--ac-amber); color:var(--ac-amber);">
+                Run update
+              </button>
+              <button onclick="dismissUpdateBanner()" type="button"
+                style="background:none; border:none; cursor:pointer; color:var(--ac-amber); font-size:16px; padding:0 4px;">&#10005;</button>
+            </div>
+          </div>
+
           <!-- Backup success toast -->
           <div id="advanced-backup-toast" style="display:none; padding:10px 16px; background:var(--ac-teal-light); border:0.5px solid var(--ac-teal); border-radius:8px; margin-bottom:12px; font-size:13px; color:var(--ac-teal);">
             <span id="advanced-backup-toast-msg"></span>
@@ -2277,12 +2296,40 @@ async function pollAdvancedGatewayStatus() {
   }
 }
 
+// ── OpenClaw update check ─────────────────────────────────────────
+let _updateBannerDismissed = false;
+
+async function checkOpenClawUpdate() {
+  if (_updateBannerDismissed) return;
+  try {
+    const res = await fetch('/api/advanced/openclaw-update');
+    const data = await res.json();
+    const banner = document.getElementById('advanced-update-banner');
+    if (data.hasUpdate && !_updateBannerDismissed) {
+      document.getElementById('advanced-update-version').textContent = 'v' + data.latestVersion;
+      document.getElementById('advanced-update-current').textContent = 'v' + data.installedVersion;
+      document.getElementById('advanced-update-link').href = data.releaseUrl;
+      banner.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+    }
+  } catch {
+    // Silently ignore — not critical
+  }
+}
+
+function dismissUpdateBanner() {
+  _updateBannerDismissed = true;
+  document.getElementById('advanced-update-banner').style.display = 'none';
+}
+
 async function loadAdvancedView() {
   // Force-load fallback tools on view entry (wasOnline guard in poll skips reload)
   advancedGatewayOnline = false;
   await pollAdvancedGatewayStatus();
   if (advancedPollTimer) clearInterval(advancedPollTimer);
   advancedPollTimer = setInterval(pollAdvancedGatewayStatus, 5000);
+  checkOpenClawUpdate();
 }
 
 /** Fetch gateway health via the `health` command and display it. */
