@@ -476,9 +476,11 @@
     .chat-send-btn:disabled { opacity: 0.4; cursor: default; }
     .chat-debug {
       display: none; max-height: 80px; overflow-y: auto;
+      flex-shrink: 0;
       background: #0a0b10; border-top: 1px solid var(--ac-border);
       padding: 4px 8px; font-family: 'DM Mono', monospace;
       font-size: 10px; color: var(--ac-hint);
+      white-space: pre-wrap; word-break: break-all;
     }
 
     .budget-sentence { font-size: 14px; color: var(--ac-text); margin-bottom: 10px; }
@@ -4159,8 +4161,10 @@ const CHAT_SESSION_KEY = 'armorclaw-dashboard-' + Date.now();
 let chatDebugLog = [];
 function chatDbg(msg) {
   const ts = new Date().toISOString().slice(11,23);
-  chatDebugLog.push(ts + ' ' + msg);
+  const line = ts + ' ' + msg;
+  chatDebugLog.push(line);
   if (chatDebugLog.length > 50) chatDebugLog.shift();
+  console.log('[chat]', line);
   const panel = document.getElementById('chat-debug');
   if (panel) panel.textContent = chatDebugLog.slice(-10).join('\n');
 }
@@ -4173,7 +4177,12 @@ document.getElementById('chat-panel-hdr')?.addEventListener('click', () => {
   chatClickTimer = setTimeout(() => { chatClickCount = 0; }, 400);
   if (chatClickCount >= 3) {
     const p = document.getElementById('chat-debug');
-    if (p) p.style.display = p.style.display === 'none' ? '' : 'none';
+    const panel = document.getElementById('chat-panel');
+    if (p) {
+      const showing = p.style.display === 'none';
+      p.style.display = showing ? '' : 'none';
+      if (panel) panel.style.height = showing ? '400px' : '';
+    }
     chatClickCount = 0;
   }
 });
@@ -4284,7 +4293,7 @@ function chatConnect() {
 
   chatWs.onmessage = (evt) => {
     const raw = typeof evt.data === 'string' ? evt.data : '';
-    chatDbg('recv: ' + raw.slice(0, 120));
+    chatDbg('recv: ' + raw.slice(0, 300));
     try { chatHandleMessage(JSON.parse(raw)); }
     catch (err) { chatDbg('parse error: ' + (err.message || err)); }
   };
@@ -4308,7 +4317,7 @@ function chatSendConnectAuth() {
     params: {
       minProtocol: 3,
       maxProtocol: 3,
-      client: { id: 'webchat-ui', displayName: 'ArmorClaw Dashboard Chat', version: '0.1.0', platform: 'web', mode: 'webchat' },
+      client: { id: 'openclaw-control-ui', displayName: 'ArmorClaw Dashboard Chat', version: '0.1.0', platform: 'web', mode: 'webchat' },
       scopes: ['operator.read', 'operator.write'],
       auth: chatGatewayToken ? { token: chatGatewayToken } : undefined,
     }
@@ -4326,34 +4335,41 @@ function chatHandleMessage(data) {
       chatSendConnectAuth();
       return;
     }
-    if (data.event === 'stream.text.delta') {
-      const text = data.payload?.delta ?? '';
-      if (text) {
-        chatResponseBuffer += text;
-        chatUpdateLastAgent(chatResponseBuffer);
+    if (data.event === 'chat') {
+      const state = data.payload?.state;
+      const text = data.payload?.message?.content?.[0]?.text ?? '';
+      if (state === 'delta') {
+        if (text) {
+          chatResponseBuffer = text; // cumulative, not additive
+          chatUpdateLastAgent(chatResponseBuffer);
+          document.getElementById('chat-typing').classList.remove('visible');
+        }
+        return;
+      }
+      if (state === 'final') {
+        chatResponding = false;
         document.getElementById('chat-typing').classList.remove('visible');
+        const el = document.querySelector('.chat-msg.agent.streaming');
+        if (!chatResponseBuffer && text && el) {
+          const textEl = el.querySelector('.chat-agent-text');
+          if (textEl) textEl.textContent = text;
+        }
+        if (el) el.classList.remove('streaming');
+        chatResponseBuffer = '';
+        chatPendingId = null;
+        return;
+      }
+      if (state === 'error') {
+        chatResponding = false;
+        document.getElementById('chat-typing').classList.remove('visible');
+        const el = document.querySelector('.chat-msg.agent.streaming');
+        if (el && !chatResponseBuffer) el.remove();
+        chatAddMsg('agent', 'Something went wrong: ' + (data.payload?.errorMessage || 'Agent error'));
+        chatResponseBuffer = '';
+        chatPendingId = null;
+        return;
       }
       return;
-    }
-    if (data.event === 'agent.turn.complete' || data.event === 'chat.turn.complete') {
-      chatResponding = false;
-      document.getElementById('chat-typing').classList.remove('visible');
-      const el = document.querySelector('.chat-msg.agent.streaming');
-      if (el) el.classList.remove('streaming');
-      if (!chatResponseBuffer && el) {
-        const text = data.payload?.text ?? data.payload?.message ?? '';
-        if (text) chatUpdateLastAgent(text);
-      }
-      return;
-    }
-    if (data.payload?.text) {
-      chatResponseBuffer += data.payload.text;
-      if (!document.querySelector('.chat-msg.agent.streaming')) {
-        chatAddMsg('agent', chatResponseBuffer, true);
-      } else {
-        chatUpdateLastAgent(chatResponseBuffer);
-      }
-      document.getElementById('chat-typing').classList.remove('visible');
     }
     return;
   }
@@ -4386,20 +4402,27 @@ function chatHandleMessage(data) {
       return;
     }
     if (data.id === chatPendingId) {
-      chatResponding = false;
-      document.getElementById('chat-typing').classList.remove('visible');
+      const result = data.payload ?? data.result ?? {};
       if (data.error) {
+        chatResponding = false;
+        document.getElementById('chat-typing').classList.remove('visible');
         const el = document.querySelector('.chat-msg.agent.streaming');
         if (el && !chatResponseBuffer) el.remove();
-        chatAddMsg('agent', 'Something went wrong: ' + (data.error.message || 'Unknown error'));
-      } else {
-        const text = data.result?.message ?? data.result?.text ?? '';
+        chatAddMsg('agent', 'Something went wrong: ' + (data.error.message || JSON.stringify(data.error)));
+        chatResponseBuffer = '';
+        chatPendingId = null;
+      } else if (result.status !== 'started') {
+        // Synchronous reply — not the normal path but handle gracefully
+        chatResponding = false;
+        document.getElementById('chat-typing').classList.remove('visible');
+        const text = result.message ?? result.text ?? '';
         if (text && !chatResponseBuffer) chatUpdateLastAgent(text);
         const el = document.querySelector('.chat-msg.agent.streaming');
         if (el) el.classList.remove('streaming');
+        chatResponseBuffer = '';
+        chatPendingId = null;
       }
-      chatResponseBuffer = '';
-      chatPendingId = null;
+      // status === 'started' → async in-flight, wait for chat events
       return;
     }
   }
@@ -4422,7 +4445,7 @@ function chatSendToGateway(message) {
 
   chatWs.send(JSON.stringify({
     type: 'req', id: id, method: 'chat.send',
-    params: { sessionKey: CHAT_SESSION_KEY, message: message }
+    params: { sessionKey: CHAT_SESSION_KEY, message: message, idempotencyKey: 'chat-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9) }
   }));
   chatDbg('sent chat.send id=' + id);
 }

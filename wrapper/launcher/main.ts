@@ -189,13 +189,19 @@ export async function openWizard(): Promise<void> {
  * ~/.openclaw/openclaw.json. The GatewayManager reads it back after confirming
  * the gateway is reachable and sets process.env. This function persists that
  * value to .env so other processes (e.g. the onboarding server) can read it.
+ *
+ * Deduplicates: skips the disk write when the token hasn't changed since the
+ * last successful sync (prevents env-writer spam on every health poll).
  */
+let _lastSyncedToken = "";
+
 function syncGatewayToken(): void {
   try {
     const token = process.env["ARMORCLAW_GATEWAY_TOKEN"] ?? "";
-    if (!token) {
+    if (!token || token === _lastSyncedToken) {
       return;
     }
+    _lastSyncedToken = token;
     import("../onboarding/env-writer.js")
       .then((mod) => {
         mod.setEnvVar("ARMORCLAW_GATEWAY_TOKEN", token);

@@ -149,7 +149,7 @@ export function registerAuditLogger(api: OpenClawPluginApi): void {
       // Prefer agentId from context; fall back to tool name as the skill identifier
       skill: context.agentId ?? evt.toolName,
       permissionsUsed: [],
-      inputSummary: buildInputSummary(evt.params),
+      inputSummary: buildInputSummary(evt.params as Record<string, unknown>),
       outcome,
       durationMs: evt.durationMs ?? 0,
     };

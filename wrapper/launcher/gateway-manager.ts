@@ -388,6 +388,11 @@ function preWriteGatewayConfig(wrapperPath: string): void {
     controlUi["allowedOrigins"] = ["*"];
     changed = true;
   }
+  // gateway.controlUi.allowInsecureAuth = true (needed for device-less operator auth on localhost)
+  if (controlUi["allowInsecureAuth"] !== true) {
+    controlUi["allowInsecureAuth"] = true;
+    changed = true;
+  }
   gw["controlUi"] = controlUi;
   config["gateway"] = gw;
 
@@ -408,6 +413,55 @@ function preWriteGatewayConfig(wrapperPath: string): void {
     changed = true;
   }
   config["plugins"] = plugins;
+
+  // models.providers.anthropic — gateway needs this to invoke the AI model.
+  // Env vars alone are NOT sufficient; openclaw.json must have an explicit providers block.
+  // The apiKey uses ${ANTHROPIC_API_KEY} syntax so the gateway resolves it from env at runtime.
+  const models = (config["models"] ?? {}) as Record<string, unknown>;
+  const providers = (models["providers"] ?? {}) as Record<string, unknown>;
+  const anthropic = (providers["anthropic"] ?? {}) as Record<string, unknown>;
+  if (anthropic["baseUrl"] !== "https://api.anthropic.com/v1") {
+    anthropic["baseUrl"] = "https://api.anthropic.com/v1";
+    changed = true;
+  }
+  if (anthropic["apiKey"] !== "${ANTHROPIC_API_KEY}") {
+    anthropic["apiKey"] = "${ANTHROPIC_API_KEY}";
+    changed = true;
+  }
+  if (anthropic["api"] !== "anthropic-messages") {
+    anthropic["api"] = "anthropic-messages";
+    changed = true;
+  }
+  // Ensure at least one model is defined
+  const modelList = anthropic["models"];
+  if (!Array.isArray(modelList) || modelList.length === 0) {
+    anthropic["models"] = [
+      {
+        id: "claude-sonnet-4-6",
+        name: "Claude Sonnet 4.6",
+        reasoning: false,
+        input: ["text"],
+        cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+        contextWindow: 200000,
+        maxTokens: 8192,
+      },
+    ];
+    changed = true;
+  }
+  providers["anthropic"] = anthropic;
+  models["providers"] = providers;
+  config["models"] = models;
+
+  // agents.defaults.model — tells the gateway which model to use for chat.send.
+  // Without this, the gateway ACKs the request but never invokes a model.
+  const agents = (config["agents"] ?? {}) as Record<string, unknown>;
+  const defaults = (agents["defaults"] ?? {}) as Record<string, unknown>;
+  if (defaults["model"] !== "anthropic/claude-sonnet-4-6") {
+    defaults["model"] = "anthropic/claude-sonnet-4-6";
+    changed = true;
+  }
+  agents["defaults"] = defaults;
+  config["agents"] = agents;
 
   if (!changed) {
     process.stderr.write(`[gateway-mgr] config already correct — skipping pre-write\n`);
@@ -655,19 +709,26 @@ export class GatewayManager extends EventEmitter {
 
   private _applySnapshot(snap: Record<string, unknown>): void {
     const agentStatus = snap["agentStatus"] as { status?: string } | undefined;
-    if (agentStatus?.status === "paused") {
-      this._status.state = "paused";
-    } else if (agentStatus?.status === "error") {
-      this._status.state = "error";
-    } else {
-      this._status.state = "running";
-    }
+    const newState: AgentState =
+      agentStatus?.status === "paused"
+        ? "paused"
+        : agentStatus?.status === "error"
+          ? "error"
+          : "running";
+
+    // _updateState only emits "state-change" when the state actually changes,
+    // preventing unnecessary downstream work (token writes, tray updates)
+    // on every 5-second health poll.
+    this._updateState(newState);
 
     const approvals = snap["pendingApprovals"] as unknown[] | undefined;
     const prevApprovals = this._status.pendingApprovals;
     this._status.pendingApprovals = Array.isArray(approvals) ? approvals.length : 0;
 
-    this.emit("state-change", this.status);
+    // Emit state-change for approval count changes so the dashboard updates
+    if (this._status.pendingApprovals !== prevApprovals) {
+      this.emit("state-change", this.status);
+    }
 
     // Notify on new approvals
     if (this._status.pendingApprovals > prevApprovals) {
