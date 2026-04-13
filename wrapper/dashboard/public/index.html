@@ -2248,7 +2248,8 @@ async function pollAdvancedGatewayStatus() {
       if (!window.__armorclawIPC) {
         document.getElementById('advanced-fallback-tools').style.display = '';
         document.getElementById('advanced-browserview-container').style.display = 'none';
-        loadAdvancedFallbackTools();
+        // Only load fallback tools on first online transition, not every poll
+        if (!wasOnline) loadAdvancedFallbackTools();
       } else {
         document.getElementById('advanced-fallback-tools').style.display = 'none';
         document.getElementById('advanced-browserview-container').style.display = '';
@@ -2277,10 +2278,11 @@ async function pollAdvancedGatewayStatus() {
 }
 
 async function loadAdvancedView() {
-  // Start polling gateway status every 2s while view is active
+  // Force-load fallback tools on view entry (wasOnline guard in poll skips reload)
+  advancedGatewayOnline = false;
   await pollAdvancedGatewayStatus();
   if (advancedPollTimer) clearInterval(advancedPollTimer);
-  advancedPollTimer = setInterval(pollAdvancedGatewayStatus, 2000);
+  advancedPollTimer = setInterval(pollAdvancedGatewayStatus, 5000);
 }
 
 /** Fetch gateway health via the `health` command and display it. */
