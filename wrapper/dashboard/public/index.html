@@ -1509,70 +1509,73 @@
 
         <!-- ── Skills sub-tabs ─────────────────────────────────────────── -->
         <div class="import-tabs" style="margin-bottom:16px;">
-          <button class="import-tab" id="skills-tab-github" onclick="switchSkillsSection('github')">Install from GitHub</button>
-          <button class="import-tab active" id="skills-tab-installed" onclick="switchSkillsSection('installed')">Installed Skills</button>
+          <button class="import-tab active" id="skills-tab-installed" onclick="switchSkillsSection('installed')">Your skills</button>
+          <button class="import-tab" id="skills-tab-file" onclick="switchSkillsSection('file')">Add a skill</button>
         </div>
 
-        <!-- ── Section 1: Install from GitHub URL ──────────────────────── -->
-        <div class="skills-section" id="skills-section-github">
+        <!-- ── Add a skill: install from a local file ─────────────────── -->
+        <div class="skills-section" id="skills-section-file">
           <div class="card">
-            <div class="card-hdr"><span class="card-title">Install from GitHub URL</span></div>
+            <div class="card-hdr"><span class="card-title">Install from file</span></div>
             <div style="padding: 0 16px 16px;">
-              <div class="github-install-warning" style="
-                padding: 12px 16px; margin-bottom: 16px; border-radius: 8px;
-                background: var(--ac-red-light); border: 1px solid var(--ac-red);
-                font-size: 13px; color: var(--ac-red); line-height: 1.5;
-              ">
-                Installing skills from GitHub means running code written by someone outside the ArmorClaw community. Review the skill before installing.
+              <p style="font-size:13px;color:var(--ac-muted);line-height:1.6;margin-bottom:16px;">
+                Drop a skill file you built yourself — a <code style="font-family:'DM Mono',monospace;font-size:12px;color:var(--ac-teal);">.ts</code> or <code style="font-family:'DM Mono',monospace;font-size:12px;color:var(--ac-teal);">.js</code> file that exports <code style="font-family:'DM Mono',monospace;font-size:12px;color:var(--ac-teal);">SKILL_NAME</code>, <code style="font-family:'DM Mono',monospace;font-size:12px;color:var(--ac-teal);">SKILL_VERSION</code>, <code style="font-family:'DM Mono',monospace;font-size:12px;color:var(--ac-teal);">PERMISSION_MANIFEST</code>, and <code style="font-family:'DM Mono',monospace;font-size:12px;color:var(--ac-teal);">run()</code>.
+                ArmorClaw will analyse the skill and show you exactly what permissions it requests before anything is installed.
+              </p>
+
+              <!-- Upload zone -->
+              <div class="upload-zone" id="upload-zone"
+                ondragover="handleFileDragover(event)"
+                ondragleave="handleFileDragleave(event)"
+                ondrop="handleFileDrop(event)"
+                onclick="document.getElementById('import-file-input').click()"
+                style="cursor:pointer;">
+                <div class="upload-zone-icon">📂</div>
+                <div class="upload-zone-label">Drop your skill file here, or click to browse</div>
+                <div class="upload-zone-hint">.ts or .js files only</div>
               </div>
-              <div class="import-row" style="margin-bottom:12px;">
-                <input class="import-url-input" id="github-install-url"
-                  type="text" placeholder="https://github.com/user/repo/blob/main/skill.ts"
-                  oninput="updateGithubInstallState()">
-              </div>
-              <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-                <label style="font-size:13px;color:var(--ac-muted);">Type CONFIRM to enable install:</label>
-                <input type="text" id="github-confirm-input" placeholder="CONFIRM"
-                  style="background:var(--ac-surface2);border:0.5px solid var(--ac-border);border-radius:8px;padding:8px 12px;color:var(--ac-text);font-family:inherit;font-size:13px;width:120px;"
-                  oninput="updateGithubInstallState()">
-              </div>
-              <button class="btn-primary" id="github-install-btn" disabled onclick="installFromGithub()">
-                Install
-              </button>
-              <div id="github-install-error" class="import-error-msg" style="display:none;margin-top:8px;"></div>
-              <div id="github-install-success" style="display:none;margin-top:8px;padding:12px;border-radius:8px;background:var(--ac-teal-light);color:var(--ac-teal);font-size:13px;"></div>
+              <input type="file" id="import-file-input" accept=".ts,.js"
+                style="display:none"
+                onchange="if(this.files[0]) analyzeSkillFile(this.files[0])">
+
+              <!-- Report card renders here after analysis -->
+              <div id="import-file-report" style="margin-top:16px;"></div>
+              <div id="import-file-error" class="import-error-msg" style="display:none;margin-top:8px;"></div>
             </div>
           </div>
         </div>
 
-        <!-- ── Section 2: Installed Skills ─────────────────────────────── -->
+        <!-- ── Your skills: bundled (built-in) + user-added ───────────── -->
         <div class="skills-section active" id="skills-section-installed">
+          <!-- ── Built-in skills ──────────────────────────────────────── -->
           <div class="card">
             <div class="card-hdr">
-              <span class="card-title">Installed Skills</span>
-              <span class="card-meta" id="installed-skills-count"></span>
+              <span class="card-title">Built in</span>
+              <span class="card-meta">Ships with ArmorClaw</span>
             </div>
-            <div id="installed-skills-list">
-              <div style="padding:16px;font-size:13px;color:var(--ac-hint)">No skills installed yet.</div>
-            </div>
-          </div>
-
-          <!-- ── ArmorClaw bundled skills ──────────────────────────────── -->
-          <div class="card" style="margin-top:16px;">
-            <div class="card-hdr"><span class="card-title">ArmorClaw bundled skills</span></div>
             <div id="bundled-skills-list">
               <div style="padding:16px;font-size:13px;color:var(--ac-hint)">Loading skills…</div>
             </div>
           </div>
 
-          <!-- ── Your vibe-coded skills ───────────────────────────────── -->
+          <!-- ── User-added skills (from file install) ────────────────── -->
           <div class="card" style="margin-top:16px;">
             <div class="card-hdr">
-              <span class="card-title">Your skills</span>
+              <span class="card-title">Added by you</span>
               <span class="card-meta" id="user-skills-count"></span>
             </div>
-            <div id="user-skills-list"></div>
+            <div id="user-skills-list">
+              <div style="padding:16px;font-size:13px;color:var(--ac-hint)">
+                You haven't added any skills yet. Use "Add a skill" above to install one from a file.
+              </div>
+            </div>
           </div>
+
+          <!-- Legacy placeholder list container — kept for backwards compat with
+               installed-skills-list references in the skills JS. Hidden because
+               the real data renders in bundled-skills-list and user-skills-list. -->
+          <div id="installed-skills-list" style="display:none"></div>
+          <div id="installed-skills-count" style="display:none"></div>
         </div>
 
       </div><!-- /view-skills -->
@@ -1684,7 +1687,7 @@
               <div class="budget-bar-fill" id="tb-bar" style="width:0%"></div>
             </div>
             <div id="tb-hard-stop" class="budget-hard-stop" style="display:none">
-              Budget reached — ArmorClaw has paused.
+              Spend limit reached — new AI tasks are blocked until you resume.
               <button class="btn-resume-budget" onclick="resumeBudget()" style="margin-left:8px" type="button">
                 Resume
               </button>
@@ -3355,7 +3358,7 @@ function syncSkills(s) {
 // ── Skills tab: section switching ──────────────────────────────────────────
 
 function switchSkillsSection(which) {
-  ['github', 'installed'].forEach(s => {
+  ['file', 'installed'].forEach(s => {
     document.getElementById('skills-tab-' + s)?.classList.toggle('active', s === which);
     document.getElementById('skills-section-' + s)?.classList.toggle('active', s === which);
   });
