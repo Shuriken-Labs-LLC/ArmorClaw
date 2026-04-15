@@ -255,7 +255,7 @@ Local web UI, served on localhost + Tailscale URL only. Never a public IP. Not a
 
 **Skills:** One card per skill. Two groups: "ArmorClaw skills" (bundled) / "Your skills" (user, "Built by you" label). Each card: name, version, Active/Inactive toggle, permissions in plain English, last run, expandable last-5-runs.
 
-**Security:** Interactive toggles for injection filter, permission enforcement, audit logging. Toggling off requires explicit confirmation. Status: total rejections today, 7-day sparkline, recent security events.
+**Security:** Read-only status view. Injection filter, permission enforcement, and audit logging are always on — not user-configurable. Exposing disable toggles to non-technical users is a footgun with no legitimate use case; the security layer is a permanent feature. Status shown: total rejections today, 7-day sparkline, recent security events.
 
 **Advanced:** Full-screen view with amber warning banner. Embeds OpenClaw Canvas UI (iframe at `/__openclaw__/canvas/`), command runner with confirm dialog, full `openclaw.json` config viewer. Security layer still runs on all tool calls. Commands execute as user, not privileged. Shows amber banner if OpenClaw update available (`update --dry-run --json`); never auto-updates.
 

@@ -11,7 +11,9 @@
     "build:ts": "tsc; node scripts/copy-wizard-public.mjs",
     "build:win": "npm run build:ts && electron-builder --win",
     "start": "npm run build:ts && electron .",
-    "test:smoke": "node --experimental-strip-types ../tests/smoke/dashboard-smoke.test.ts"
+    "test:security": "cd .. && npx vitest run tests/unit/security/",
+    "test:smoke": "node --experimental-strip-types ../tests/smoke/dashboard-smoke.test.ts",
+    "test:undo": "cd .. && npx vitest run tests/unit/undo/"
   },
   "dependencies": {
     "croner": "^10.0.1",

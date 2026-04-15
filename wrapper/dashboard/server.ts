@@ -19,6 +19,7 @@ import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import express from "express";
+import { type AgentStatus, getAgentStatus, setAgentStatus } from "../lib/agent-status.ts";
 import { getModelAdapterState } from "../lib/model-adapter.ts";
 import { getBackupParentDir, getLauncherDataPath } from "../lib/platform-paths.ts";
 import { getAllSkills } from "../lib/skill-registry.ts";
@@ -364,17 +365,10 @@ export function getSecurityStats(): SecurityStats {
   }
 }
 
-// ── Agent status ──────────────────────────────────────────────────────────────
-
-export type AgentStatus = "running" | "paused" | "error";
-let agentStatus: AgentStatus = "running";
-
-export function getAgentStatus(): AgentStatus {
-  return agentStatus;
-}
-export function setAgentStatus(s: AgentStatus): void {
-  agentStatus = s;
-}
+// AgentStatus, getAgentStatus, setAgentStatus — imported from ../lib/agent-status.ts
+// Re-export so existing callers of server.ts don't need to change import paths.
+export type { AgentStatus };
+export { getAgentStatus, setAgentStatus };
 
 // ── Gateway reachability ──────────────────────────────────────────────────────
 
@@ -527,7 +521,7 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
   const undo = getCurrentUndo();
   const gatewayReachable = await checkGatewayReachable();
   return {
-    agentStatus,
+    agentStatus: getAgentStatus(),
     gatewayReachable,
     config: {
       modelProvider: env["ARMORCLAW_MODEL_PROVIDER"] ?? null,
@@ -1718,7 +1712,7 @@ export async function startServer(
 // ── Testing helpers ───────────────────────────────────────────────────────────
 
 export function clearDashboardStateForTesting(): void {
-  agentStatus = "running";
+  setAgentStatus("running");
   _channelLinksCache = null;
   _telegramUsername = undefined;
   resetTailscaleCacheForTesting();

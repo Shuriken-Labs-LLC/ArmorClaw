@@ -2,6 +2,7 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { getAgentStatus } from "../lib/agent-status.ts";
 
 // Lazy path helpers — defer homedir() so tests can isolate HOME
 function auditDir(): string {
@@ -237,14 +238,47 @@ export function checkForInjection(event: {
   return null;
 }
 
+// ── Pause audit write ─────────────────────────────────────────────────────────
+
+/** Write an agent-paused block entry to the audit log. Silent on any I/O error. */
+export function writePauseAuditEntry(toolName: string): void {
+  try {
+    mkdirSync(auditDir(), { recursive: true });
+    const entry = JSON.stringify({
+      timestamp: new Date().toISOString(),
+      type: "agent_paused",
+      tool: toolName,
+      outcome: "rejected",
+    });
+    appendFileSync(auditLogPath(), entry + "\n", "utf-8");
+  } catch {
+    // Never throw — audit write failures are intentionally silent
+  }
+}
+
 // ── Hook registration ────────────────────────────────────────────────────────
 
 /**
  * Register the injection filter on the before_tool_call hook.
+ *
+ * Gate order (checked in sequence, first match wins):
+ *   1. Agent paused — blocks all tool calls instantly, user must resume from dashboard
+ *   2. Injection scan — blocks instruction-override / jailbreak / encoded payloads
+ *
  * The handler returns synchronously — resolution happens before the tool fires.
  */
 export function registerInjectionFilter(api: OpenClawPluginApi): void {
   api.on("before_tool_call", (event, _ctx) => {
+    // ── Gate 1: agent paused ─────────────────────────────────────────────────
+    if (getAgentStatus() === "paused") {
+      writePauseAuditEntry(event.toolName);
+      return {
+        block: true,
+        blockReason: "Agent is paused — resume from the ArmorClaw dashboard to continue.",
+      };
+    }
+
+    // ── Gate 2: injection scan ───────────────────────────────────────────────
     const rejection = checkForInjection(event);
     if (!rejection) {
       return undefined;
