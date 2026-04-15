@@ -11,12 +11,6 @@ import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import express from "express";
-
-// ── OAuth scope constants ─────────────────────────────────────────────────────
-
-const GOOGLE_SCOPES = "https://mail.google.com/ https://www.googleapis.com/auth/calendar";
-const MICROSOFT_SCOPES = "offline_access Mail.Read Mail.Send Calendars.ReadWrite";
-
 import { setEnvVar } from "./env-writer.ts";
 import {
   advanceStep,
@@ -41,14 +35,6 @@ export const DASHBOARD_PORT = 7390;
 
 /** Set by startServer() so route handlers can build the correct wizard URL. */
 let activePort: number | null = null;
-
-/**
- * The port the OAuth callback server is listening on.
- * This is separate from the wizard UI port so that redirect URIs registered
- * in Google Cloud Console / Azure don't break when the wizard UI falls back
- * to a different port. Preferred: 7392.
- */
-let callbackPort: number | null = null;
 
 // ── API key test calls ────────────────────────────────────────────────────────
 
@@ -213,163 +199,7 @@ function startTailscalePoll(): void {
   })();
 }
 
-// ── OAuth callback handler ────────────────────────────────────────────────────
-
-/**
- * Exchange an OAuth authorization code for access + refresh tokens.
- * Stores both tokens in .env (GOOGLE_OAUTH_ACCESS_TOKEN / _REFRESH_TOKEN
- * or MICROSOFT_OAUTH_ACCESS_TOKEN / _REFRESH_TOKEN).
- *
- * Returns true on success, false on failure.
- */
-async function exchangeOAuthCode(
-  provider: "gmail" | "outlook",
-  code: string,
-): Promise<{ ok: boolean; error?: string }> {
-  const cbPort = callbackPort ?? 7392;
-  const redirectUri =
-    provider === "gmail"
-      ? `http://localhost:${cbPort}/auth/google/callback`
-      : `http://localhost:${cbPort}/auth/microsoft/callback`;
-
-  process.stderr.write(
-    `[oauth] exchangeOAuthCode: provider=${provider} code=${code.slice(0, 20)}... redirectUri=${redirectUri}\n`,
-  );
-  try {
-    if (provider === "gmail") {
-      const clientId = process.env["GOOGLE_OAUTH_CLIENT_ID"]?.trim();
-      const clientSecret = process.env["GOOGLE_OAUTH_CLIENT_SECRET"]?.trim();
-      if (!clientId || !clientSecret) {
-        process.stderr.write(
-          `[oauth] ERROR: Google OAuth credentials not in env (clientId=${!!clientId} clientSecret=${!!clientSecret})\n`,
-        );
-        return { ok: false, error: "Google OAuth credentials not configured." };
-      }
-      process.stderr.write(
-        `[oauth] POSTing to https://oauth2.googleapis.com/token (clientId=${clientId.slice(0, 20)}...)\n`,
-      );
-      const res = await fetch("https://oauth2.googleapis.com/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          code,
-          client_id: clientId,
-          client_secret: clientSecret,
-          redirect_uri: redirectUri,
-          grant_type: "authorization_code",
-        }),
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!res.ok) {
-        const body = await res.text();
-        process.stderr.write(
-          `[oauth] ERROR: Google token exchange failed (${res.status}): ${body.slice(0, 300)}\n`,
-        );
-        return {
-          ok: false,
-          error: `Google token exchange failed (${res.status}): ${body.slice(0, 200)}`,
-        };
-      }
-      const tokens = (await res.json()) as Record<string, unknown>;
-      process.stderr.write(
-        `[oauth] SUCCESS: Google tokens received — access_token=${typeof tokens["access_token"] === "string" ? "present" : "MISSING"} refresh_token=${typeof tokens["refresh_token"] === "string" ? "present" : "MISSING"}\n`,
-      );
-      setEnvVar("GOOGLE_OAUTH_ACCESS_TOKEN", (tokens["access_token"] as string) ?? "");
-      if (tokens["refresh_token"]) {
-        setEnvVar("GOOGLE_OAUTH_REFRESH_TOKEN", tokens["refresh_token"] as string);
-      }
-    } else {
-      const clientId = process.env["MICROSOFT_OAUTH_CLIENT_ID"]?.trim();
-      const clientSecret = process.env["MICROSOFT_OAUTH_CLIENT_SECRET"]?.trim();
-      if (!clientId || !clientSecret) {
-        return { ok: false, error: "Microsoft OAuth credentials not configured." };
-      }
-      const res = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          code,
-          client_id: clientId,
-          client_secret: clientSecret,
-          redirect_uri: redirectUri,
-          grant_type: "authorization_code",
-          scope: MICROSOFT_SCOPES,
-        }),
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!res.ok) {
-        const body = await res.text();
-        return {
-          ok: false,
-          error: `Microsoft token exchange failed (${res.status}): ${body.slice(0, 200)}`,
-        };
-      }
-      const tokens = (await res.json()) as Record<string, unknown>;
-      setEnvVar("MICROSOFT_OAUTH_ACCESS_TOKEN", (tokens["access_token"] as string) ?? "");
-      if (tokens["refresh_token"]) {
-        setEnvVar("MICROSOFT_OAUTH_REFRESH_TOKEN", tokens["refresh_token"] as string);
-      }
-    }
-    return { ok: true };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, error: msg };
-  }
-}
-
-async function handleOAuthCallback(
-  provider: "gmail" | "outlook",
-  code: string | undefined,
-  error: string | undefined,
-  res: express.Response,
-): Promise<void> {
-  if (error || !code) {
-    process.stderr.write(`[oauth] handleOAuthCallback: FAILED — error=${error ?? "no code"}\n`);
-    res.send(`<!DOCTYPE html><html><head><title>Connection failed</title></head><body>
-      <p style="font-family:sans-serif;padding:24px;color:#A32D2D">
-        Connection failed${error ? `: ${error}` : ""}. You can close this tab and try again.
-      </p>
-      <script>setTimeout(() => window.close(), 4000);</script>
-    </body></html>`);
-    return;
-  }
-
-  // Exchange the auth code for access + refresh tokens synchronously
-  // so we can show the actual result in the callback page.
-  const result = await exchangeOAuthCode(provider, code);
-
-  if (result.ok) {
-    if (provider === "gmail") {
-      updateState({ gmailConnected: true });
-    } else {
-      updateState({ outlookConnected: true });
-    }
-    // Also store the auth code as a fallback marker
-    if (provider === "gmail") {
-      setEnvVar("GOOGLE_AUTH_CODE_PENDING", code);
-    } else {
-      setEnvVar("MICROSOFT_AUTH_CODE_PENDING", code);
-    }
-    notifyListeners();
-
-    res.send(`<!DOCTYPE html><html><head><title>Connected</title></head><body>
-      <p style="font-family:sans-serif;padding:24px;color:#1D9E75;font-size:18px">
-        ✓ Connected successfully. You can close this tab.
-      </p>
-      <script>setTimeout(() => window.close(), 3000);</script>
-    </body></html>`);
-  } else {
-    process.stderr.write(`[oauth] handleOAuthCallback: token exchange FAILED — ${result.error}\n`);
-    notifyListeners();
-
-    res.send(`<!DOCTYPE html><html><head><title>Connection failed</title></head><body>
-      <p style="font-family:sans-serif;padding:24px;color:#A32D2D;max-width:600px">
-        Token exchange failed: ${result.error?.replace(/</g, "&lt;").replace(/>/g, "&gt;") ?? "Unknown error"}<br><br>
-        You can close this tab and try again.
-      </p>
-    </body></html>`);
-  }
-}
+// ── Step 3 — Gmail IMAP connection ────────────────────────────────────────────
 
 // ── Step 6 — Gateway launch sequence ──────────────────────────────────────────
 
@@ -929,147 +759,99 @@ export function createApp(): express.Application {
     res.json({ ok: true });
   });
 
-  // ── Step 3 — Email / calendar OAuth ─────────────────────────────────────
+  /** Connect Gmail via app password over IMAP */
+  app.post("/api/step/3/connect-gmail", async (req, res) => {
+    const { email, appPassword } = req.body as { email?: string; appPassword?: string };
 
-  /**
-   * Save OAuth client credentials for a provider and return the auth URL.
-   * The user enters their Client ID + Secret from Google Cloud / Azure portal.
-   * Credentials are written to .env using the GOOGLE_OAUTH_ / MICROSOFT_OAUTH_
-   * prefixed variable names.
-   */
-  app.post("/api/step/3/credentials", (req, res) => {
-    const { provider, clientId, clientSecret } = req.body as {
-      provider?: string;
-      clientId?: string;
-      clientSecret?: string;
-    };
+    const emailAddr = (email ?? "").trim().toLowerCase();
+    const pass = (appPassword ?? "").trim();
 
-    if (provider !== "gmail" && provider !== "outlook") {
-      res.status(400).json({ ok: false, message: "Unknown provider." });
-      return;
-    }
-
-    const id = (clientId ?? "").trim();
-    const secret = (clientSecret ?? "").trim();
-
-    if (!id) {
+    if (!emailAddr || !emailAddr.includes("@")) {
       res
         .status(422)
-        .json({ ok: false, field: "clientId", message: "Please enter the Client ID." });
+        .json({ ok: false, field: "email", message: "Please enter a valid Gmail address." });
       return;
     }
-    if (!secret) {
-      res
-        .status(422)
-        .json({ ok: false, field: "clientSecret", message: "Please enter the Client Secret." });
-      return;
-    }
-
-    // Persist to .env
-    if (provider === "gmail") {
-      setEnvVar("GOOGLE_OAUTH_CLIENT_ID", id);
-      setEnvVar("GOOGLE_OAUTH_CLIENT_SECRET", secret);
-    } else {
-      setEnvVar("MICROSOFT_OAUTH_CLIENT_ID", id);
-      setEnvVar("MICROSOFT_OAUTH_CLIENT_SECRET", secret);
-    }
-
-    // Construct the OAuth authorisation URL.
-    // Redirect URIs use the dedicated callback server port (not the wizard UI port)
-    // so they remain stable regardless of which port the wizard UI binds to.
-    const cbPort = callbackPort ?? 7392;
-    const redirectUri =
-      provider === "gmail"
-        ? `http://localhost:${cbPort}/auth/google/callback`
-        : `http://localhost:${cbPort}/auth/microsoft/callback`;
-
-    let authUrl: string;
-
-    if (provider === "gmail") {
-      const params = new URLSearchParams({
-        client_id: id,
-        redirect_uri: redirectUri,
-        response_type: "code",
-        scope: GOOGLE_SCOPES,
-        access_type: "offline",
-        prompt: "consent",
-      });
-      authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
-    } else {
-      const params = new URLSearchParams({
-        client_id: id,
-        redirect_uri: redirectUri,
-        response_type: "code",
-        scope: MICROSOFT_SCOPES,
-      });
-      authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}`;
-    }
-
-    process.stderr.write(
-      `[oauth] provider=${provider} callbackPort=${cbPort} redirectUri=${redirectUri}\n`,
-    );
-    process.stderr.write(`[oauth] authUrl=${authUrl.slice(0, 120)}...\n`);
-
-    res.json({ ok: true, authUrl });
-  });
-
-  /**
-   * Health check: is the OAuth callback server actually listening?
-   * The wizard UI calls this before starting the OAuth flow.
-   */
-  app.get("/api/step/3/callback-health", async (_req, res) => {
-    const cbPort = callbackPort;
-    if (!cbPort) {
-      res.json({
+    if (!pass || pass.length < 8) {
+      res.status(422).json({
         ok: false,
-        message: "Callback server port not set (server may not have started).",
+        field: "appPassword",
+        message: "Please enter your app password.",
       });
       return;
     }
+
+    // Test IMAP connection
     try {
-      const probe = await fetch(
-        `http://localhost:${cbPort}/auth/google/callback?error=health_check`,
-        {
-          signal: AbortSignal.timeout(3000),
-        },
-      );
-      res.json({ ok: probe.ok, port: cbPort, status: probe.status });
-    } catch (err) {
+      const { ImapFlow } = (await import("imapflow")) as unknown as {
+        ImapFlow: new (opts: unknown) => {
+          connect(): Promise<void>;
+          logout(): Promise<void>;
+        };
+      };
+      const client = new ImapFlow({
+        host: "imap.gmail.com",
+        port: 993,
+        secure: true,
+        auth: { user: emailAddr, pass },
+        logger: false,
+      });
+      await client.connect();
+      await client.logout();
+    } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      res.json({ ok: false, port: cbPort, message: `Callback server not reachable: ${msg}` });
+      res.status(422).json({
+        ok: false,
+        field: "appPassword",
+        message: `Could not connect to Gmail. Check your app password and try again. (${msg})`,
+      });
+      return;
     }
-  });
 
-  /**
-   * Returns the OAuth callback port and the redirect URIs the user should
-   * register in Google Cloud Console / Azure Portal.
-   */
-  app.get("/api/step/3/callback-info", (_req, res) => {
-    const cbPort = callbackPort ?? 7392;
-    res.json({
-      callbackPort: cbPort,
-      google: `http://localhost:${cbPort}/auth/google/callback`,
-      microsoft: `http://localhost:${cbPort}/auth/microsoft/callback`,
-    });
-  });
+    // Store app password in keychain
+    try {
+      const { setCredential } = (await import("../lib/credential-store.ts")) as unknown as {
+        setCredential: (service: string, account: string, value: string) => Promise<void>;
+      };
+      await setCredential("armorclaw-gmail", "app-password", pass);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({
+        ok: false,
+        message: `Could not save to keychain: ${msg}`,
+      });
+      return;
+    }
 
-  /** Skip Step 3 entirely — email can be connected later from Settings. */
-  app.post("/api/step/3/skip", (_req, res) => {
+    // Write non-sensitive flags to .env
+    setEnvVar("ARMORCLAW_GMAIL_CONNECTED", "true");
+    setEnvVar("ARMORCLAW_GMAIL_ADDRESS", emailAddr);
+
+    updateState({ gmailConnected: true, gmailAddress: emailAddr });
     advanceStep();
+    notifyListeners();
+    res.json({ ok: true, email: emailAddr });
+  });
+
+  /** Disconnect Gmail from keychain and env */
+  app.post("/api/step/3/disconnect-gmail", async (_req, res) => {
+    try {
+      const { deleteCredential } = (await import("../lib/credential-store.ts")) as unknown as {
+        deleteCredential: (service: string, account: string) => Promise<boolean>;
+      };
+      await deleteCredential("armorclaw-gmail", "app-password");
+    } catch {
+      // Ignore errors
+    }
+    setEnvVar("ARMORCLAW_GMAIL_CONNECTED", "");
+    setEnvVar("ARMORCLAW_GMAIL_ADDRESS", "");
+    updateState({ gmailConnected: false });
     notifyListeners();
     res.json({ ok: true });
   });
 
-  app.post("/api/step/3/advance", (_req, res) => {
-    // At least one provider must be connected, OR the user skipped (handled by /skip).
-    const state = getState();
-    if (!state.gmailConnected && !state.outlookConnected) {
-      res.status(422).json({
-        ok: false,
-        message: "Connect at least one email provider to continue, or click 'Skip for now'.",
-      });
-      return;
-    }
+  /** Skip Step 3 entirely — email can be connected later from Settings. */
+  app.post("/api/step/3/skip", (_req, res) => {
     advanceStep();
     notifyListeners();
     res.json({ ok: true });
@@ -1244,41 +1026,11 @@ export function createApp(): express.Application {
 
 // ── OAuth callback app ────────────────────────────────────────────────────────
 
-/**
- * Tiny Express app that handles only the two OAuth callback routes.
- * Runs on a dedicated port (default 7392) separate from the wizard UI so that
- * the redirect URIs registered in Google Cloud Console / Azure stay stable
- * even when the wizard UI port changes.
- */
-function createCallbackApp(): express.Application {
-  const cbApp = express();
-
-  cbApp.get("/auth/google/callback", (req, res) => {
-    const { code, error } = req.query as { code?: string; error?: string };
-    process.stderr.write(
-      `[oauth] /auth/google/callback hit — code=${code ? "present(" + String(code).length + " chars)" : "MISSING"} error=${error ?? "none"}\n`,
-    );
-    void handleOAuthCallback("gmail", code, error, res);
-  });
-
-  cbApp.get("/auth/microsoft/callback", (req, res) => {
-    const { code, error } = req.query as { code?: string; error?: string };
-    process.stderr.write(
-      `[oauth] /auth/microsoft/callback hit — code=${code ? "present(" + String(code).length + " chars)" : "MISSING"} error=${error ?? "none"}\n`,
-    );
-    void handleOAuthCallback("outlook", code, error, res);
-  });
-
-  return cbApp;
-}
-
 // ── Server factory ────────────────────────────────────────────────────────────
 
 export interface StartedServer {
   /** Port the wizard UI is listening on. */
   port: number;
-  /** Port the OAuth callback server is listening on. */
-  callbackPort: number;
   close: () => Promise<void>;
 }
 
@@ -1324,23 +1076,11 @@ function bindServer(
 }
 
 /**
- * Start both the wizard UI server and the OAuth callback server.
+ * Start the wizard UI server.
  *
  * The wizard UI uses `preferredPort` (default 7391) with generous fallback.
- * The OAuth callback server uses port 7392 with limited fallback (5 retries)
- * since redirect URIs must be pre-registered with providers.
- *
- * The callback server is started first so that `callbackPort` is known before
- * any wizard route handler runs.
  */
 export async function startServer(preferredPort = 7391, maxRetries = 10): Promise<StartedServer> {
-  // 1. Start the OAuth callback server first (port 7392, limited fallback)
-  const cbApp = createCallbackApp();
-  const cbServer = await bindServer(cbApp, 7392, 5);
-  callbackPort = cbServer.port;
-  process.stderr.write(`[oauth] Callback server listening on port ${callbackPort}\n`);
-
-  // 2. Start the wizard UI server (dynamic port)
   const wizardApp = createApp();
   const uiServer = await bindServer(wizardApp, preferredPort, maxRetries);
   activePort = uiServer.port;
@@ -1348,9 +1088,7 @@ export async function startServer(preferredPort = 7391, maxRetries = 10): Promis
 
   return {
     port: uiServer.port,
-    callbackPort: cbServer.port,
     close: async () => {
-      await cbServer.close();
       await uiServer.close();
     },
   };

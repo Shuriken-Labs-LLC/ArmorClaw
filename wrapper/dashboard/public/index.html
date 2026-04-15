@@ -1270,31 +1270,6 @@
     .skills-section { display: none; }
     .skills-section.active { display: block; }
 
-    .clawhub-card {
-      padding: 16px;
-      border-bottom: 0.5px solid var(--ac-border);
-    }
-    .clawhub-card:last-child { border-bottom: none; }
-    .clawhub-card-name { font-weight: 500; font-size: 14px; margin-bottom: 4px; }
-    .clawhub-card-desc { font-size: 13px; color: var(--ac-muted); margin-bottom: 8px; }
-    .clawhub-card-caps {
-      display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
-    }
-    .cap-badge {
-      font-size: 11px; padding: 3px 8px; border-radius: 20px;
-      background: var(--ac-surface2); color: var(--ac-muted); border: 0.5px solid var(--ac-border);
-    }
-    .clawhub-warning {
-      padding: 10px 12px; border-radius: 8px; margin-bottom: 10px;
-      background: var(--ac-amber-light); border: 1px solid var(--ac-amber);
-      font-size: 12px; color: var(--ac-amber); line-height: 1.5;
-    }
-    .clawhub-confirm-row {
-      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
-    }
-    .clawhub-confirm-row label { font-size: 12px; color: var(--ac-muted); cursor: pointer; }
-    .clawhub-confirm-row input[type="checkbox"] { accent-color: var(--ac-teal); }
-
     .installed-skill-card {
       padding: 16px;
       border-bottom: 0.5px solid var(--ac-border);
@@ -1534,25 +1509,11 @@
 
         <!-- ── Skills sub-tabs ─────────────────────────────────────────── -->
         <div class="import-tabs" style="margin-bottom:16px;">
-          <button class="import-tab active" id="skills-tab-browse" onclick="switchSkillsSection('browse')">Browse ClawHub</button>
           <button class="import-tab" id="skills-tab-github" onclick="switchSkillsSection('github')">Install from GitHub</button>
-          <button class="import-tab" id="skills-tab-installed" onclick="switchSkillsSection('installed')">Installed Skills</button>
+          <button class="import-tab active" id="skills-tab-installed" onclick="switchSkillsSection('installed')">Installed Skills</button>
         </div>
 
-        <!-- ── Section 1: Browse ClawHub ───────────────────────────────── -->
-        <div class="skills-section active" id="skills-section-browse">
-          <div class="card">
-            <div class="card-hdr">
-              <span class="card-title">ClawHub Public Registry</span>
-              <button class="btn-ghost" onclick="loadClawHubSkills()" style="font-size:12px;">Refresh</button>
-            </div>
-            <div id="clawhub-skills-list">
-              <div style="padding:16px;font-size:13px;color:var(--ac-hint)">Loading skills from ClawHub…</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- ── Section 2: Install from GitHub URL ──────────────────────── -->
+        <!-- ── Section 1: Install from GitHub URL ──────────────────────── -->
         <div class="skills-section" id="skills-section-github">
           <div class="card">
             <div class="card-hdr"><span class="card-title">Install from GitHub URL</span></div>
@@ -1584,8 +1545,8 @@
           </div>
         </div>
 
-        <!-- ── Section 3: Installed Skills ─────────────────────────────── -->
-        <div class="skills-section" id="skills-section-installed">
+        <!-- ── Section 2: Installed Skills ─────────────────────────────── -->
+        <div class="skills-section active" id="skills-section-installed">
           <div class="card">
             <div class="card-hdr">
               <span class="card-title">Installed Skills</span>
@@ -1893,11 +1854,27 @@
           </div>
         </div>
 
-        <!-- 3. Email and calendar (disabled for v1) -->
+        <!-- 3. Email and calendar -->
         <div class="card settings-card">
           <div class="card-hdr"><span class="card-title">Email &amp; Calendar</span></div>
-          <div style="padding:8px 0; font-size:14px; color:var(--ac-muted);">
-            Email integration coming soon — Gmail and Outlook support will be available in a future update.
+          <div class="settings-row" style="margin-bottom:8px;">
+            <div class="settings-row-label">Gmail</div>
+            <div class="settings-row-body" style="display:flex;align-items:center;gap:8px;">
+              <span class="svc-dot" id="svc-gmail-dot"></span>
+              <span style="font-size:13px;color:var(--ac-muted);" id="svc-gmail-status">Not connected</span>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">Outlook</div>
+            <div class="settings-row-body" style="display:flex;align-items:center;gap:8px;">
+              <span class="svc-dot" id="svc-outlook-dot"></span>
+              <span style="font-size:13px;color:var(--ac-muted);" id="svc-outlook-status">Not connected</span>
+            </div>
+          </div>
+          <div style="margin-top:10px;">
+            <a href="http://127.0.0.1:7391" target="_blank" style="color:var(--ac-teal);font-size:13px;">
+              Connect in setup wizard →
+            </a>
           </div>
         </div>
 
@@ -3387,8 +3364,6 @@ function loadBundledSkills() {
 
 // Load bundled skills when the page loads
 loadBundledSkills();
-// Pre-load ClawHub skills for the Browse tab
-loadClawHubSkills();
 // Load installed skills
 loadInstalledSkills();
 
@@ -3423,99 +3398,11 @@ function syncSkills(s) {
 // ── Skills tab: section switching ──────────────────────────────────────────
 
 function switchSkillsSection(which) {
-  ['browse', 'github', 'installed'].forEach(s => {
+  ['github', 'installed'].forEach(s => {
     document.getElementById('skills-tab-' + s)?.classList.toggle('active', s === which);
     document.getElementById('skills-section-' + s)?.classList.toggle('active', s === which);
   });
-  if (which === 'browse') loadClawHubSkills();
   if (which === 'installed') loadInstalledSkills();
-}
-
-// ── ClawHub browse ────────────────────────────────────────────────────────
-
-const CAPABILITY_LABELS = {
-  'read:files': 'Read files on your computer',
-  'write:files': 'Write files on your computer',
-  'read:email': 'Read your emails',
-  'send:email': 'Send emails on your behalf',
-  'read:calendar': 'Read your calendar',
-  'write:calendar': 'Create calendar events',
-  'browser:sandboxed': 'Control a sandboxed browser',
-  'network:outbound': 'Make network requests',
-};
-
-function loadClawHubSkills() {
-  const list = document.getElementById('clawhub-skills-list');
-  if (!list) return;
-  if (!_clawHubLoaded) {
-    list.innerHTML = '<div style="padding:16px;font-size:13px;color:var(--ac-hint)">Loading skills from ClawHub…</div>';
-  }
-  fetch('/api/skills/clawhub')
-    .then(r => r.json())
-    .then(data => {
-      _clawHubLoaded = true;
-      const skills = data.skills || [];
-      if (skills.length === 0) {
-        list.innerHTML = '<div style="padding:16px;font-size:13px;color:var(--ac-hint)">No skills found on ClawHub. The registry may be offline or empty.</div>';
-        return;
-      }
-      list.innerHTML = skills.map((s, idx) => {
-        const caps = (s.capabilities || []);
-        const capBadges = caps.map(c => `<span class="cap-badge">${escHtml(CAPABILITY_LABELS[c] || c)}</span>`).join('');
-        const capWarnings = caps.map(c => CAPABILITY_LABELS[c] || c).join(', ');
-        const warningText = caps.length > 0
-          ? `This skill can: ${capWarnings}.`
-          : 'This skill has not declared specific capabilities.';
-        return `<div class="clawhub-card" id="clawhub-card-${idx}">
-          <div class="clawhub-card-name">${escHtml(s.name)}</div>
-          <div class="clawhub-card-desc">${escHtml(s.description)}</div>
-          ${capBadges ? `<div class="clawhub-card-caps">${capBadges}</div>` : ''}
-          <div class="clawhub-warning">${escHtml(warningText)}</div>
-          <div class="clawhub-confirm-row">
-            <input type="checkbox" id="clawhub-understand-${idx}" onchange="updateClawHubInstallBtn(${idx})">
-            <label for="clawhub-understand-${idx}">I understand</label>
-          </div>
-          <button class="btn-primary" id="clawhub-install-${idx}" disabled
-            onclick='installClawHubSkill(${JSON.stringify(s).replace(/'/g, "&#39;")}, ${idx})'>
-            Install
-          </button>
-          <span id="clawhub-msg-${idx}" style="margin-left:8px;font-size:12px;"></span>
-        </div>`;
-      }).join('');
-    })
-    .catch(() => {
-      list.innerHTML = '<div style="padding:16px;font-size:13px;color:var(--ac-red)">Failed to load ClawHub skills.</div>';
-    });
-}
-
-function updateClawHubInstallBtn(idx) {
-  const cb = document.getElementById('clawhub-understand-' + idx);
-  const btn = document.getElementById('clawhub-install-' + idx);
-  if (cb && btn) btn.disabled = !cb.checked;
-}
-
-async function installClawHubSkill(skill, idx) {
-  const btn = document.getElementById('clawhub-install-' + idx);
-  const msg = document.getElementById('clawhub-msg-' + idx);
-  if (btn) btn.disabled = true;
-  if (msg) { msg.textContent = 'Installing…'; msg.style.color = 'var(--ac-muted)'; }
-  try {
-    const res = await fetch('/api/skills/clawhub/install', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ skill }),
-    });
-    const data = await res.json();
-    if (res.ok && data.ok) {
-      if (msg) { msg.textContent = 'Installed'; msg.style.color = 'var(--ac-teal)'; }
-    } else {
-      if (msg) { msg.textContent = data.message || 'Install failed'; msg.style.color = 'var(--ac-red)'; }
-      if (btn) btn.disabled = false;
-    }
-  } catch {
-    if (msg) { msg.textContent = 'Network error'; msg.style.color = 'var(--ac-red)'; }
-    if (btn) btn.disabled = false;
-  }
 }
 
 // ── GitHub URL install ────────────────────────────────────────────────────

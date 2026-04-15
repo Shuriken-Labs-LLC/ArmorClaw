@@ -169,37 +169,13 @@ export function validateStep2(data: Partial<Step2Data>): ValidationResult {
 
 // ── Step 3 ────────────────────────────────────────────────────────────────────
 
-export type EmailProvider = "gmail" | "outlook";
-
 export interface Step3Data {
-  providers: EmailProvider[];
   gmailConnected: boolean;
-  outlookConnected: boolean;
 }
 
-export function validateStep3(data: Partial<Step3Data>): ValidationResult {
-  const providers = data.providers ?? [];
-  if (providers.length === 0) {
-    return {
-      ok: false,
-      field: "providers",
-      message: "Please choose at least one email provider, or skip this step.",
-    };
-  }
-  if (providers.includes("gmail") && !data.gmailConnected) {
-    return {
-      ok: false,
-      field: "gmail",
-      message: "Gmail isn't connected yet. Click 'Connect Gmail' to sign in.",
-    };
-  }
-  if (providers.includes("outlook") && !data.outlookConnected) {
-    return {
-      ok: false,
-      field: "outlook",
-      message: "Outlook isn't connected yet. Click 'Connect Outlook' to sign in.",
-    };
-  }
+export function validateStep3(_data: Partial<Step3Data>): ValidationResult {
+  // Step 3 is always skippable — connection is optional.
+  // If the user connected Gmail, it's already been validated by the IMAP test.
   return { ok: true };
 }
 

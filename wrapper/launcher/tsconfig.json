@@ -13,7 +13,13 @@
     "resolveJsonModule": true,
     "noEmitOnError": false,
     "rewriteRelativeImportExtensions": true,
-    "typeRoots": ["./node_modules/@types"]
+    "typeRoots": ["./node_modules/@types"],
+    "baseUrl": ".",
+    "paths": {
+      "imapflow": ["./node_modules/imapflow"],
+      "nodemailer": ["./node_modules/nodemailer"],
+      "keytar": ["./node_modules/keytar"]
+    }
   },
   "include": [
     "main.ts",

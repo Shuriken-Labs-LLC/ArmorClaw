@@ -552,8 +552,8 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
     skills: getAllSkills(),
     recipes: getAllRecipes(),
     connectedServices: {
-      gmail: Boolean(env["GOOGLE_OAUTH_ACCESS_TOKEN"] || env["GOOGLE_OAUTH_REFRESH_TOKEN"]),
-      outlook: Boolean(env["MICROSOFT_OAUTH_ACCESS_TOKEN"] || env["MICROSOFT_OAUTH_REFRESH_TOKEN"]),
+      gmail: Boolean(env["ARMORCLAW_GMAIL_CONNECTED"]),
+      outlook: false,
     },
     tailscaleUrl: getTailscaleUrl(),
     security: getSecurityStats(),
@@ -583,11 +583,7 @@ export interface BundledSkillStatus {
  * Uses the parsed .env map — never reads secrets into output.
  */
 export function getBundledSkillStatuses(env: Record<string, string>): BundledSkillStatus[] {
-  const emailActive =
-    Boolean(env["GOOGLE_OAUTH_ACCESS_TOKEN"]) ||
-    Boolean(env["GOOGLE_OAUTH_REFRESH_TOKEN"]) ||
-    Boolean(env["MICROSOFT_OAUTH_ACCESS_TOKEN"]) ||
-    Boolean(env["MICROSOFT_OAUTH_REFRESH_TOKEN"]);
+  const emailActive = Boolean(env["ARMORCLAW_GMAIL_CONNECTED"]);
 
   return [
     {
@@ -768,121 +764,6 @@ export function getChannelTypes(): ChannelType[] {
       configurable: true,
     },
   ];
-}
-
-// ── ClawHub registry fetcher ──────────────────────────────────────────────
-
-export interface ClawHubSkill {
-  id: string;
-  name: string;
-  description: string;
-  capabilities: string[];
-  sourceUrl: string;
-}
-
-/**
- * Fetch skills from the ClawHub public registry at openclaw.ai/integrations.
- * Parses a JSON feed if available, otherwise returns an empty array.
- * Never throws — returns empty on any failure.
- */
-export async function fetchClawHubSkills(): Promise<ClawHubSkill[]> {
-  try {
-    const res = await fetch("https://openclaw.ai/api/integrations", {
-      signal: AbortSignal.timeout(10_000),
-      headers: { Accept: "application/json" },
-    });
-    if (res.ok) {
-      const data = (await res.json()) as { integrations?: unknown[] } | unknown[];
-      const list = Array.isArray(data)
-        ? data
-        : Array.isArray((data as Record<string, unknown>).integrations)
-          ? (data as { integrations: unknown[] }).integrations
-          : [];
-      return list
-        .map((item: unknown) => {
-          const i = item as Record<string, unknown>;
-          return {
-            id: String((i["id"] as string) ?? (i["slug"] as string) ?? (i["name"] as string) ?? ""),
-            name: String((i["name"] as string) ?? (i["title"] as string) ?? ""),
-            description: String((i["description"] as string) ?? (i["summary"] as string) ?? ""),
-            capabilities: Array.isArray(i["capabilities"])
-              ? (i["capabilities"] as string[])
-              : Array.isArray(i["permissions"])
-                ? (i["permissions"] as string[])
-                : [],
-            sourceUrl: String(
-              (i["sourceUrl"] as string) ?? (i["url"] as string) ?? (i["repo"] as string) ?? "",
-            ),
-          };
-        })
-        .filter((s) => s.id && s.name);
-    }
-  } catch {
-    /* network or parse error — fall through */
-  }
-  // Fallback: try scraping the HTML page
-  try {
-    const res = await fetch("https://openclaw.ai/integrations", {
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (res.ok) {
-      const html = await res.text();
-      return parseClawHubHtml(html);
-    }
-  } catch {
-    /* fall through */
-  }
-  return [];
-}
-
-/**
- * Best-effort parse of the openclaw.ai/integrations HTML page.
- * Extracts skill names and descriptions from structured data or common patterns.
- */
-export function parseClawHubHtml(html: string): ClawHubSkill[] {
-  // Try JSON-LD first
-  const jsonLdMatch = html.match(
-    /<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i,
-  );
-  if (jsonLdMatch) {
-    try {
-      const ld = JSON.parse(jsonLdMatch[1]) as Record<string, unknown>;
-      const items = Array.isArray(ld) ? ld : ((ld["itemListElement"] as unknown[]) ?? []);
-      if (items.length > 0) {
-        return items
-          .map((item: unknown) => {
-            const i = item as Record<string, unknown>;
-            return {
-              id: String((i["identifier"] as string) ?? (i["name"] as string) ?? "")
-                .toLowerCase()
-                .replace(/\s+/g, "-"),
-              name: String((i["name"] as string) ?? ""),
-              description: String((i["description"] as string) ?? ""),
-              capabilities: [],
-              sourceUrl: String((i["url"] as string) ?? ""),
-            };
-          })
-          .filter((s) => s.id && s.name);
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-  // Try data-integration attributes
-  const skills: ClawHubSkill[] = [];
-  const regex =
-    /data-integration-name="([^"]+)"[^>]*data-integration-description="([^"]*)"[^>]*(?:data-integration-url="([^"]*)")?/g;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(html)) !== null) {
-    skills.push({
-      id: match[1].toLowerCase().replace(/\s+/g, "-"),
-      name: match[1],
-      description: match[2],
-      capabilities: [],
-      sourceUrl: match[3] ?? "",
-    });
-  }
-  return skills;
 }
 
 // ── Express app ───────────────────────────────────────────────────────────────
@@ -1319,57 +1200,10 @@ export function createApp(): express.Application {
     res.json(getBundledSkillStatuses(env));
   });
 
-  // ── Skills: ClawHub registry ──
-  app.get("/api/skills/clawhub", async (_req, res) => {
-    const skills = await fetchClawHubSkills();
-    res.json({ ok: true, skills });
-  });
-
   // ── Skills: installed skills (from skills.json) ──
   app.get("/api/skills/installed", (_req, res) => {
     const config = readSkillsConfig();
     res.json({ ok: true, skills: config.installed });
-  });
-
-  // ── Skills: install from ClawHub ──
-  app.post("/api/skills/clawhub/install", async (req, res) => {
-    const { skill } = req.body as { skill?: unknown };
-    if (!skill || typeof skill !== "object") {
-      res.status(422).json({ ok: false, message: "skill object is required" });
-      return;
-    }
-    const s = skill as Record<string, unknown>;
-    const id = String((s["id"] as string) ?? "");
-    const name = String((s["name"] as string) ?? "");
-    if (!id || !name) {
-      res.status(422).json({ ok: false, message: "skill must have id and name" });
-      return;
-    }
-    const config = readSkillsConfig();
-    if (config.installed.some((i) => i.id === id)) {
-      res.status(409).json({ ok: false, message: "Skill is already installed" });
-      return;
-    }
-    const entry: InstalledSkillEntry = {
-      id,
-      name,
-      description: String((s["description"] as string) ?? ""),
-      capabilities: Array.isArray(s["capabilities"]) ? (s["capabilities"] as string[]) : [],
-      source: "clawhub",
-      sourceUrl: String((s["sourceUrl"] as string) ?? ""),
-      enabled: true,
-      installedAt: new Date().toISOString(),
-    };
-    config.installed.push(entry);
-    try {
-      writeSkillsConfig(config);
-      notifyListeners();
-      res.json({ ok: true, skill: entry });
-    } catch (err) {
-      res
-        .status(500)
-        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
-    }
   });
 
   // ── Skills: install from GitHub URL (with CONFIRM gate) ──

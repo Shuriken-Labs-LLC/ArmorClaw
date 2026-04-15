@@ -23,8 +23,7 @@
 import { registerSkill } from "../../lib/skill-registry.ts";
 import { writeAuditEntry } from "../../security/audit-logger.ts";
 import { registerUndo } from "../../undo/registry.ts";
-import { GmailAdapter } from "./adapters/gmail.ts";
-import { OutlookAdapter } from "./adapters/outlook.ts";
+import { ImapAdapter } from "./adapters/imap.ts";
 import type {
   CalendarEvent,
   EmailCalendarInput,
@@ -47,30 +46,19 @@ export const PERMISSION_MANIFEST = [
 
 /**
  * Return the appropriate adapter based on env config.
- * When both providers are configured and no explicit preference is given,
- * Gmail takes precedence.
+ * Gmail IMAP is the only supported provider for v1.
  *
- * @param preference  Optional override from the input.
+ * @param _preference  Ignored in v1 (Gmail only).
  */
-export function resolveAdapter(preference?: "gmail" | "outlook"): IEmailCalendarAdapter {
-  const hasGmail = Boolean(process.env["GOOGLE_OAUTH_CLIENT_ID"]);
-  const hasOutlook = Boolean(process.env["MICROSOFT_OAUTH_CLIENT_ID"]);
+export function resolveAdapter(_preference?: "gmail" | "outlook"): IEmailCalendarAdapter {
+  const hasGmail = Boolean(process.env["ARMORCLAW_GMAIL_CONNECTED"]);
 
-  if (preference === "outlook" && hasOutlook) {
-    return new OutlookAdapter();
-  }
-  if (preference === "gmail" && hasGmail) {
-    return new GmailAdapter();
-  }
   if (hasGmail) {
-    return new GmailAdapter();
-  }
-  if (hasOutlook) {
-    return new OutlookAdapter();
+    return new ImapAdapter();
   }
 
   throw new Error(
-    "No email provider configured. Connect Gmail or Outlook in Settings to use the email skill.",
+    "Gmail is not connected. Open Settings and connect your Gmail account to use the email skill.",
   );
 }
 
@@ -322,7 +310,7 @@ registerSkill(
   {
     skillId: SKILL_NAME,
     displayName: "Email + calendar",
-    description: "Inbox triage, draft replies, and calendar management for Gmail and Outlook.",
+    description: "Inbox triage and draft replies for Gmail via app password.",
     version: SKILL_VERSION,
     author: "bundled",
     permissionManifest: [...PERMISSION_MANIFEST],

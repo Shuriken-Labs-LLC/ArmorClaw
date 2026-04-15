@@ -20,10 +20,9 @@ export interface WizardState {
   // Step 2 — Sandbox directory
   sandboxDir?: string;
 
-  // Step 3 — Email & Calendar
-  emailProviders: Array<"gmail" | "outlook">;
+  // Step 3 — Email (Gmail IMAP/app password)
   gmailConnected: boolean;
-  outlookConnected: boolean;
+  gmailAddress?: string;
 
   // Step 4 — Tailscale
   tailscaleStatus: TailscaleStatus;
@@ -40,9 +39,7 @@ function makeInitialState(): WizardState {
     currentStep: 1,
     completedSteps: [],
     apiKeyMasked: false,
-    emailProviders: [],
     gmailConnected: false,
-    outlookConnected: false,
     tailscaleStatus: "pending",
     tailscaleDeferred: false,
     connectedChannels: [],
