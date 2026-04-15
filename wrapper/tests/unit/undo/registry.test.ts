@@ -91,8 +91,8 @@ describe("registerUndo — entry fields", () => {
   it("uses real Date.now() when nowMs is not provided", () => {
     const before = Date.now();
     const entry = registerUndo({
-      actionType: "crm-write",
-      skill: "crm-skill",
+      actionType: "file-write",
+      skill: "secure-files",
       snapshot: null,
       undoFn: vi.fn().mockResolvedValue(undefined),
     });
@@ -119,7 +119,7 @@ describe("registerUndo — single slot", () => {
   });
 
   it("supports all three action types", () => {
-    const types = ["email-draft", "file-write", "crm-write"] as const;
+    const types = ["email-draft", "file-write"] as const;
     for (const actionType of types) {
       const entry = registerUndo(makeOptions({ actionType }));
       expect(entry.actionType).toBe(actionType);
@@ -229,12 +229,12 @@ describe("executeUndo — audit logging", () => {
 
   it("includes actionType and id in inputSummary", async () => {
     vi.mocked(appendFileSync).mockImplementation(() => undefined);
-    registerUndo(makeOptions({ id: "my-id", actionType: "crm-write", skill: "crm" }));
+    registerUndo(makeOptions({ id: "my-id", actionType: "file-write", skill: "secure-files" }));
     await executeUndo(() => BASE_NOW);
 
     const [, written] = vi.mocked(appendFileSync).mock.calls[0];
     const entry = JSON.parse((written as string).trim());
-    expect(entry.inputSummary).toContain("crm-write");
+    expect(entry.inputSummary).toContain("file-write");
     expect(entry.inputSummary).toContain("my-id");
   });
 

@@ -679,34 +679,34 @@ describe("resolveAdapter", () => {
   it("throws when no provider is configured", async () => {
     const { resolveAdapter } = await import("../../../skills/email-calendar/index.ts");
     const saved = { ...process.env };
-    delete process.env["GOOGLE_CLIENT_ID"];
-    delete process.env["MICROSOFT_CLIENT_ID"];
+    delete process.env["GOOGLE_OAUTH_CLIENT_ID"];
+    delete process.env["MICROSOFT_OAUTH_CLIENT_ID"];
 
     expect(() => resolveAdapter()).toThrow(/No email provider configured/);
 
     Object.assign(process.env, saved);
   });
 
-  it("returns GmailAdapter when GOOGLE_CLIENT_ID is set", async () => {
+  it("returns GmailAdapter when GOOGLE_OAUTH_CLIENT_ID is set", async () => {
     const { resolveAdapter } = await import("../../../skills/email-calendar/index.ts");
     const { GmailAdapter } = await import("../../../skills/email-calendar/adapters/gmail.ts");
-    process.env["GOOGLE_CLIENT_ID"] = "test-client-id";
+    process.env["GOOGLE_OAUTH_CLIENT_ID"] = "test-client-id";
 
     const adapter = resolveAdapter();
     expect(adapter).toBeInstanceOf(GmailAdapter);
 
-    delete process.env["GOOGLE_CLIENT_ID"];
+    delete process.env["GOOGLE_OAUTH_CLIENT_ID"];
   });
 
-  it("returns OutlookAdapter when MICROSOFT_CLIENT_ID is set", async () => {
+  it("returns OutlookAdapter when MICROSOFT_OAUTH_CLIENT_ID is set", async () => {
     const { resolveAdapter } = await import("../../../skills/email-calendar/index.ts");
     const { OutlookAdapter } = await import("../../../skills/email-calendar/adapters/outlook.ts");
-    delete process.env["GOOGLE_CLIENT_ID"];
-    process.env["MICROSOFT_CLIENT_ID"] = "test-client-id";
+    delete process.env["GOOGLE_OAUTH_CLIENT_ID"];
+    process.env["MICROSOFT_OAUTH_CLIENT_ID"] = "test-client-id";
 
     const adapter = resolveAdapter();
     expect(adapter).toBeInstanceOf(OutlookAdapter);
 
-    delete process.env["MICROSOFT_CLIENT_ID"];
+    delete process.env["MICROSOFT_OAUTH_CLIENT_ID"];
   });
 });

@@ -19,12 +19,19 @@ export function escAttr(s: string | null | undefined): string {
   return escHtml(s);
 }
 
-/** Format a number as a USD string with two decimal places. */
+/** Format a number as a USD string, with extra precision for sub-cent amounts. */
 export function fmtUSD(n: unknown): string {
-  if (typeof n !== "number") {
+  if (typeof n !== "number" || n === 0) {
     return "$0.00";
   }
-  return "$" + n.toFixed(2);
+  if (n >= 0.01) {
+    return "$" + n.toFixed(2);
+  }
+  // Sub-cent: show enough decimals to display a non-zero digit
+  if (n >= 0.001) {
+    return "$" + n.toFixed(3);
+  }
+  return "$" + n.toFixed(4);
 }
 
 /** Format an ISO timestamp as a relative or short-date string. */

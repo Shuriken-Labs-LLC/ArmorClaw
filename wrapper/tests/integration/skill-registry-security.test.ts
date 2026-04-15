@@ -26,6 +26,7 @@ import { registerAuditLogger } from "../../security/audit-logger.ts";
 import { registerInjectionFilter } from "../../security/injection-filter.ts";
 import {
   clearManifestsForTesting,
+  getPendingApprovals,
   loadPermissionManifest,
   registerPermissionFilter,
 } from "../../security/permissions.ts";
@@ -110,7 +111,7 @@ const bundledSkillManifest: ArmorClawSkillManifest = {
 const userSkillManifest: ArmorClawSkillManifest = {
   skillId: USER_SKILL_ID,
   displayName: "Lead Scorer",
-  description: "Scores CRM leads.",
+  description: "Scores incoming leads.",
   version: "1.0.0",
   author: "user",
   permissionManifest: ["network:read"],
@@ -252,38 +253,48 @@ describe("injection filter blocks prompt injection for any skill author", () => 
   });
 });
 
-// ── 3. Undeclared tool — blocked by permission engine ────────────────────────
+// ── 3. Undeclared tool — queued for approval (warn-and-confirm) ──────────────
+//
+// The permission engine was shifted from hard-block to warn-and-confirm.
+// Undeclared tools are NOT blocked — they proceed but are queued in the
+// pending approvals list for the user to review in the dashboard.
 
-describe("permission filter blocks undeclared tools for any skill author", () => {
-  it("blocks a tool not in the permission manifest for a bundled skill", () => {
+describe("permission filter queues undeclared tools for approval", () => {
+  it("queues a tool not in the permission manifest for a bundled skill", () => {
     const api = setupSecurityChain(bundledSkillManifest);
     const result = api.fireBeforeToolCall({ toolName: BLOCKED_TOOL, params: {} });
-    expect(result?.block).toBe(true);
-    expect(result?.blockReason).toContain(BLOCKED_TOOL);
-    expect(result?.blockReason).toContain("ArmorClaw");
+    // Tool is allowed to proceed (not blocked)
+    expect(result).toBeUndefined();
+    // But it's queued in the pending approvals list
+    const pending = getPendingApprovals();
+    expect(pending.length).toBeGreaterThanOrEqual(1);
+    expect(pending.some((a) => a.toolName === BLOCKED_TOOL)).toBe(true);
   });
 
-  it("blocks a tool not in the permission manifest for a user skill", () => {
+  it("queues a tool not in the permission manifest for a user skill", () => {
     const api = setupSecurityChain(userSkillManifest);
     const result = api.fireBeforeToolCall({ toolName: BLOCKED_TOOL, params: {} });
-    expect(result?.block).toBe(true);
-    expect(result?.blockReason).toContain(BLOCKED_TOOL);
-    expect(result?.blockReason).toContain("ArmorClaw");
+    expect(result).toBeUndefined();
+    const pending = getPendingApprovals();
+    expect(pending.length).toBeGreaterThanOrEqual(1);
+    expect(pending.some((a) => a.toolName === BLOCKED_TOOL)).toBe(true);
   });
 
-  it("bundled and user skill produce identical permission block result", () => {
-    const blockedEvent: BeforeEvent = { toolName: BLOCKED_TOOL, params: {} };
+  it("bundled and user skill produce identical approval-queue result", () => {
+    const undeclaredEvent: BeforeEvent = { toolName: BLOCKED_TOOL, params: {} };
 
     const bundledApi = setupSecurityChain(bundledSkillManifest);
-    const bundledResult = bundledApi.fireBeforeToolCall(blockedEvent);
+    const bundledResult = bundledApi.fireBeforeToolCall(undeclaredEvent);
 
     clearManifestsForTesting();
     clearRegistryForTesting();
 
     const userApi = setupSecurityChain(userSkillManifest);
-    const userResult = userApi.fireBeforeToolCall(blockedEvent);
+    const userResult = userApi.fireBeforeToolCall(undeclaredEvent);
 
-    expect(bundledResult?.block).toBe(userResult?.block);
+    // Both return undefined (tool proceeds) — identical treatment
+    expect(bundledResult).toBeUndefined();
+    expect(userResult).toBeUndefined();
   });
 });
 

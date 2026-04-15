@@ -7,7 +7,18 @@
  * Coverage target: 80%+ line coverage on getBundledSkillStatuses.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// ── Module mocks ─────────────────────────────────────────────────────────────
+
+vi.mock("../../../security/permissions.ts", () => ({
+  getPendingApprovals: vi.fn(() => []),
+  resolveApproval: vi.fn(() => true),
+  onApprovalChange: vi.fn(() => () => {}),
+}));
+
+// ── Imports ───────────────────────────────────────────────────────────────────
+
 import { getBundledSkillStatuses } from "../../../dashboard/server.ts";
 import type { BundledSkillStatus } from "../../../dashboard/server.ts";
 
@@ -20,29 +31,35 @@ function findSkill(statuses: BundledSkillStatus[], id: string): BundledSkillStat
 // ── email-calendar ────────────────────────────────────────────────────────────
 
 describe("email-calendar status", () => {
-  it("active when GOOGLE_CLIENT_ID is set", () => {
-    const env = { GOOGLE_CLIENT_ID: "282171340527-xxx.apps.googleusercontent.com" };
+  it("active when Google OAuth tokens exist", () => {
+    const env = { GOOGLE_OAUTH_ACCESS_TOKEN: "ya29.a0AfH6SM..." };
     const result = findSkill(getBundledSkillStatuses(env), "email-calendar")!;
     expect(result.status).toBe("active");
     expect(result.missingConfig).toBeUndefined();
   });
 
-  it("active when GOOGLE_AUTH_CODE_PENDING is set", () => {
-    const env = { GOOGLE_AUTH_CODE_PENDING: "4/0AfrIepBq..." };
+  it("active when Google refresh token exists", () => {
+    const env = { GOOGLE_OAUTH_REFRESH_TOKEN: "1//0abc..." };
     const result = findSkill(getBundledSkillStatuses(env), "email-calendar")!;
     expect(result.status).toBe("active");
   });
 
-  it("active when MICROSOFT_CLIENT_ID is set", () => {
-    const env = { MICROSOFT_CLIENT_ID: "abc-123" };
+  it("active when Microsoft OAuth tokens exist", () => {
+    const env = { MICROSOFT_OAUTH_ACCESS_TOKEN: "eyJ0eXAi..." };
     const result = findSkill(getBundledSkillStatuses(env), "email-calendar")!;
     expect(result.status).toBe("active");
   });
 
-  it("active when MICROSOFT_AUTH_CODE_PENDING is set", () => {
-    const env = { MICROSOFT_AUTH_CODE_PENDING: "M.R3_abc" };
+  it("active when Microsoft refresh token exists", () => {
+    const env = { MICROSOFT_OAUTH_REFRESH_TOKEN: "M.R3_BAY..." };
     const result = findSkill(getBundledSkillStatuses(env), "email-calendar")!;
     expect(result.status).toBe("active");
+  });
+
+  it("not_configured when only client ID exists but no tokens", () => {
+    const env = { GOOGLE_OAUTH_CLIENT_ID: "282171340527-xxx.apps.googleusercontent.com" };
+    const result = findSkill(getBundledSkillStatuses(env), "email-calendar")!;
+    expect(result.status).toBe("not_configured");
   });
 
   it("not_configured when no email env vars", () => {
@@ -53,39 +70,9 @@ describe("email-calendar status", () => {
   });
 
   it("not_configured when only unrelated env vars are set", () => {
-    const env = { HUBSPOT_API_KEY: "hk_123", ARMORCLAW_MODEL_PROVIDER: "anthropic" };
+    const env = { ARMORCLAW_MODEL_PROVIDER: "anthropic" };
     const result = findSkill(getBundledSkillStatuses(env), "email-calendar")!;
     expect(result.status).toBe("not_configured");
-  });
-});
-
-// ── crm-leadgen ───────────────────────────────────────────────────────────────
-
-describe("crm-leadgen status", () => {
-  it("active when HUBSPOT_API_KEY is set", () => {
-    const env = { HUBSPOT_API_KEY: "hk_test_123" };
-    const result = findSkill(getBundledSkillStatuses(env), "crm-leadgen")!;
-    expect(result.status).toBe("active");
-    expect(result.missingConfig).toBeUndefined();
-  });
-
-  it("active when AIRTABLE_API_KEY is set", () => {
-    const env = { AIRTABLE_API_KEY: "patABC123" };
-    const result = findSkill(getBundledSkillStatuses(env), "crm-leadgen")!;
-    expect(result.status).toBe("active");
-  });
-
-  it("active when both CRM keys are set", () => {
-    const env = { HUBSPOT_API_KEY: "hk_123", AIRTABLE_API_KEY: "patABC" };
-    const result = findSkill(getBundledSkillStatuses(env), "crm-leadgen")!;
-    expect(result.status).toBe("active");
-  });
-
-  it("not_configured when no CRM env vars", () => {
-    const result = findSkill(getBundledSkillStatuses({}), "crm-leadgen")!;
-    expect(result.status).toBe("not_configured");
-    expect(result.missingConfig).toContain("HubSpot or Airtable");
-    expect(result.missingConfig).toContain("Settings");
   });
 });
 
@@ -99,7 +86,7 @@ describe("secure-files status", () => {
   });
 
   it("always active regardless of env content", () => {
-    const env = { GOOGLE_CLIENT_ID: "x", HUBSPOT_API_KEY: "y" };
+    const env = { GOOGLE_OAUTH_CLIENT_ID: "x" };
     const result = findSkill(getBundledSkillStatuses(env), "secure-files")!;
     expect(result.status).toBe("active");
   });
@@ -123,13 +110,13 @@ describe("browser status", () => {
 // ── General shape ─────────────────────────────────────────────────────────────
 
 describe("getBundledSkillStatuses shape", () => {
-  it("returns exactly 4 skills", () => {
-    expect(getBundledSkillStatuses({})).toHaveLength(4);
+  it("returns exactly 3 skills", () => {
+    expect(getBundledSkillStatuses({})).toHaveLength(3);
   });
 
   it("returns the expected skill ids in order", () => {
     const ids = getBundledSkillStatuses({}).map((s) => s.id);
-    expect(ids).toEqual(["email-calendar", "crm-leadgen", "secure-files", "browser"]);
+    expect(ids).toEqual(["email-calendar", "secure-files", "browser"]);
   });
 
   it("every skill has displayName, description, version, and status", () => {
@@ -143,8 +130,7 @@ describe("getBundledSkillStatuses shape", () => {
 
   it("active skills never have missingConfig", () => {
     const env = {
-      GOOGLE_CLIENT_ID: "x",
-      HUBSPOT_API_KEY: "y",
+      GOOGLE_OAUTH_ACCESS_TOKEN: "ya29.test",
     };
     for (const sk of getBundledSkillStatuses(env)) {
       if (sk.status === "active") {

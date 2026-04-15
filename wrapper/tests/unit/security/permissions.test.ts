@@ -5,6 +5,7 @@ import permissionsPlugin, {
   PermissionLoadError,
   checkToolPermission,
   clearManifestsForTesting,
+  getPendingApprovals,
   getRegisteredManifests,
   loadPermissionManifest,
   registerPermissionFilter,
@@ -224,39 +225,41 @@ describe("loadPermissionManifest — immutability", () => {
 // ── checkToolPermission ───────────────────────────────────────────────────────
 
 describe("checkToolPermission", () => {
-  it("returns null when no manifests are registered (ArmorClaw inactive)", () => {
-    expect(checkToolPermission("any_tool")).toBeNull();
+  it("allows when no manifests are registered (ArmorClaw inactive)", () => {
+    const result = checkToolPermission("any_tool");
+    expect(result.decision).toBe("allow");
   });
 
-  it("returns null for a tool listed in a registered manifest", () => {
+  it("allows a tool listed in a registered manifest", () => {
     loadPermissionManifest(validManifest({ allowedTools: ["read_file"] }));
-    expect(checkToolPermission("read_file")).toBeNull();
+    const result = checkToolPermission("read_file");
+    expect(result.decision).toBe("allow");
   });
 
-  it("returns a block reason for a tool not in any manifest", () => {
+  it("returns approval_required for a tool not in any manifest", () => {
     loadPermissionManifest(validManifest({ allowedTools: ["read_file"] }));
-    const reason = checkToolPermission("bash");
-    expect(reason).not.toBeNull();
-    expect(reason).toContain("bash");
+    const result = checkToolPermission("bash");
+    expect(result.decision).toBe("approval_required");
+    expect(result.reason).toContain("bash");
   });
 
   it("allows a tool covered by any one of multiple manifests", () => {
     loadPermissionManifest(validManifest({ skillId: "skill-a", allowedTools: ["tool_a"] }));
     loadPermissionManifest(validManifest({ skillId: "skill-b", allowedTools: ["tool_b"] }));
-    expect(checkToolPermission("tool_a")).toBeNull();
-    expect(checkToolPermission("tool_b")).toBeNull();
+    expect(checkToolPermission("tool_a").decision).toBe("allow");
+    expect(checkToolPermission("tool_b").decision).toBe("allow");
   });
 
-  it("blocks a tool not in any of multiple manifests", () => {
+  it("requires approval for a tool not in any of multiple manifests", () => {
     loadPermissionManifest(validManifest({ skillId: "skill-a", allowedTools: ["tool_a"] }));
     loadPermissionManifest(validManifest({ skillId: "skill-b", allowedTools: ["tool_b"] }));
-    expect(checkToolPermission("tool_c")).not.toBeNull();
+    expect(checkToolPermission("tool_c").decision).toBe("approval_required");
   });
 
-  it("block reason includes the tool name", () => {
+  it("approval reason includes the tool name", () => {
     loadPermissionManifest(validManifest({ allowedTools: ["read_file"] }));
-    const reason = checkToolPermission("forbidden_tool");
-    expect(reason).toContain("forbidden_tool");
+    const result = checkToolPermission("forbidden_tool");
+    expect(result.reason).toContain("forbidden_tool");
   });
 });
 
@@ -284,27 +287,23 @@ describe("registerPermissionFilter", () => {
     expect(result).toBeUndefined();
   });
 
-  it("blocks a tool that is not in any manifest", () => {
+  it("allows undeclared tools (queues for approval instead of blocking)", () => {
     loadPermissionManifest(validManifest({ allowedTools: ["safe_tool"] }));
     const mockApi = makeMockApi();
     registerPermissionFilter(mockApi as unknown as OpenClawPluginApi);
-    const result = mockApi.capturedHandler({ toolName: "dangerous_tool", params: {} }, {}) as {
-      block: boolean;
-      blockReason: string;
-    };
-    expect(result.block).toBe(true);
-    expect(result.blockReason).toContain("dangerous_tool");
+    const result = mockApi.capturedHandler({ toolName: "dangerous_tool", params: {} }, {});
+    // Undeclared tools are allowed through but queued for approval
+    expect(result).toBeUndefined();
   });
 
-  it("blockReason includes ArmorClaw attribution", () => {
-    loadPermissionManifest(validManifest({ allowedTools: ["other_tool"] }));
+  it("queues a pending approval for undeclared tools", () => {
+    loadPermissionManifest(validManifest({ allowedTools: ["safe_tool"] }));
     const mockApi = makeMockApi();
     registerPermissionFilter(mockApi as unknown as OpenClawPluginApi);
-    const result = mockApi.capturedHandler({ toolName: "bad_tool", params: {} }, {}) as {
-      block: boolean;
-      blockReason: string;
-    };
-    expect(result.blockReason).toContain("ArmorClaw");
+    mockApi.capturedHandler({ toolName: "unknown_tool", params: {} }, {});
+    const pending = getPendingApprovals();
+    expect(pending.length).toBeGreaterThan(0);
+    expect(pending[0].toolName).toBe("unknown_tool");
   });
 });
 

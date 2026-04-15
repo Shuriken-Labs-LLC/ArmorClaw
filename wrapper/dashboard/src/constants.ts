@@ -10,9 +10,11 @@ export const NAV: ReadonlyArray<{ id: string; label: string; icon: string }> = [
   { id: "home", label: "Home", icon: "\u2295" },
   { id: "skills", label: "Skills", icon: "\u26A1" },
   { id: "recipes", label: "Recipes", icon: "\uD83D\uDDD3" },
+  { id: "channels", label: "Channels", icon: "\uD83D\uDCE1" },
   { id: "security", label: "Security", icon: "\uD83D\uDD12" },
   { id: "token-burn", label: "Token Burn", icon: "\uD83D\uDCCA" },
   { id: "settings", label: "Settings", icon: "\u2699" },
+  { id: "advanced", label: "Advanced", icon: "\uD83D\uDD27" },
 ];
 
 /** Human-readable labels for model providers. */

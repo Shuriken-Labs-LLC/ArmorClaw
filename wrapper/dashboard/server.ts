@@ -13,12 +13,14 @@
  * The dashboard never writes application state.
  */
 
-import { execSync } from "node:child_process";
-import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { execSync, spawn } from "node:child_process";
+import { cpSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import express from "express";
+import { getModelAdapterState } from "../lib/model-adapter.ts";
+import { getBackupParentDir, getLauncherDataPath } from "../lib/platform-paths.ts";
 import { getAllSkills } from "../lib/skill-registry.ts";
 import {
   fetchSkillSource,
@@ -36,17 +38,27 @@ import {
 import type { RecipeWithState } from "../recipes/types.ts";
 import type { AuditEntry } from "../security/audit-logger.ts";
 import {
+  getPendingApprovals as getPermissionPendingApprovals,
+  resolveApproval,
+  onApprovalChange,
+} from "../security/permissions.ts";
+import type { PendingToolApproval } from "../security/permissions.ts";
+import { calculateCost } from "../token-tracker/pricing.ts";
+import type { Provider } from "../token-tracker/pricing.ts";
+import {
   getBudgetStatus,
   getDailyHistory,
   getMonthBySkill,
   getMonthTokens,
   getRecentEvents,
   getTodayTokens,
+  recordTokenEvent,
   resumeFromHardStop,
   setBudgetMonthlyUSD,
 } from "../token-tracker/store.ts";
 import type { DailyTotal, TokenEvent } from "../token-tracker/store.ts";
 import { getCurrentUndo, executeUndo } from "../undo/registry.ts";
+import { getOpenClawVersionStatus, startVersionCheckInterval } from "./openclaw-version-check.ts";
 import * as DashConstants from "./src/constants.ts";
 import * as DashUtils from "./src/utils.ts";
 
@@ -57,7 +69,15 @@ export const DASHBOARD_PORT = 7390;
 const DASHBOARD_HTML = join(import.meta.dirname, "public", "index.html");
 
 /** Absolute path to the repo-root .env file (dashboard/ → wrapper/ → repo root). */
-const ENV_FILE = join(import.meta.dirname, "..", "..", ".env");
+/**
+ * .env path: when running inside the Electron launcher, ARMORCLAW_REPO_ROOT
+ * is set by main.ts. When running standalone, fall back to walking up from
+ * import.meta.dirname (dashboard/ → wrapper/ → repo root).
+ */
+const ENV_FILE = join(
+  process.env["ARMORCLAW_REPO_ROOT"] ?? join(import.meta.dirname, "..", ".."),
+  ".env",
+);
 
 // ── Tailscale URL detection ───────────────────────────────────────────────────
 
@@ -244,7 +264,10 @@ function auditLogPath(): string {
  * Read the most recent `limit` entries from the audit log, newest-first.
  * Never throws — returns [] on any I/O or parse error.
  */
-export function readRecentAuditEntries(limit = 20): AuditEntry[] {
+/** Internal skills/operations that should not appear in the user-facing activity feed. */
+const INTERNAL_SKILLS = new Set(["gateway-config", "platform-check", "registry", "token-rotation"]);
+
+export function readRecentAuditEntries(limit = 20, includeInternal = false): AuditEntry[] {
   try {
     const raw = readFileSync(auditLogPath(), "utf-8");
     const entries: AuditEntry[] = [];
@@ -253,7 +276,12 @@ export function readRecentAuditEntries(limit = 20): AuditEntry[] {
         continue;
       }
       try {
-        entries.push(JSON.parse(line) as AuditEntry);
+        const entry = JSON.parse(line) as AuditEntry;
+        // Filter out internal operations from the user-facing feed
+        if (!includeInternal && entry.skill && INTERNAL_SKILLS.has(entry.skill)) {
+          continue;
+        }
+        entries.push(entry);
       } catch {
         /* skip malformed lines */
       }
@@ -343,23 +371,79 @@ export function setAgentStatus(s: AgentStatus): void {
   agentStatus = s;
 }
 
-// ── Pending approvals (STUB) ──────────────────────────────────────────────────
+// ── Gateway reachability ──────────────────────────────────────────────────────
+
+const GATEWAY_PORT = 18789;
+
+/**
+ * Quick probe of the OpenClaw gateway WebSocket port.
+ * Returns true if the port accepts a TCP connection within 2 seconds.
+ */
+async function checkGatewayReachable(): Promise<boolean> {
+  const { createConnection } = await import("node:net");
+  return new Promise((resolve) => {
+    const sock = createConnection({ host: "127.0.0.1", port: GATEWAY_PORT, timeout: 2000 }, () => {
+      sock.destroy();
+      resolve(true);
+    });
+    sock.on("error", () => resolve(false));
+    sock.on("timeout", () => {
+      sock.destroy();
+      resolve(false);
+    });
+  });
+}
+
+// ── Pending approvals ─────────────────────────────────────────────────────────
 //
-// PLACEHOLDER: Approvals are not yet wired to the skill system.
-// When the approval flow is built in wrapper/skills/, skills will POST to
-// /api/approvals with the action requiring user sign-off, and block execution
-// until the user approves or rejects here in the dashboard.
-// For v1 the list is always empty — the card shows a zero-state.
+// Source: in-process security/permissions.ts approval queue (ArmorClaw's own
+// permission engine, runs as an OpenClaw plugin).
+//
+// Gateway-side exec approvals (exec.approval.request/resolve) are NOT polled
+// here. The gateway has no "list pending" RPC — pending approvals arrive as
+// exec.approval.requested events pushed to connected operator clients. That
+// requires a persistent WebSocket subscription, not a short-lived poll.
+// TODO(post-v1): maintain a persistent gateway WS and listen for
+//   exec.approval.requested / exec.approval.resolved events; merge with
+//   local approvals here.
 
 export interface PendingApproval {
   id: string;
   skill: string;
   displayName: string;
   requestedAt: string;
+  /** "local" = in-process permission engine, "gateway" = OpenClaw gateway */
+  source: "local" | "gateway";
 }
 
-export function getPendingApprovals(): ReadonlyArray<PendingApproval> {
-  return []; // STUB — always empty until the approval system is built
+/**
+ * Get pending approvals from the in-process permission engine.
+ *
+ * Gateway-level exec approvals (exec.approval.request/resolve) are not
+ * included here — the gateway pushes them as events to persistent operator
+ * WebSocket connections; there is no "list pending" query RPC.
+ * See TODO in the section comment above for the post-v1 path.
+ */
+export async function getPendingApprovals(): Promise<ReadonlyArray<PendingApproval>> {
+  const skills = getAllSkills();
+  const nameMap = new Map(skills.map((s) => [s.skillId, s.displayName]));
+
+  const rawApprovals = getPermissionPendingApprovals();
+  return rawApprovals.map((a: PendingToolApproval) => ({
+    id: a.id,
+    skill: a.toolName,
+    displayName: nameMap.get(a.skillId ?? "") ?? humaniseToolName(a.toolName),
+    requestedAt: a.timestamp,
+    source: "local" as const,
+  }));
+}
+
+/** Convert a raw tool name to something readable: "read_email" → "Read email" */
+function humaniseToolName(raw: string): string {
+  return raw
+    .replace(/[-_]/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/, (c) => c.toUpperCase());
 }
 
 // ── SSE listener registry ─────────────────────────────────────────────────────
@@ -386,8 +470,14 @@ export function notifyListeners(): void {
 
 export interface DashboardSnapshot {
   agentStatus: AgentStatus;
+  /** Whether the OpenClaw gateway WebSocket on port 18789 is reachable. */
+  gatewayReachable: boolean;
   config: {
     modelProvider: string | null;
+    isLocal: boolean;
+    activeProvider: string | null;
+    ollamaReachable: boolean;
+    ollamaModels: string[];
     sandboxDir: string | null;
   };
   channels: ChannelLink[];
@@ -396,7 +486,6 @@ export interface DashboardSnapshot {
   budget: ReturnType<typeof getBudgetStatus>;
   monthTokens: ReturnType<typeof getMonthTokens>;
   undo: { id: string; actionType: string; skill: string; expiresAt: string } | null;
-  // APPROVALS STUB: always empty — see comment above getPendingApprovals()
   pendingApprovals: PendingApproval[];
   feed: AuditEntry[];
   skills: ReturnType<typeof getAllSkills>;
@@ -404,8 +493,6 @@ export interface DashboardSnapshot {
   connectedServices: {
     gmail: boolean;
     outlook: boolean;
-    hubspot: boolean;
-    airtable: boolean;
   };
   /** Tailscale HTTPS URL for this device, or null if Tailscale is not active. */
   tailscaleUrl: string | null;
@@ -433,10 +520,21 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
   }
 
   const undo = getCurrentUndo();
+  const gatewayReachable = await checkGatewayReachable();
   return {
     agentStatus,
+    gatewayReachable,
     config: {
       modelProvider: env["ARMORCLAW_MODEL_PROVIDER"] ?? null,
+      ...(() => {
+        const ms = getModelAdapterState();
+        return {
+          isLocal: ms.isLocal,
+          activeProvider: ms.active,
+          ollamaReachable: ms.ollamaReachable,
+          ollamaModels: ms.ollamaModels,
+        };
+      })(),
       sandboxDir: env["ARMORCLAW_SANDBOX_DIR"] ?? null,
     },
     channels: _channelLinksCache,
@@ -445,15 +543,13 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
     undo: undo
       ? { id: undo.id, actionType: undo.actionType, skill: undo.skill, expiresAt: undo.expiresAt }
       : null,
-    pendingApprovals: [], // STUB
+    pendingApprovals: (await getPendingApprovals()) as PendingApproval[],
     feed: readRecentAuditEntries(20),
     skills: getAllSkills(),
     recipes: getAllRecipes(),
     connectedServices: {
-      gmail: Boolean(env["GOOGLE_CLIENT_ID"]),
-      outlook: Boolean(env["MICROSOFT_CLIENT_ID"]),
-      hubspot: Boolean(env["HUBSPOT_API_KEY"]),
-      airtable: Boolean(env["AIRTABLE_API_KEY"]),
+      gmail: Boolean(env["GOOGLE_OAUTH_ACCESS_TOKEN"] || env["GOOGLE_OAUTH_REFRESH_TOKEN"]),
+      outlook: Boolean(env["MICROSOFT_OAUTH_ACCESS_TOKEN"] || env["MICROSOFT_OAUTH_REFRESH_TOKEN"]),
     },
     tailscaleUrl: getTailscaleUrl(),
     security: getSecurityStats(),
@@ -479,17 +575,15 @@ export interface BundledSkillStatus {
 }
 
 /**
- * Check config readiness for all four bundled skills.
+ * Check config readiness for all three bundled skills.
  * Uses the parsed .env map — never reads secrets into output.
  */
 export function getBundledSkillStatuses(env: Record<string, string>): BundledSkillStatus[] {
   const emailActive =
-    Boolean(env["GOOGLE_CLIENT_ID"]) ||
-    Boolean(env["GOOGLE_AUTH_CODE_PENDING"]) ||
-    Boolean(env["MICROSOFT_CLIENT_ID"]) ||
-    Boolean(env["MICROSOFT_AUTH_CODE_PENDING"]);
-
-  const crmActive = Boolean(env["HUBSPOT_API_KEY"]) || Boolean(env["AIRTABLE_API_KEY"]);
+    Boolean(env["GOOGLE_OAUTH_ACCESS_TOKEN"]) ||
+    Boolean(env["GOOGLE_OAUTH_REFRESH_TOKEN"]) ||
+    Boolean(env["MICROSOFT_OAUTH_ACCESS_TOKEN"]) ||
+    Boolean(env["MICROSOFT_OAUTH_REFRESH_TOKEN"]);
 
   return [
     {
@@ -502,19 +596,6 @@ export function getBundledSkillStatuses(env: Record<string, string>): BundledSki
         : {
             status: "not_configured" as const,
             missingConfig: "Connect Gmail or Outlook in Settings to activate",
-          }),
-    },
-    {
-      id: "crm-leadgen",
-      displayName: "CRM + lead gen",
-      description:
-        "Prospect research, follow-up drafts, and CRM record management for HubSpot and Airtable.",
-      version: "1.0.0",
-      ...(crmActive
-        ? { status: "active" as const }
-        : {
-            status: "not_configured" as const,
-            missingConfig: "Connect HubSpot or Airtable in Settings",
           }),
     },
     {
@@ -533,6 +614,271 @@ export function getBundledSkillStatuses(env: Record<string, string>): BundledSki
       status: "active",
     },
   ];
+}
+
+// ── Skills config (~/Library/Application Support/armorclaw-launcher/skills.json) ──
+
+export interface InstalledSkillEntry {
+  id: string;
+  name: string;
+  description: string;
+  capabilities: string[];
+  source: "clawhub" | "github";
+  sourceUrl: string;
+  enabled: boolean;
+  installedAt: string;
+}
+
+export interface SkillsConfig {
+  installed: InstalledSkillEntry[];
+}
+
+function skillsConfigPath(): string {
+  return join(getLauncherDataPath(), "skills.json");
+}
+
+export function readSkillsConfig(): SkillsConfig {
+  try {
+    const raw = readFileSync(skillsConfigPath(), "utf-8");
+    const parsed = JSON.parse(raw) as SkillsConfig;
+    if (!Array.isArray(parsed.installed)) {
+      return { installed: [] };
+    }
+    return parsed;
+  } catch {
+    return { installed: [] };
+  }
+}
+
+export function writeSkillsConfig(config: SkillsConfig): void {
+  mkdirSync(getLauncherDataPath(), { recursive: true });
+  writeFileSync(skillsConfigPath(), JSON.stringify(config, null, 2) + "\n", "utf-8");
+}
+
+// ── Channels config (~/Library/Application Support/armorclaw-launcher/channels.json) ──
+
+export interface ChannelsConfig {
+  channels: Record<
+    string,
+    {
+      enabled: boolean;
+      token?: string;
+      allowFrom?: string[];
+    }
+  >;
+}
+
+function channelsConfigPath(): string {
+  return join(getLauncherDataPath(), "channels.json");
+}
+
+export function readChannelsConfig(): ChannelsConfig {
+  try {
+    const raw = readFileSync(channelsConfigPath(), "utf-8");
+    const parsed = JSON.parse(raw) as ChannelsConfig;
+    if (!parsed.channels || typeof parsed.channels !== "object") {
+      return { channels: {} };
+    }
+    return parsed;
+  } catch {
+    return { channels: {} };
+  }
+}
+
+export function writeChannelsConfig(config: ChannelsConfig): void {
+  mkdirSync(getLauncherDataPath(), { recursive: true });
+  writeFileSync(channelsConfigPath(), JSON.stringify(config, null, 2) + "\n", "utf-8");
+}
+
+/**
+ * Validate a Telegram bot token by calling the getMe API endpoint.
+ * Returns the bot username on success, or null on failure.
+ */
+export async function validateTelegramToken(
+  token: string,
+): Promise<{ ok: boolean; username?: string; error?: string }> {
+  if (!token || typeof token !== "string" || !token.trim()) {
+    return { ok: false, error: "Token is required" };
+  }
+  const trimmed = token.trim();
+  // Basic format check: Telegram tokens look like 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+  if (!/^\d+:[A-Za-z0-9_-]+$/.test(trimmed)) {
+    return {
+      ok: false,
+      error: "Token format is invalid. It should look like 123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
+    };
+  }
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${trimmed}/getMe`, {
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      return {
+        ok: false,
+        error:
+          "Telegram rejected this token. Double-check you copied the whole thing from BotFather.",
+      };
+    }
+    const data = (await res.json()) as { ok: boolean; result?: { username?: string } };
+    if (data.ok && data.result?.username) {
+      return { ok: true, username: data.result.username };
+    }
+    return { ok: false, error: "Token was accepted but no bot username was returned." };
+  } catch {
+    return {
+      ok: false,
+      error: "Could not reach Telegram servers. Check your internet connection.",
+    };
+  }
+}
+
+/** Channel type definition for the Channels view. */
+export interface ChannelType {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  status: "active" | "not_configured" | "error";
+  configurable: boolean;
+}
+
+/**
+ * Build the list of supported channel types with their current status.
+ */
+export function getChannelTypes(): ChannelType[] {
+  const config = readChannelsConfig();
+  const tg = config.channels["telegram"];
+  let tgStatus: ChannelType["status"] = "not_configured";
+  if (tg?.enabled && tg.token) {
+    tgStatus = "active";
+  }
+
+  return [
+    {
+      id: "telegram",
+      name: "Telegram",
+      description:
+        "Message your agent from Telegram. Create a bot via BotFather and connect it here.",
+      icon: "✈️",
+      status: tgStatus,
+      configurable: true,
+    },
+  ];
+}
+
+// ── ClawHub registry fetcher ──────────────────────────────────────────────
+
+export interface ClawHubSkill {
+  id: string;
+  name: string;
+  description: string;
+  capabilities: string[];
+  sourceUrl: string;
+}
+
+/**
+ * Fetch skills from the ClawHub public registry at openclaw.ai/integrations.
+ * Parses a JSON feed if available, otherwise returns an empty array.
+ * Never throws — returns empty on any failure.
+ */
+export async function fetchClawHubSkills(): Promise<ClawHubSkill[]> {
+  try {
+    const res = await fetch("https://openclaw.ai/api/integrations", {
+      signal: AbortSignal.timeout(10_000),
+      headers: { Accept: "application/json" },
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { integrations?: unknown[] } | unknown[];
+      const list = Array.isArray(data)
+        ? data
+        : Array.isArray((data as Record<string, unknown>).integrations)
+          ? (data as { integrations: unknown[] }).integrations
+          : [];
+      return list
+        .map((item: unknown) => {
+          const i = item as Record<string, unknown>;
+          return {
+            id: String((i["id"] as string) ?? (i["slug"] as string) ?? (i["name"] as string) ?? ""),
+            name: String((i["name"] as string) ?? (i["title"] as string) ?? ""),
+            description: String((i["description"] as string) ?? (i["summary"] as string) ?? ""),
+            capabilities: Array.isArray(i["capabilities"])
+              ? (i["capabilities"] as string[])
+              : Array.isArray(i["permissions"])
+                ? (i["permissions"] as string[])
+                : [],
+            sourceUrl: String(
+              (i["sourceUrl"] as string) ?? (i["url"] as string) ?? (i["repo"] as string) ?? "",
+            ),
+          };
+        })
+        .filter((s) => s.id && s.name);
+    }
+  } catch {
+    /* network or parse error — fall through */
+  }
+  // Fallback: try scraping the HTML page
+  try {
+    const res = await fetch("https://openclaw.ai/integrations", {
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (res.ok) {
+      const html = await res.text();
+      return parseClawHubHtml(html);
+    }
+  } catch {
+    /* fall through */
+  }
+  return [];
+}
+
+/**
+ * Best-effort parse of the openclaw.ai/integrations HTML page.
+ * Extracts skill names and descriptions from structured data or common patterns.
+ */
+export function parseClawHubHtml(html: string): ClawHubSkill[] {
+  // Try JSON-LD first
+  const jsonLdMatch = html.match(
+    /<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i,
+  );
+  if (jsonLdMatch) {
+    try {
+      const ld = JSON.parse(jsonLdMatch[1]) as Record<string, unknown>;
+      const items = Array.isArray(ld) ? ld : ((ld["itemListElement"] as unknown[]) ?? []);
+      if (items.length > 0) {
+        return items
+          .map((item: unknown) => {
+            const i = item as Record<string, unknown>;
+            return {
+              id: String((i["identifier"] as string) ?? (i["name"] as string) ?? "")
+                .toLowerCase()
+                .replace(/\s+/g, "-"),
+              name: String((i["name"] as string) ?? ""),
+              description: String((i["description"] as string) ?? ""),
+              capabilities: [],
+              sourceUrl: String((i["url"] as string) ?? ""),
+            };
+          })
+          .filter((s) => s.id && s.name);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  // Try data-integration attributes
+  const skills: ClawHubSkill[] = [];
+  const regex =
+    /data-integration-name="([^"]+)"[^>]*data-integration-description="([^"]*)"[^>]*(?:data-integration-url="([^"]*)")?/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(html)) !== null) {
+    skills.push({
+      id: match[1].toLowerCase().replace(/\s+/g, "-"),
+      name: match[1],
+      description: match[2],
+      capabilities: [],
+      sourceUrl: match[3] ?? "",
+    });
+  }
+  return skills;
 }
 
 // ── Express app ───────────────────────────────────────────────────────────────
@@ -560,6 +906,16 @@ export function createApp(): express.Application {
     res.setHeader("Cache-Control", "no-cache");
     res.send(_dashLibCache);
   });
+
+  // Push SSE updates when the permission engine queues a new approval
+  onApprovalChange(() => notifyListeners());
+
+  // Start background OpenClaw version polling (every 6 hours)
+  startVersionCheckInterval();
+
+  // Serve static files from public/ (favicon, etc.)
+  const publicDir = join(import.meta.dirname, "public");
+  app.use(express.static(publicDir));
 
   app.get("/", (_req, res) => {
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -606,6 +962,23 @@ export function createApp(): express.Application {
     res.json({ ok: executed });
   });
 
+  // ── Approval endpoints ──
+  app.post("/api/approvals/:id/approve", (req, res) => {
+    const resolved = resolveApproval(req.params["id"], true);
+    if (resolved) {
+      notifyListeners();
+    }
+    res.json({ ok: resolved });
+  });
+
+  app.post("/api/approvals/:id/reject", (req, res) => {
+    const resolved = resolveApproval(req.params["id"], false);
+    if (resolved) {
+      notifyListeners();
+    }
+    res.json({ ok: resolved });
+  });
+
   app.post("/api/agent/pause", (_req, res) => {
     setAgentStatus("paused");
     notifyListeners();
@@ -640,6 +1013,47 @@ export function createApp(): express.Application {
     res.json({ ok: true });
   });
 
+  // ── Token tracking: record usage from gateway chat ──
+  // The gateway handles model calls directly; this endpoint lets the chat UI
+  // report token usage after each chat.final so ArmorClaw's budget tracker
+  // and cost display stay accurate.
+  app.post("/api/tokens/record", (req, res) => {
+    const body = req.body as {
+      provider?: string;
+      model?: string;
+      skill?: string;
+      inputTokens?: number;
+      outputTokens?: number;
+    };
+    const provider = (body.provider ?? "anthropic") as Provider;
+    const model = body.model ?? "unknown";
+    const skill = body.skill ?? "chat";
+    const inputTokens = typeof body.inputTokens === "number" ? body.inputTokens : 0;
+    const outputTokens = typeof body.outputTokens === "number" ? body.outputTokens : 0;
+
+    if (inputTokens === 0 && outputTokens === 0) {
+      res.json({ ok: true, recorded: false });
+      return;
+    }
+
+    const estimatedCostUSD = calculateCost(provider, model, inputTokens, outputTokens);
+
+    const event: TokenEvent = {
+      timestamp: new Date().toISOString(),
+      provider,
+      model,
+      skill,
+      inputTokens,
+      outputTokens,
+      estimatedCostUSD,
+    };
+
+    // Fire-and-forget — never block the response on token tracking
+    void recordTokenEvent(event);
+    notifyListeners();
+    res.json({ ok: true, recorded: true, estimatedCostUSD });
+  });
+
   // ── Settings: model provider ──
   app.post("/api/settings/provider", (req, res) => {
     const { provider, apiKey } = req.body as { provider?: string; apiKey?: string };
@@ -662,6 +1076,17 @@ export function createApp(): express.Application {
     res.json({ ok: true });
   });
 
+  // ── Settings: Ollama status ──
+  app.get("/api/settings/ollama-status", async (_req, res) => {
+    const state = getModelAdapterState();
+    res.json({
+      reachable: state.ollamaReachable,
+      models: state.ollamaModels,
+      isActive: state.active === "ollama",
+      isLocal: state.isLocal,
+    });
+  });
+
   // ── Settings: sandbox directory ──
   app.post("/api/settings/sandbox", (req, res) => {
     const { path: sandboxPath } = req.body as { path?: string };
@@ -674,9 +1099,117 @@ export function createApp(): express.Application {
     res.json({ ok: true });
   });
 
+  // ── Settings: launch on startup ──
+  app.get("/api/settings/launch-on-startup", (_req, res) => {
+    const env = readEnvConfig();
+    // Default is enabled unless explicitly set to "false"
+    const enabled = env["ARMORCLAW_LAUNCH_ON_STARTUP"] !== "false";
+    res.json({ enabled });
+  });
+
+  app.post("/api/settings/launch-on-startup", (req, res) => {
+    const { enabled } = req.body as { enabled?: boolean };
+    if (typeof enabled !== "boolean") {
+      res.status(422).json({ ok: false, message: "enabled must be a boolean" });
+      return;
+    }
+    writeEnvVar("ARMORCLAW_LAUNCH_ON_STARTUP", enabled ? "true" : "false");
+    // The Electron app reads this on next launch via configureLoginItem()
+    notifyListeners();
+    res.json({ ok: true, enabled });
+  });
+
+  // ── Memory ──
+  app.get("/api/memory", (_req, res) => {
+    const memPath = join(homedir(), ".armorclaw", "memory.md");
+    try {
+      const content = existsSync(memPath) ? readFileSync(memPath, "utf-8") : "";
+      res.json({ ok: true, content, path: memPath });
+    } catch {
+      res.json({ ok: true, content: "", path: memPath });
+    }
+  });
+
+  app.post("/api/memory/clear", (_req, res) => {
+    const memPath = join(homedir(), ".armorclaw", "memory.md");
+    try {
+      const header =
+        "# ArmorClaw Memory\n\nThings I know about you. You can edit this file directly.\n\n";
+      writeFileSync(memPath, header, "utf-8");
+      res.json({ ok: true });
+    } catch (err) {
+      res
+        .status(500)
+        .json({ ok: false, message: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.post("/api/memory/open", (_req, res) => {
+    const memPath = join(homedir(), ".armorclaw", "memory.md");
+    try {
+      const cmd =
+        process.platform === "darwin"
+          ? `open "${memPath}"`
+          : process.platform === "win32"
+            ? `start "" "${memPath}"`
+            : `xdg-open "${memPath}"`;
+      execSync(cmd, { stdio: "ignore", timeout: 5000 });
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ ok: false, message: "Could not open the memory file." });
+    }
+  });
+
+  // ── Vector memory status ──
+  app.get("/api/memory/vector-status", async (_req, res) => {
+    const repoRoot = process.env["ARMORCLAW_REPO_ROOT"];
+    const nodeBin = process.env["ARMORCLAW_NODE_PATH"];
+    if (!repoRoot || !nodeBin) {
+      res.json({ ok: true, available: false, status: "Not configured" });
+      return;
+    }
+    try {
+      const output = execSync(`"${nodeBin}" "${join(repoRoot, "openclaw.mjs")}" memory status`, {
+        encoding: "utf-8",
+        timeout: 10_000,
+        cwd: repoRoot,
+      });
+      res.json({ ok: true, available: true, status: output.trim() });
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? ((err as { stderr?: string }).stderr?.trim() ?? err.message)
+          : String(err);
+      res.json({ ok: true, available: false, status: msg });
+    }
+  });
+
+  app.post("/api/memory/reindex", async (_req, res) => {
+    const repoRoot = process.env["ARMORCLAW_REPO_ROOT"];
+    const nodeBin = process.env["ARMORCLAW_NODE_PATH"];
+    if (!repoRoot || !nodeBin) {
+      res.status(500).json({ ok: false, message: "Not configured" });
+      return;
+    }
+    try {
+      const output = execSync(`"${nodeBin}" "${join(repoRoot, "openclaw.mjs")}" memory index`, {
+        encoding: "utf-8",
+        timeout: 60_000,
+        cwd: repoRoot,
+      });
+      res.json({ ok: true, output: output.trim() });
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? ((err as { stderr?: string }).stderr?.trim() ?? err.message)
+          : String(err);
+      res.status(500).json({ ok: false, message: msg });
+    }
+  });
+
   // ── Audit log CSV export ──
   app.get("/api/audit/export.csv", (_req, res) => {
-    const entries = readRecentAuditEntries(10_000); // read up to 10k entries for export
+    const entries = readRecentAuditEntries(10_000, true); // include internal entries in export
     const header = "timestamp,skill,outcome,durationMs,permissionsUsed\n";
     const rows = entries
       .map((e) =>
@@ -779,6 +1312,149 @@ export function createApp(): express.Application {
     res.json(getBundledSkillStatuses(env));
   });
 
+  // ── Skills: ClawHub registry ──
+  app.get("/api/skills/clawhub", async (_req, res) => {
+    const skills = await fetchClawHubSkills();
+    res.json({ ok: true, skills });
+  });
+
+  // ── Skills: installed skills (from skills.json) ──
+  app.get("/api/skills/installed", (_req, res) => {
+    const config = readSkillsConfig();
+    res.json({ ok: true, skills: config.installed });
+  });
+
+  // ── Skills: install from ClawHub ──
+  app.post("/api/skills/clawhub/install", async (req, res) => {
+    const { skill } = req.body as { skill?: unknown };
+    if (!skill || typeof skill !== "object") {
+      res.status(422).json({ ok: false, message: "skill object is required" });
+      return;
+    }
+    const s = skill as Record<string, unknown>;
+    const id = String((s["id"] as string) ?? "");
+    const name = String((s["name"] as string) ?? "");
+    if (!id || !name) {
+      res.status(422).json({ ok: false, message: "skill must have id and name" });
+      return;
+    }
+    const config = readSkillsConfig();
+    if (config.installed.some((i) => i.id === id)) {
+      res.status(409).json({ ok: false, message: "Skill is already installed" });
+      return;
+    }
+    const entry: InstalledSkillEntry = {
+      id,
+      name,
+      description: String((s["description"] as string) ?? ""),
+      capabilities: Array.isArray(s["capabilities"]) ? (s["capabilities"] as string[]) : [],
+      source: "clawhub",
+      sourceUrl: String((s["sourceUrl"] as string) ?? ""),
+      enabled: true,
+      installedAt: new Date().toISOString(),
+    };
+    config.installed.push(entry);
+    try {
+      writeSkillsConfig(config);
+      notifyListeners();
+      res.json({ ok: true, skill: entry });
+    } catch (err) {
+      res
+        .status(500)
+        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
+    }
+  });
+
+  // ── Skills: install from GitHub URL (with CONFIRM gate) ──
+  app.post("/api/skills/github/install", async (req, res) => {
+    const { url, confirm } = req.body as { url?: unknown; confirm?: unknown };
+    if (typeof url !== "string" || !url.trim()) {
+      res.status(422).json({ ok: false, message: "url is required" });
+      return;
+    }
+    if (confirm !== "CONFIRM") {
+      res.status(422).json({ ok: false, message: "You must type CONFIRM to install from GitHub" });
+      return;
+    }
+    if (!isValidGitHubUrl(url.trim())) {
+      res.status(422).json({ ok: false, message: "URL must be a GitHub HTTPS URL" });
+      return;
+    }
+    try {
+      const { code, filename } = await fetchSkillSource(url.trim());
+      const report = verifySkillSource(code);
+      if (!report.safe) {
+        res.status(403).json({ ok: false, message: "Skill contains dangerous patterns", report });
+        return;
+      }
+      const dest = installSkill(code, filename);
+      // Also track in skills.json
+      const config = readSkillsConfig();
+      const id = filename.replace(/\.(ts|js)$/, "");
+      if (!config.installed.some((i) => i.id === id)) {
+        config.installed.push({
+          id,
+          name: filename,
+          description: `Installed from GitHub: ${url.trim()}`,
+          capabilities: report.permissionsFound,
+          source: "github",
+          sourceUrl: url.trim(),
+          enabled: true,
+          installedAt: new Date().toISOString(),
+        });
+        writeSkillsConfig(config);
+      }
+      notifyListeners();
+      res.json({ ok: true, dest, report });
+    } catch (err) {
+      res
+        .status(422)
+        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
+    }
+  });
+
+  // ── Skills: toggle enable/disable ──
+  app.post("/api/skills/installed/:id/toggle", (req, res) => {
+    const { id } = req.params;
+    const config = readSkillsConfig();
+    const skill = config.installed.find((s) => s.id === id);
+    if (!skill) {
+      res.status(404).json({ ok: false, message: "Skill not found" });
+      return;
+    }
+    skill.enabled = !skill.enabled;
+    try {
+      writeSkillsConfig(config);
+      notifyListeners();
+      res.json({ ok: true, enabled: skill.enabled });
+    } catch (err) {
+      res
+        .status(500)
+        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
+    }
+  });
+
+  // ── Skills: remove installed skill ──
+  app.post("/api/skills/installed/:id/remove", (req, res) => {
+    const { id } = req.params;
+    const config = readSkillsConfig();
+    const idx = config.installed.findIndex((s) => s.id === id);
+    if (idx === -1) {
+      res.status(404).json({ ok: false, message: "Skill not found" });
+      return;
+    }
+    config.installed.splice(idx, 1);
+    try {
+      writeSkillsConfig(config);
+      notifyListeners();
+      res.json({ ok: true });
+    } catch (err) {
+      res
+        .status(500)
+        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
+    }
+  });
+
   // ── Recipes ──
   app.post("/api/recipes/:id/activate", (req, res) => {
     const { id } = req.params;
@@ -842,6 +1518,349 @@ export function createApp(): express.Application {
       }
     }
     res.json({ ok: true, deleted });
+  });
+
+  // ── Advanced settings: read-only OpenClaw config ──
+  app.get("/api/advanced/config", (_req, res) => {
+    try {
+      const configPath = join(homedir(), ".openclaw", "openclaw.json");
+      const raw = readFileSync(configPath, "utf-8");
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      // Strip sensitive fields before sending to the dashboard
+      const safe = { ...parsed };
+      if (safe["gateway"] && typeof safe["gateway"] === "object") {
+        const gw = { ...(safe["gateway"] as Record<string, unknown>) };
+        if (gw["auth"] && typeof gw["auth"] === "object") {
+          const auth = { ...(gw["auth"] as Record<string, unknown>) };
+          if (auth["token"]) {
+            auth["token"] = "••••••••";
+          }
+          if (auth["password"]) {
+            auth["password"] = "••••••••";
+          }
+          gw["auth"] = auth;
+        }
+        safe["gateway"] = gw;
+      }
+      res.json({ ok: true, config: safe, path: configPath });
+    } catch {
+      res.json({ ok: true, config: {}, path: join(homedir(), ".openclaw", "openclaw.json") });
+    }
+  });
+
+  // ── Chat: gateway config for WebSocket connection ──
+  //
+  // Returns the gateway WebSocket URL and auth token so the desktop chat
+  // window and inline chat panel can connect. The GatewayManager reads
+  // the token from openclaw.json after confirming the gateway is reachable,
+  // then sets process.env. Fallback polls openclaw.json directly.
+  app.get("/api/chat/gateway-config", async (_req, res) => {
+    // Prefer process.env — the gateway manager reads the token from
+    // openclaw.json after the gateway is confirmed reachable and sets
+    // process.env to match.
+    let token = process.env["ARMORCLAW_GATEWAY_TOKEN"] ?? "";
+    let tokenSource = token ? "process.env" : "";
+
+    // Fallback: read from openclaw.json (external gateway or legacy path)
+    if (!token) {
+      const configPath = join(homedir(), ".openclaw", "openclaw.json");
+      for (let attempt = 0; attempt < 10; attempt++) {
+        try {
+          const raw = readFileSync(configPath, "utf-8");
+          const config = JSON.parse(raw) as Record<string, unknown>;
+          const gw = config["gateway"] as Record<string, unknown> | undefined;
+          const auth = gw?.["auth"] as Record<string, unknown> | undefined;
+          const t = typeof auth?.["token"] === "string" ? auth["token"] : "";
+          if (t) {
+            token = t;
+            tokenSource = `openclaw.json (attempt ${attempt + 1})`;
+            break;
+          }
+        } catch {
+          // File doesn't exist yet — keep polling
+        }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+
+    process.stderr.write(
+      `[dashboard] /api/chat/gateway-config → source=${tokenSource || "NONE"} token=${token ? token.slice(0, 8) + "..." : "EMPTY"}\n`,
+    );
+
+    if (!token) {
+      res.status(503).json({
+        wsUrl: "ws://127.0.0.1:18789",
+        token: "",
+        error: "Gateway token not available yet. Retry shortly.",
+      });
+      return;
+    }
+
+    res.json({
+      wsUrl: "ws://127.0.0.1:18789",
+      token,
+    });
+  });
+
+  // ── Advanced: OpenClaw Control UI URL ──
+  //
+  // The gateway serves a Canvas UI at http://127.0.0.1:18789/__openclaw__/canvas/
+  // This endpoint returns that URL and probes whether it's reachable.
+  app.get("/api/advanced/control-ui-url", async (_req, res) => {
+    const gatewayPort = 18789;
+    const controlUrl = `http://127.0.0.1:${gatewayPort}/__openclaw__/canvas/`;
+    try {
+      const probe = await fetch(controlUrl, { signal: AbortSignal.timeout(3000) });
+      res.json({ ok: true, url: controlUrl, reachable: probe.ok, gatewayPort });
+    } catch {
+      res.json({ ok: true, url: controlUrl, reachable: false, gatewayPort });
+    }
+  });
+
+  // ── Advanced: start the gateway (non-blocking spawn) ──
+  app.post("/api/advanced/start-gateway", (_req, res) => {
+    const repoRoot = process.env["ARMORCLAW_REPO_ROOT"];
+    const nodeBin = process.env["ARMORCLAW_NODE_PATH"];
+    if (!repoRoot || !nodeBin) {
+      res.status(500).json({
+        ok: false,
+        message: "ArmorClaw paths not configured. Restart the app.",
+      });
+      return;
+    }
+    const openclawMjs = join(repoRoot, "openclaw.mjs");
+    // Gateway owns its token — no --token flag. It generates a new token on
+    // startup and writes it to openclaw.json. The next poll cycle reads it back.
+    const gwArgs = [openclawMjs, "gateway"];
+    try {
+      const child = spawn(nodeBin, gwArgs, {
+        stdio: "ignore",
+        detached: true,
+        cwd: repoRoot,
+        env: {
+          ...process.env,
+          PATH: `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${process.env["PATH"] ?? ""}`,
+        },
+      });
+      child.unref();
+      res.json({ ok: true, pid: child.pid });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ ok: false, message: msg });
+    }
+  });
+
+  // ── Advanced: run any OpenClaw command ──
+  //
+  // No restrictions beyond hard-banned permission levels. The ArmorClaw
+  // security layer (injection filter, permission engine) continues to run
+  // on all tool calls even when commands are issued from this view.
+  app.post("/api/advanced/run-command", (req, res) => {
+    const { command } = req.body as { command?: string };
+    if (!command || typeof command !== "string") {
+      res.status(422).json({ ok: false, message: "command is required" });
+      return;
+    }
+    const trimmed = command.trim();
+    if (!trimmed) {
+      res.status(422).json({ ok: false, message: "command is empty" });
+      return;
+    }
+    const repoRoot = process.env["ARMORCLAW_REPO_ROOT"];
+    const nodeBin = process.env["ARMORCLAW_NODE_PATH"];
+    if (!repoRoot || !nodeBin) {
+      res.status(500).json({
+        ok: false,
+        message:
+          "ArmorClaw paths not configured. ARMORCLAW_REPO_ROOT or ARMORCLAW_NODE_PATH is missing. Restart the app.",
+      });
+      return;
+    }
+    const openclawMjs = join(repoRoot, "openclaw.mjs");
+    try {
+      const output = execSync(`"${nodeBin}" "${openclawMjs}" ${trimmed}`, {
+        encoding: "utf-8",
+        timeout: 30_000,
+        cwd: repoRoot,
+      });
+      notifyListeners();
+      res.json({ ok: true, output: output.trim() });
+    } catch (err) {
+      const errObj = err as { stderr?: string; stdout?: string };
+      const msg =
+        errObj.stderr?.trim() ||
+        errObj.stdout?.trim() ||
+        (err instanceof Error ? err.message : String(err));
+      res.status(500).json({ ok: false, message: msg });
+    }
+  });
+
+  // ── Channels ──────────────────────────────────────────────────────────────
+
+  /** List all channel types with current status. */
+  app.get("/api/channels", (_req, res) => {
+    res.json({ ok: true, channels: getChannelTypes() });
+  });
+
+  /** Validate a Telegram bot token by calling getMe. */
+  app.post("/api/channels/telegram/validate", async (req, res) => {
+    const { token } = req.body as { token?: unknown };
+    if (typeof token !== "string" || !token.trim()) {
+      res.status(422).json({ ok: false, error: "token is required" });
+      return;
+    }
+    const result = await validateTelegramToken(token.trim());
+    if (result.ok) {
+      res.json({ ok: true, username: result.username });
+    } else {
+      res.status(422).json({ ok: false, error: result.error });
+    }
+  });
+
+  /** Save Telegram channel config to channels.json. */
+  app.post("/api/channels/telegram/save", (req, res) => {
+    const { token, username: ownerUsername } = req.body as { token?: unknown; username?: unknown };
+    if (typeof token !== "string" || !token.trim()) {
+      res.status(422).json({ ok: false, message: "token is required" });
+      return;
+    }
+    if (typeof ownerUsername !== "string" || !ownerUsername.trim()) {
+      res.status(422).json({ ok: false, message: "username is required" });
+      return;
+    }
+    const cleanUsername = ownerUsername.trim().replace(/^@/, "");
+    if (!cleanUsername) {
+      res.status(422).json({ ok: false, message: "username cannot be empty" });
+      return;
+    }
+    try {
+      const config = readChannelsConfig();
+      config.channels["telegram"] = {
+        enabled: true,
+        token: token.trim(),
+        allowFrom: [cleanUsername],
+      };
+      writeChannelsConfig(config);
+      // Also write TELEGRAM_BOT_TOKEN to .env for existing channel link resolution
+      writeEnvVar("TELEGRAM_BOT_TOKEN", token.trim());
+      // Reset telegram username cache so channel links pick up the new token
+      resetTelegramCacheForTesting();
+      _channelLinksCache = null;
+      notifyListeners();
+      res.json({ ok: true });
+    } catch (err) {
+      res
+        .status(500)
+        .json({ ok: false, message: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  /** Restart the gateway so channel config changes take effect. */
+  app.post("/api/channels/gateway/restart", (_req, res) => {
+    const repoRoot = process.env["ARMORCLAW_REPO_ROOT"];
+    const nodeBin = process.env["ARMORCLAW_NODE_PATH"];
+    if (!repoRoot || !nodeBin) {
+      res.status(500).json({
+        ok: false,
+        message: "ArmorClaw paths not configured. Restart the app.",
+      });
+      return;
+    }
+    // Kill existing gateway, then start a new one
+    try {
+      execSync("pkill -f 'openclaw.mjs gateway'", {
+        stdio: "ignore",
+        timeout: 5_000,
+      });
+    } catch {
+      // No existing process — that's fine
+    }
+    const openclawMjs = join(repoRoot, "openclaw.mjs");
+    // Gateway owns its token — no --token flag. It generates a new token on
+    // startup and writes it to openclaw.json. The next poll cycle reads it back.
+    const gwArgs = [openclawMjs, "gateway"];
+    try {
+      const child = spawn(nodeBin, gwArgs, {
+        stdio: "ignore",
+        detached: true,
+        cwd: repoRoot,
+        env: {
+          ...process.env,
+          PATH: `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${process.env["PATH"] ?? ""}`,
+        },
+      });
+      child.unref();
+      notifyListeners();
+      res.json({ ok: true, pid: child.pid });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ ok: false, message: msg });
+    }
+  });
+
+  // ── Advanced: open config file in editor ──
+  app.post("/api/advanced/open-config", (_req, res) => {
+    const configPath = join(homedir(), ".openclaw", "openclaw.json");
+    try {
+      const platform = process.platform;
+      const cmd =
+        platform === "darwin"
+          ? `open "${configPath}"`
+          : platform === "win32"
+            ? `start "" "${configPath}"`
+            : `xdg-open "${configPath}"`;
+      execSync(cmd, { stdio: "ignore", timeout: 5000 });
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ ok: false, message: "Could not open the config file." });
+    }
+  });
+
+  // ── Advanced: back up launcher config ──
+  app.post("/api/advanced/backup-config", (_req, res) => {
+    const srcDir = getLauncherDataPath();
+    if (!existsSync(srcDir)) {
+      res.status(404).json({ ok: false, message: "No config directory found to back up." });
+      return;
+    }
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const destDir = join(getBackupParentDir(), `armorclaw-backup-${ts}`);
+    try {
+      cpSync(srcDir, destDir, { recursive: true });
+      res.json({ ok: true, path: destDir });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ ok: false, message: msg });
+    }
+  });
+
+  // ── Advanced: gateway port probe (lightweight TCP check) ──
+  // The gateway is a WebSocket server on 18789, not an HTTP server.
+  // A plain HTTP GET to "/" may fail even when the gateway is running.
+  // Use a raw TCP connect check instead (same approach as gateway-manager.ts).
+  app.get("/api/advanced/gateway-probe", async (_req, res) => {
+    const net = await import("node:net");
+    const reachable = await new Promise<boolean>((resolve) => {
+      const sock = net.createConnection(
+        { host: "127.0.0.1", port: GATEWAY_PORT, timeout: 2000 },
+        () => {
+          sock.destroy();
+          resolve(true);
+        },
+      );
+      sock.on("error", () => resolve(false));
+      sock.on("timeout", () => {
+        sock.destroy();
+        resolve(false);
+      });
+    });
+    res.json({ ok: true, reachable });
+  });
+
+  // ── OpenClaw update check ──
+  app.get("/api/advanced/openclaw-update", (_req, res) => {
+    const status = getOpenClawVersionStatus();
+    res.json({ ok: true, ...status });
   });
 
   return app;

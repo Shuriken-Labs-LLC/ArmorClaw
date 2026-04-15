@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+// @ts-ignore — openclaw/plugin-sdk has no type declarations
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -134,16 +135,23 @@ export function exportAuditLog(): string {
  * Never throws — all I/O is wrapped.
  */
 export function registerAuditLogger(api: OpenClawPluginApi): void {
-  api.on("after_tool_call", (event, ctx) => {
-    const outcome: AuditOutcome = event.error ? "error" : "success";
+  api.on("after_tool_call", (event: unknown, ctx: unknown) => {
+    const evt = event as {
+      error?: unknown;
+      toolName: string;
+      params?: unknown;
+      durationMs?: number;
+    };
+    const context = ctx as { agentId?: string };
+    const outcome: AuditOutcome = evt.error ? "error" : "success";
     const entry: AuditEntry = {
       timestamp: new Date().toISOString(),
       // Prefer agentId from context; fall back to tool name as the skill identifier
-      skill: ctx.agentId ?? event.toolName,
+      skill: context.agentId ?? evt.toolName,
       permissionsUsed: [],
-      inputSummary: buildInputSummary(event.params),
+      inputSummary: buildInputSummary(evt.params as Record<string, unknown>),
       outcome,
-      durationMs: event.durationMs ?? 0,
+      durationMs: evt.durationMs ?? 0,
     };
     writeAuditEntry(entry);
   });

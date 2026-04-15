@@ -79,12 +79,12 @@ describe("formatActivity", () => {
     const activity: ActivityEntry[] = [
       { displayName: "Lead scorer", actionCount: 2 },
       { displayName: "Email triage", actionCount: 4 },
-      { displayName: "CRM sync", actionCount: 1 },
+      { displayName: "File organiser", actionCount: 1 },
     ];
     const result = formatActivity(activity);
     expect(result).toContain(", and");
     expect(result).toContain("Lead scorer");
-    expect(result).toContain("CRM sync");
+    expect(result).toContain("File organiser");
   });
 });
 
