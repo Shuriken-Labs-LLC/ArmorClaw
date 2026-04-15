@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import * as DashConstants from "../../../dashboard/src/constants.ts";
+import * as DashNav from "../../../dashboard/src/nav.ts";
 import { INITIAL_STATE } from "../../../dashboard/src/state.ts";
 import * as DashState from "../../../dashboard/src/state.ts";
 import * as DashUtils from "../../../dashboard/src/utils.ts";
@@ -221,5 +222,46 @@ describe("dashboard smoke", () => {
     for (const [key, value] of Object.entries(INITIAL_STATE)) {
       expect(serialized[key]).toEqual(value);
     }
+  });
+
+  // ── nav.ts (PR 3) ──────────────────────────────────────────────────────────
+
+  it("exports all expected nav functions", () => {
+    const expectedNav = ["buildNav", "showView", "openDrawer", "closeDrawer"];
+    for (const name of expectedNav) {
+      expect(DashNav).toHaveProperty(name);
+      expect(typeof DashNav[name as keyof typeof DashNav]).toBe("function");
+    }
+  });
+
+  it("nav functions serialize to valid JS via Function.toString()", () => {
+    const navLines = Object.entries(DashNav).map(
+      ([k, fn]) => `var ${k}=${(fn as Function).toString()};`,
+    );
+    const navJs = navLines.join("\n");
+    expect(navJs.length).toBeGreaterThan(50);
+    for (const name of ["buildNav", "showView", "openDrawer", "closeDrawer"]) {
+      expect(navJs).toContain(`var ${name}=`);
+    }
+    // Must not contain TypeScript-specific syntax in the serialised output
+    expect(navJs).not.toMatch(/:\s*(string|void|boolean|number|null)\b/);
+    expect(navJs).not.toContain(" as HTMLElement");
+  });
+
+  it("HTML does not redefine extracted nav functions", () => {
+    const html = readFileSync(HTML_PATH, "utf-8");
+    for (const name of ["buildNav", "showView", "openDrawer", "closeDrawer"]) {
+      const re = new RegExp(`\\bfunction\\s+${name}\\s*\\(`);
+      expect(html).not.toMatch(re);
+    }
+  });
+
+  it("HTML still calls extracted nav functions (not broken)", () => {
+    const html = readFileSync(HTML_PATH, "utf-8");
+    // These are called from inline onclick attributes and the boot block
+    expect(html).toContain("buildNav(");
+    expect(html).toContain("showView(");
+    expect(html).toContain("openDrawer()");
+    expect(html).toContain("closeDrawer()");
   });
 });

@@ -60,6 +60,7 @@ import type { DailyTotal, TokenEvent } from "../token-tracker/store.ts";
 import { getCurrentUndo, executeUndo } from "../undo/registry.ts";
 import { getOpenClawVersionStatus, startVersionCheckInterval } from "./openclaw-version-check.ts";
 import * as DashConstants from "./src/constants.ts";
+import * as DashNav from "./src/nav.ts";
 import * as DashState from "./src/state.ts";
 import * as DashUtils from "./src/utils.ts";
 
@@ -788,7 +789,10 @@ export function createApp(): express.Application {
       const stateLines = Object.entries(DashState.INITIAL_STATE).map(
         ([k, v]) => `var ${k}=${JSON.stringify(v)};`,
       );
-      _dashLibCache = constLines.concat(fnLines, stateLines).join("\n");
+      const navLines = Object.entries(DashNav).map(
+        ([k, fn]) => `var ${k}=${(fn as Function).toString()};`,
+      );
+      _dashLibCache = constLines.concat(fnLines, stateLines, navLines).join("\n");
     }
     res.setHeader("Content-Type", "application/javascript; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache");

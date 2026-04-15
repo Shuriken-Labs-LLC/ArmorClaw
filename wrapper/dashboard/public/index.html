@@ -2159,41 +2159,8 @@
 // chatConnectId, chatChallengeNonce, chatRetryAttempts, chatRetryTimer,
 // chatLastSessionTokens, chatUsagePendingCallbacks
 // — loaded from /dashboard-lib.js (src/state.ts)
-
-function buildNav(containerId) {
-  const el = document.getElementById(containerId);
-  if (!el) return;
-  el.innerHTML = '';
-  for (const item of NAV) {
-    // Use <div role="button"> instead of <button> so the browser UA never
-    // injects ButtonText system color — the persistent sidebar visibility bug.
-    const btn = document.createElement('div');
-    btn.className = 'nav-item' + (item.id === activeView ? ' active' : '');
-    btn.dataset.view = item.id;
-    btn.setAttribute('role', 'button');
-    btn.setAttribute('tabindex', '0');
-    btn.innerHTML = `<span class="nav-icon">${item.icon}</span><span>${item.label}</span>`;
-    btn.onclick = () => { showView(item.id); closeDrawer(); };
-    btn.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showView(item.id); closeDrawer(); } };
-    el.appendChild(btn);
-  }
-}
-
-function showView(id) {
-  activeView = id;
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById(`view-${id}`)?.classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === id));
-  // Stop Advanced polling when leaving, start when entering
-  if (id === 'advanced') {
-    loadAdvancedView();
-  } else {
-    if (advancedPollTimer) {
-      clearInterval(advancedPollTimer);
-      advancedPollTimer = null;
-    }
-  }
-}
+// buildNav, showView, openDrawer, closeDrawer
+// — loaded from /dashboard-lib.js (src/nav.ts)
 
 // ── Advanced view ────────────────────────────────────────────────────────────
 
@@ -2368,16 +2335,6 @@ async function runAdvancedCommand() {
   } catch (err) {
     if (output) output.textContent = 'Error: ' + err.message;
   }
-}
-
-// ── Drawer (mobile) ─────────────────────────────────────────────────────────────
-function openDrawer() {
-  document.getElementById('drawer').classList.add('open');
-  document.getElementById('drawer-overlay').classList.add('open');
-}
-function closeDrawer() {
-  document.getElementById('drawer').classList.remove('open');
-  document.getElementById('drawer-overlay').classList.remove('open');
 }
 
 // ── SSE ─────────────────────────────────────────────────────────────────────────
