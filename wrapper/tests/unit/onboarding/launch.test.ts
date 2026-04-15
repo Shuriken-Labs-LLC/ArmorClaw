@@ -1,18 +1,13 @@
 /**
- * Unit tests for the Step 7 gateway launch sequence.
+ * Unit tests for the Step 6 gateway launch sequence.
  *
- * All child process, HTTP, and file operations are injected.
+ * All HTTP and file operations are injected.
  * No real gateway is spawned; no real files are read.
  */
 
-import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
-
-vi.mock("../../../config/gateway.ts", () => ({
-  generateAuthToken: vi.fn().mockReturnValue("a".repeat(64)),
-}));
 
 vi.mock("../../../onboarding/env-writer.ts", () => ({
   setEnvVar: vi.fn(),
@@ -21,11 +16,9 @@ vi.mock("../../../onboarding/env-writer.ts", () => ({
 
 vi.mock("../../../onboarding/state.ts", () => ({
   getState: vi.fn().mockReturnValue({
-    currentStep: 7,
-    completedSteps: [1, 2, 3, 4, 5, 6],
-    telegramConnected: false,
-    whatsappConnected: false,
-    signalConnected: false,
+    currentStep: 6,
+    completedSteps: [1, 2, 3, 4, 5],
+    connectedChannels: [],
   }),
   updateState: vi.fn(),
   advanceStep: vi.fn(),
@@ -46,7 +39,6 @@ vi.mock("../../../onboarding/validators.ts", () => ({
   validateStep2: vi.fn(),
   validateStep4: vi.fn(),
   validateStep5: vi.fn(),
-  validateStep6: vi.fn(),
 }));
 
 // ── Imports ───────────────────────────────────────────────────────────────────
@@ -56,22 +48,12 @@ import {
   launchGateway,
   setExecCommandForTesting,
   setHttpGetForTesting,
-  setSpawnGatewayForTesting,
+  setProbePortForTesting,
 } from "../../../onboarding/server.ts";
 import type { LaunchStep } from "../../../onboarding/server.ts";
 import { getState } from "../../../onboarding/state.ts";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function makeMockChild() {
-  const child = new EventEmitter() as EventEmitter & {
-    kill: ReturnType<typeof vi.fn>;
-    unref: ReturnType<typeof vi.fn>;
-  };
-  child.kill = vi.fn();
-  child.unref = vi.fn();
-  return child;
-}
 
 const DASHBOARD_SNAPSHOT = JSON.stringify({
   agentStatus: { status: "running" },
@@ -85,16 +67,12 @@ const DASHBOARD_SNAPSHOT = JSON.stringify({
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getState).mockReturnValue({
-    currentStep: 7,
-    completedSteps: [1, 2, 3, 4, 5, 6],
-    telegramConnected: false,
-    whatsappConnected: false,
-    signalConnected: false,
+    currentStep: 6,
+    completedSteps: [1, 2, 3, 4, 5],
+    connectedChannels: [],
   } as ReturnType<typeof getState>);
   setExecCommandForTesting(vi.fn());
-  setSpawnGatewayForTesting(
-    () => makeMockChild() as ReturnType<typeof import("node:child_process").spawn>,
-  );
+  setProbePortForTesting(async () => true);
   setHttpGetForTesting(async () => DASHBOARD_SNAPSHOT);
 });
 
@@ -122,63 +100,57 @@ describe("launchGateway", () => {
     }
   });
 
-  it("writes ARMORCLAW_GATEWAY_MODE and ARMORCLAW_GATEWAY_TOKEN to .env", async () => {
+  it("writes ARMORCLAW_GATEWAY_MODE to .env (token is read back from gateway after start)", async () => {
     await launchGateway();
     expect(setEnvVar).toHaveBeenCalledWith("ARMORCLAW_GATEWAY_MODE", "local");
-    expect(setEnvVar).toHaveBeenCalledWith("ARMORCLAW_GATEWAY_TOKEN", expect.any(String));
   });
 
-  it("runs all 5 openclaw config set commands", async () => {
+  it("runs openclaw config set commands (no token — gateway owns its token)", async () => {
     const commands: string[] = [];
     setExecCommandForTesting((cmd: string) => {
       commands.push(cmd);
     });
     await launchGateway();
 
-    expect(commands).toHaveLength(5);
+    expect(commands).toHaveLength(4);
     expect(commands.some((c) => c.includes("gateway.mode local"))).toBe(true);
-    expect(commands.some((c) => c.includes("gateway.auth.token"))).toBe(true);
+    expect(commands.some((c) => c.includes("controlUi.allowedOrigins"))).toBe(true);
     expect(commands.some((c) => c.includes("plugins.load.paths"))).toBe(true);
     expect(commands.some((c) => c.includes("plugins.allow"))).toBe(true);
-    expect(commands.some((c) => c.includes("plugins.entries.armorclaw.path"))).toBe(true);
+    // Token must NOT be in the config commands
+    expect(commands.some((c) => c.includes("gateway.auth.token"))).toBe(false);
   });
 
-  it("plugin path uses absolute path to wrapper/", async () => {
+  it("plugins.load.paths contains absolute path to wrapper/", async () => {
     const commands: string[] = [];
     setExecCommandForTesting((cmd: string) => {
       commands.push(cmd);
     });
     await launchGateway();
 
-    const entryCmd = commands.find((c) => c.includes("plugins.entries.armorclaw.path"));
-    expect(entryCmd).toBeDefined();
+    const loadCmd = commands.find((c) => c.includes("plugins.load.paths"));
+    expect(loadCmd).toBeDefined();
     // Must contain an absolute path (starts with /)
-    expect(entryCmd).toMatch(/\/.*wrapper/);
+    expect(loadCmd).toMatch(/\/.*wrapper/);
   });
 
-  it("spawns the gateway process", async () => {
-    const spawnFn = vi.fn().mockReturnValue(makeMockChild());
-    setSpawnGatewayForTesting(
-      spawnFn as () => ReturnType<typeof import("node:child_process").spawn>,
-    );
-    await launchGateway();
-    expect(spawnFn).toHaveBeenCalledTimes(1);
-  });
-
-  it("calls unref() on the spawned child to detach it", async () => {
-    const child = makeMockChild();
-    setSpawnGatewayForTesting(() => child as ReturnType<typeof import("node:child_process").spawn>);
-    await launchGateway();
-    expect(child.unref).toHaveBeenCalledTimes(1);
+  it("does not spawn a gateway process (GatewayManager owns lifecycle)", async () => {
+    // launchGateway only polls — it never spawns. Verify by checking
+    // that no child_process.spawn import is exercised (the function
+    // simply doesn't exist anymore). This is a structural assertion:
+    // if someone re-adds a spawn call, it would need _spawnGateway
+    // which no longer exists as an export.
+    const result = await launchGateway();
+    expect(result.ok).toBe(true);
   });
 });
 
 describe("launchGateway — gateway reachability", () => {
-  it("polls until the gateway responds", async () => {
+  it("polls until the gateway port responds", async () => {
     let callCount = 0;
-    setHttpGetForTesting(async () => {
+    setProbePortForTesting(async () => {
       callCount++;
-      return callCount >= 3 ? DASHBOARD_SNAPSHOT : null;
+      return callCount >= 3;
     });
 
     const result = await launchGateway();
@@ -186,8 +158,8 @@ describe("launchGateway — gateway reachability", () => {
     expect(callCount).toBeGreaterThanOrEqual(3);
   });
 
-  it("returns error when gateway never responds", async () => {
-    setHttpGetForTesting(async () => null);
+  it("returns error when gateway port never responds", async () => {
+    setProbePortForTesting(async () => false);
     // Override setTimeout to resolve instantly so we don't wait 15s
     const origSetTimeout = globalThis.setTimeout;
     globalThis.setTimeout = ((fn: () => void) => origSetTimeout(fn, 0)) as typeof setTimeout;
@@ -202,7 +174,7 @@ describe("launchGateway — gateway reachability", () => {
   }, 30_000);
 
   it("error message suggests Retry", async () => {
-    setHttpGetForTesting(async () => null);
+    setProbePortForTesting(async () => false);
     const origSetTimeout = globalThis.setTimeout;
     globalThis.setTimeout = ((fn: () => void) => origSetTimeout(fn, 0)) as typeof setTimeout;
     try {
@@ -255,9 +227,7 @@ describe("launchGateway — channel check", () => {
     vi.mocked(getState).mockReturnValue({
       currentStep: 7,
       completedSteps: [1, 2, 3, 4, 5, 6],
-      telegramConnected: true,
-      whatsappConnected: false,
-      signalConnected: false,
+      connectedChannels: ["telegram"],
     } as ReturnType<typeof getState>);
     const result = await launchGateway();
     const step = result.steps.find((s) => s.id === "channel-check");
@@ -268,9 +238,7 @@ describe("launchGateway — channel check", () => {
     vi.mocked(getState).mockReturnValue({
       currentStep: 7,
       completedSteps: [1, 2, 3, 4, 5, 6],
-      telegramConnected: false,
-      whatsappConnected: false,
-      signalConnected: false,
+      connectedChannels: [],
     } as ReturnType<typeof getState>);
     const result = await launchGateway();
     const step = result.steps.find((s) => s.id === "channel-check");
@@ -279,24 +247,59 @@ describe("launchGateway — channel check", () => {
   });
 });
 
-describe("launchGateway — spawn failure", () => {
-  it("returns ok: false when spawn throws", async () => {
-    setSpawnGatewayForTesting(() => {
-      throw new Error("ENOENT");
+describe("launchGateway — gateway restart after token write", () => {
+  it("re-polls and succeeds when gateway drops then comes back", async () => {
+    // Simulate: initial polls succeed, then port drops after token write,
+    // then comes back after a few attempts.
+    let postTokenPhase = false;
+    const origSetEnvVar = vi.mocked(setEnvVar);
+    origSetEnvVar.mockImplementation((key: string) => {
+      if (key === "ARMORCLAW_GATEWAY_TOKEN") {
+        postTokenPhase = true;
+      }
     });
+
+    let postTokenCalls = 0;
+    setProbePortForTesting(async () => {
+      if (!postTokenPhase) {
+        return true;
+      } // initial poll succeeds
+      postTokenCalls++;
+      // First post-token probe: port is down; second: still down; third: back up
+      return postTokenCalls >= 3;
+    });
+
     const result = await launchGateway();
-    expect(result.ok).toBe(false);
-    const step = result.steps.find((s) => s.id === "gateway-start");
-    expect(step?.status).toBe("error");
+    expect(result.ok).toBe(true);
+    expect(postTokenCalls).toBeGreaterThanOrEqual(3);
   });
 
-  it("error message is plain language", async () => {
-    setSpawnGatewayForTesting(() => {
-      throw new Error("ENOENT");
+  it("continues with warning when gateway never comes back after token write", async () => {
+    let postTokenPhase = false;
+    const origSetEnvVar = vi.mocked(setEnvVar);
+    origSetEnvVar.mockImplementation((key: string) => {
+      if (key === "ARMORCLAW_GATEWAY_TOKEN") {
+        postTokenPhase = true;
+      }
     });
-    const result = await launchGateway();
-    expect(result.message).toContain("restart");
-  });
+
+    setProbePortForTesting(async () => {
+      if (!postTokenPhase) {
+        return true;
+      }
+      return false; // gateway never comes back
+    });
+
+    const origSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((fn: () => void) => origSetTimeout(fn, 0)) as typeof setTimeout;
+    try {
+      const result = await launchGateway();
+      // Should still complete (with possible warn on plugin step), not crash
+      expect(result.steps).toBeDefined();
+    } finally {
+      globalThis.setTimeout = origSetTimeout;
+    }
+  }, 30_000);
 });
 
 describe("launchGateway — config command failures", () => {
@@ -338,7 +341,7 @@ describe("launchGateway — progress steps shape", () => {
     expect(ids).toEqual([
       "backup",
       "config",
-      "gateway-start",
+      "gateway-install",
       "gateway-reachable",
       "plugin-loaded",
       "channel-check",

@@ -47,6 +47,8 @@ import {
 } from "../token-tracker/store.ts";
 import type { DailyTotal, TokenEvent } from "../token-tracker/store.ts";
 import { getCurrentUndo, executeUndo } from "../undo/registry.ts";
+import * as DashConstants from "./src/constants.ts";
+import * as DashUtils from "./src/utils.ts";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -538,6 +540,26 @@ export function getBundledSkillStatuses(env: Record<string, string>): BundledSki
 export function createApp(): express.Application {
   const app = express();
   app.use(express.json());
+
+  // ── Client-side module shim ──
+  // Serves constants and utils from the canonical TS modules as a single JS
+  // file. Uses JSON.stringify for data and Function.toString() for helpers,
+  // so the TS source remains the single source of truth (no build step).
+  let _dashLibCache: string | null = null;
+  app.get("/dashboard-lib.js", (_req, res) => {
+    if (!_dashLibCache) {
+      const constLines = Object.entries(DashConstants).map(
+        ([k, v]) => `var ${k}=${JSON.stringify(v)};`,
+      );
+      const fnLines = Object.entries(DashUtils).map(
+        ([k, fn]) => `var ${k}=${(fn as Function).toString()};`,
+      );
+      _dashLibCache = constLines.concat(fnLines).join("\n");
+    }
+    res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache");
+    res.send(_dashLibCache);
+  });
 
   app.get("/", (_req, res) => {
     res.setHeader("Content-Type", "text/html; charset=utf-8");
