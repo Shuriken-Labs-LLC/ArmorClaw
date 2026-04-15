@@ -1634,17 +1634,13 @@
   </main>
 </div><!-- /app -->
 
+<script src="/dashboard-lib.js"></script>
 <script>
 // ── Navigation ─────────────────────────────────────────────────────────────────
-
-const NAV = [
-  { id: 'home',       label: 'Home',       icon: '⊕' },
-  { id: 'skills',     label: 'Skills',     icon: '⚡' },
-  { id: 'recipes',    label: 'Recipes',    icon: '🗓' },
-  { id: 'security',   label: 'Security',   icon: '🔒' },
-  { id: 'token-burn', label: 'Token Burn', icon: '📊' },
-  { id: 'settings',   label: 'Settings',   icon: '⚙' },
-];
+// NAV, PROVIDER_LABELS, PROVIDER_KEY_HINTS, SCHEDULE_PRESETS, PERM_LABELS,
+// DAY_ABBRS, SKILL_ICONS — loaded from /dashboard-lib.js (src/constants.ts)
+// escHtml, escAttr, fmtUSD, fmtTime, humaniseSkillName, maskKey
+// — loaded from /dashboard-lib.js (src/utils.ts)
 
 let activeView = 'home';
 
@@ -1904,22 +1900,7 @@ function translateEntry(e, skillNames) {
   return isAgentProcess ? 'Agent ran a task' : `Ran ${display}`;
 }
 
-/** Convert a raw skill/tool name to something readable: "email_calendar" → "Email calendar" */
-function humaniseSkillName(raw) {
-  return raw
-    .replace(/[-_]/g, ' ')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/\b\w/g, c => c.toUpperCase());
-}
-
 // Recipes shortcut row + full Recipes view
-const SCHEDULE_PRESETS = [
-  { value: '0 8 * * *',   label: 'Every morning (8am)' },
-  { value: '0 8 * * 1-5', label: 'Weekdays only (8am Mon–Fri)' },
-  { value: '0 9 * * 1',   label: 'Every Monday (9am)' },
-  { value: '0 * * * *',   label: 'Every hour' },
-  { value: 'custom',      label: 'Custom…' },
-];
 
 function recipeCard(r) {
   const selId   = 'rs-' + r.id;
@@ -2025,12 +2006,6 @@ async function applyCustomScheduleWithCron(id, cron) {
 
 // ── Settings view ───────────────────────────────────────────────────────────────
 
-const PROVIDER_LABELS = { anthropic: 'Anthropic (Claude)', openai: 'OpenAI (GPT)', ollama: 'Ollama (local)' };
-const PROVIDER_KEY_HINTS = {
-  anthropic: 'Enter your Anthropic API key (sk-ant-...)',
-  openai:    'Enter your OpenAI API key (sk-...)',
-  ollama:    'Enter your Ollama base URL (http://localhost:11434)',
-};
 let selectedProvider = '';
 
 function syncSettings(s) {
@@ -2112,11 +2087,6 @@ function syncSettings(s) {
   // ── Budget input ──
   const bi = document.getElementById('s-budget-input');
   if (bi && document.activeElement !== bi) bi.value = String(b.monthlyBudgetUSD);
-}
-
-function maskKey(key) {
-  if (key.length <= 8) return '•'.repeat(key.length);
-  return key.slice(0, 4) + '•'.repeat(Math.min(key.length - 8, 20)) + key.slice(-4);
 }
 
 function toggleSettingsForm(id) {
@@ -2390,21 +2360,6 @@ async function resumeBudget() {
 
 // ── Security view ───────────────────────────────────────────────────────────────
 
-const PERM_LABELS = {
-  'read:files':        'Read files in sandbox',
-  'write:files':       'Write files in sandbox',
-  'read:email':        'Read email',
-  'send:email':        'Send email',
-  'read:calendar':     'Read calendar',
-  'write:calendar':    'Edit calendar',
-  'read:crm':          'Read CRM records',
-  'write:crm':         'Update CRM records',
-  'browser:sandboxed': 'Control browser (sandboxed)',
-  'network:outbound':  'Make network requests',
-};
-
-const DAY_ABBRS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
 function syncSecurity(s) {
   const sec = s.security || {
     injectionFilterActive: true,
@@ -2533,13 +2488,6 @@ function syncSecurity(s) {
 }
 
 // ── Skills view ──────────────────────────────────────────────────────────────────
-
-const SKILL_ICONS = {
-  'email-calendar': '📧',
-  'crm-leadgen':    '📊',
-  'secure-files':   '📁',
-  'browser':        '🌐',
-};
 
 let _bundledSkillsLoaded = false;
 
@@ -2811,32 +2759,6 @@ function dismissUndo() {
   undoDismissed = true;
   document.getElementById('undo-banner').style.display = 'none';
 }
-
-// ── Formatters ──────────────────────────────────────────────────────────────────
-function fmtUSD(n) {
-  if (typeof n !== 'number') return '$0.00';
-  return n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(2)}`;
-}
-
-function fmtTime(iso) {
-  if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    const now = new Date();
-    const diffMs = now - d;
-    if (diffMs < 60_000)       return 'just now';
-    if (diffMs < 3_600_000)    return `${Math.floor(diffMs / 60_000)}m ago`;
-    if (diffMs < 86_400_000)   return `${Math.floor(diffMs / 3_600_000)}h ago`;
-    return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(d);
-  } catch { return ''; }
-}
-
-function escHtml(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-function escAttr(s) { return escHtml(s); }
 
 // ── Boot ────────────────────────────────────────────────────────────────────────
 buildNav('sidebar-nav');
