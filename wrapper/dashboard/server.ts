@@ -69,16 +69,19 @@ export const DASHBOARD_PORT = 7390;
 
 const DASHBOARD_HTML = join(import.meta.dirname, "public", "index.html");
 
-/** Absolute path to the repo-root .env file (dashboard/ → wrapper/ → repo root). */
 /**
- * .env path: when running inside the Electron launcher, ARMORCLAW_REPO_ROOT
- * is set by main.ts. When running standalone, fall back to walking up from
- * import.meta.dirname (dashboard/ → wrapper/ → repo root).
+ * Lazily resolve the repo-root .env path on each call.
+ *
+ * dashboard/server.ts is imported by dashboard-window.ts at the top level of
+ * main.ts, which executes BEFORE app.on("ready") fires and before
+ * setSharedEnvVars() sets ARMORCLAW_REPO_ROOT. Evaluating the path at module
+ * load time would always fall back to import.meta.dirname (pointing into
+ * dist-src/) and miss the actual repo root. Calling getEnvFile() at runtime
+ * ensures ARMORCLAW_REPO_ROOT is already set.
  */
-const ENV_FILE = join(
-  process.env["ARMORCLAW_REPO_ROOT"] ?? join(import.meta.dirname, "..", ".."),
-  ".env",
-);
+function getEnvFile(): string {
+  return join(process.env["ARMORCLAW_REPO_ROOT"] ?? join(import.meta.dirname, "..", ".."), ".env");
+}
 
 // ── Tailscale URL detection ───────────────────────────────────────────────────
 
@@ -127,7 +130,7 @@ export function resetTailscaleCacheForTesting(): void {
  */
 export function readEnvConfig(): Record<string, string> {
   try {
-    const raw = readFileSync(ENV_FILE, "utf-8");
+    const raw = readFileSync(getEnvFile(), "utf-8");
     const out: Record<string, string> = {};
     for (const line of raw.split("\n")) {
       const trimmed = line.trim();
@@ -164,7 +167,7 @@ export function writeEnvVar(key: string, value: string): boolean {
   try {
     let existing = "";
     try {
-      existing = readFileSync(ENV_FILE, "utf-8");
+      existing = readFileSync(getEnvFile(), "utf-8");
     } catch {
       /* new file */
     }
@@ -181,7 +184,7 @@ export function writeEnvVar(key: string, value: string): boolean {
     if (!found) {
       lines.push(`${key}=${value}`);
     }
-    writeFileSync(ENV_FILE, lines.join("\n").replace(/\n+$/, "") + "\n", "utf-8");
+    writeFileSync(getEnvFile(), lines.join("\n").replace(/\n+$/, "") + "\n", "utf-8");
     return true;
   } catch {
     return false;
@@ -1610,17 +1613,6 @@ export function createApp(): express.Application {
   //
   // The gateway serves a Canvas UI at http://127.0.0.1:18789/__openclaw__/canvas/
   // This endpoint returns that URL and probes whether it's reachable.
-  app.get("/api/advanced/control-ui-url", async (_req, res) => {
-    const gatewayPort = 18789;
-    const controlUrl = `http://127.0.0.1:${gatewayPort}/__openclaw__/canvas/`;
-    try {
-      const probe = await fetch(controlUrl, { signal: AbortSignal.timeout(3000) });
-      res.json({ ok: true, url: controlUrl, reachable: probe.ok, gatewayPort });
-    } catch {
-      res.json({ ok: true, url: controlUrl, reachable: false, gatewayPort });
-    }
-  });
-
   // ── Advanced: start the gateway (non-blocking spawn) ──
   app.post("/api/advanced/start-gateway", (_req, res) => {
     const repoRoot = process.env["ARMORCLAW_REPO_ROOT"];

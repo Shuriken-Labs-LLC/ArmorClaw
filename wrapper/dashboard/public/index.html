@@ -2096,27 +2096,8 @@
             <span id="advanced-backup-toast-msg"></span>
           </div>
 
-          <!-- BrowserView placeholder — Electron overlays the BrowserView here -->
-          <div id="advanced-browserview-container" style="flex:1; min-height:500px; background:var(--ac-surface); border-radius:8px; border:0.5px solid var(--ac-border); display:flex; align-items:center; justify-content:center; position:relative;">
-            <span style="color:var(--ac-muted); font-size:14px;" id="advanced-browserview-placeholder">Loading OpenClaw control panel...</span>
-          </div>
-
-          <!-- Fallback: OpenClaw tools (for non-Electron contexts, e.g. Tailscale browser access) -->
-          <div id="advanced-fallback-tools" style="display:none; margin-top:16px;">
-
-            <!-- Full OpenClaw canvas link (shown when reachable on localhost) -->
-            <div id="advanced-canvas-card" class="card" style="display:none; padding:16px; margin-bottom:16px; border-color:var(--ac-teal);">
-              <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-                <div>
-                  <div style="font-size:13px; font-weight:500; color:var(--ac-text); margin-bottom:4px;">OpenClaw control panel available</div>
-                  <div style="font-size:12px; color:var(--ac-muted);">Open the full native interface in a new tab — works when accessed from the same computer.</div>
-                </div>
-                <a id="advanced-canvas-link" href="#" target="_blank" rel="noopener"
-                  class="btn-primary" style="padding:8px 16px; font-size:13px; white-space:nowrap; text-decoration:none;">
-                  Open full panel
-                </a>
-              </div>
-            </div>
+          <!-- Advanced tools: gateway health, command runner, config viewer -->
+          <div id="advanced-fallback-tools" style="margin-top:16px;">
 
             <!-- Gateway health summary -->
             <div class="card" style="padding:16px; margin-bottom:16px;">
@@ -2229,28 +2210,15 @@ function showView(id) {
   // Stop Advanced polling when leaving, start when entering
   if (id === 'advanced') {
     loadAdvancedView();
-    // Notify Electron to show BrowserView
-    notifyElectronAdvancedTab(true);
   } else {
     if (advancedPollTimer) {
       clearInterval(advancedPollTimer);
       advancedPollTimer = null;
     }
-    // Notify Electron to hide BrowserView
-    notifyElectronAdvancedTab(false);
   }
 }
 
 // ── Advanced view ────────────────────────────────────────────────────────────
-
-/** Notify Electron main process about Advanced tab visibility. */
-function notifyElectronAdvancedTab(visible) {
-  // If running inside Electron, window.__armorclawIPC will be set.
-  // Otherwise (browser access via Tailscale), fall back to config/command tools.
-  if (window.__armorclawIPC) {
-    window.__armorclawIPC.advancedTabVisible(visible, advancedGatewayOnline);
-  }
-}
 
 /** Probe gateway and update State A / State B visibility. */
 async function pollAdvancedGatewayStatus() {
@@ -2263,30 +2231,14 @@ async function pollAdvancedGatewayStatus() {
     if (advancedGatewayOnline) {
       document.getElementById('advanced-state-offline').style.display = 'none';
       document.getElementById('advanced-state-online').style.display = '';
-      // Show fallback tools when not in Electron (BrowserView unavailable)
-      if (!window.__armorclawIPC) {
-        document.getElementById('advanced-fallback-tools').style.display = '';
-        document.getElementById('advanced-browserview-container').style.display = 'none';
-        // Only load fallback tools on first online transition, not every poll
-        if (!wasOnline) loadAdvancedFallbackTools();
-      } else {
-        document.getElementById('advanced-fallback-tools').style.display = 'none';
-        document.getElementById('advanced-browserview-container').style.display = '';
-        document.getElementById('advanced-browserview-placeholder').textContent = 'OpenClaw control panel is displayed above by your desktop app.';
-      }
-      // Notify Electron about transition to online
-      if (!wasOnline && activeView === 'advanced') {
-        notifyElectronAdvancedTab(true);
-      }
+      document.getElementById('advanced-fallback-tools').style.display = '';
+      // Only load fallback tools on first online transition, not every poll
+      if (!wasOnline) loadAdvancedFallbackTools();
     } else {
       document.getElementById('advanced-state-offline').style.display = '';
       document.getElementById('advanced-state-online').style.display = 'none';
       if (wasOnline) {
         document.getElementById('advanced-offline-detail').textContent = 'Gateway disconnected. Start it again to continue.';
-        // Notify Electron to hide BrowserView
-        if (activeView === 'advanced') {
-          notifyElectronAdvancedTab(false);
-        }
       }
     }
   } catch {
@@ -2353,23 +2305,9 @@ async function refreshAdvancedHealth() {
   }
 }
 
-/** Load config viewer, command runner, health summary, and canvas link (non-Electron fallback). */
+/** Load config viewer, command runner, and gateway health summary. */
 async function loadAdvancedFallbackTools() {
   refreshAdvancedHealth();
-
-  // Probe whether the OpenClaw canvas is reachable and surface a link if so
-  try {
-    const res = await fetch('/api/advanced/control-ui-url');
-    const data = await res.json();
-    const card = document.getElementById('advanced-canvas-card');
-    const link = document.getElementById('advanced-canvas-link');
-    if (card && link && data.reachable && data.url) {
-      link.href = data.url;
-      card.style.display = '';
-    }
-  } catch {
-    // Canvas unreachable — leave card hidden
-  }
 
   try {
     const res = await fetch('/api/advanced/config');
