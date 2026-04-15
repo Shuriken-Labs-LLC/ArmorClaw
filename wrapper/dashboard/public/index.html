@@ -2190,8 +2190,17 @@
 // DAY_ABBRS, SKILL_ICONS — loaded from /dashboard-lib.js (src/constants.ts)
 // escHtml, escAttr, fmtUSD, fmtTime, humaniseSkillName, maskKey
 // — loaded from /dashboard-lib.js (src/utils.ts)
-
-let activeView = 'home';
+// activeView, dashState, undoDismissed, undoTickerId, selectedProvider,
+// tbBreakdownOpen, _bundledSkillsLoaded, _pendingInstall, advancedPollTimer,
+// advancedGatewayOnline, _updateBannerDismissed, _lastAgentStatus,
+// _lastApprovalIds, _lastChannelIds, _lastBudgetKey, _lastFeedKey,
+// _clawHubLoaded, channelsData, channelsLoaded, tgSetupOpen, tgValidated,
+// tgBotUsername, chatDebugLog, chatClickCount, chatClickTimer, chatGatewayUrl,
+// chatGatewayToken, chatWs, chatConnected, chatAuthenticated, chatResponding,
+// chatPendingId, chatResponseBuffer, chatLastUserMessage, chatMsgIdCounter,
+// chatConnectId, chatChallengeNonce, chatRetryAttempts, chatRetryTimer,
+// chatLastSessionTokens, chatUsagePendingCallbacks
+// — loaded from /dashboard-lib.js (src/state.ts)
 
 function buildNav(containerId) {
   const el = document.getElementById(containerId);
@@ -2233,9 +2242,6 @@ function showView(id) {
 }
 
 // ── Advanced view ────────────────────────────────────────────────────────────
-
-let advancedPollTimer = null;
-let advancedGatewayOnline = false;
 
 /** Notify Electron main process about Advanced tab visibility. */
 function notifyElectronAdvancedTab(visible) {
@@ -2291,7 +2297,6 @@ async function pollAdvancedGatewayStatus() {
 }
 
 // ── OpenClaw update check ─────────────────────────────────────────
-let _updateBannerDismissed = false;
 
 async function checkOpenClawUpdate() {
   if (_updateBannerDismissed) return;
@@ -2461,7 +2466,6 @@ function closeDrawer() {
 }
 
 // ── SSE ─────────────────────────────────────────────────────────────────────────
-let dashState = null;
 
 function connectSSE() {
   const es = new EventSource('/api/events');
@@ -2502,7 +2506,6 @@ function syncUI(s) {
 }
 
 // Agent status pill + subline + controls
-let _lastAgentStatus = '';
 function syncStatus(s) {
   const pill     = document.getElementById('status-pill');
   const txt      = document.getElementById('status-text');
@@ -2535,7 +2538,6 @@ function syncStatus(s) {
 }
 
 // Pending approvals
-let _lastApprovalIds = '';
 function syncApprovals(s) {
   const body = document.getElementById('approvals-body');
   const card = body?.closest('.approvals-card');
@@ -2576,7 +2578,6 @@ async function rejectAction(id) {
 }
 
 // "Open in [Channel]" buttons — full-width card between approvals and budget
-let _lastChannelIds = '';
 function syncChannelBtns(s) {
   const card = document.getElementById('chat-card');
   const btns = document.getElementById('chat-card-btns');
@@ -2596,8 +2597,6 @@ function syncChannelBtns(s) {
 }
 
 // Undo banner
-let undoDismissed = false;
-let undoTickerId  = null;
 
 function syncUndo(s) {
   const banner = document.getElementById('undo-banner');
@@ -2634,7 +2633,6 @@ function syncUndo(s) {
 }
 
 // Token burn widget
-let _lastBudgetKey = '';
 function syncBudget(s) {
   const sentence = document.getElementById('budget-sentence');
   const bar      = document.getElementById('budget-bar');
@@ -2658,7 +2656,6 @@ function syncBudget(s) {
 }
 
 // Activity feed — translate audit log entries to plain English
-let _lastFeedKey = '';
 function syncFeed(s) {
   const list  = document.getElementById('feed-list');
   const count = document.getElementById('feed-count');
@@ -2850,8 +2847,6 @@ async function applyCustomScheduleWithCron(id, cron) {
 }
 
 // ── Settings view ───────────────────────────────────────────────────────────────
-
-let selectedProvider = '';
 
 function syncSettings(s) {
   const cfg = s.config || {};
@@ -3106,8 +3101,6 @@ function showSaveMsg(id) {
 }
 
 // ── Token Burn view ─────────────────────────────────────────────────────────────
-
-let tbBreakdownOpen = false;
 
 function openTbBreakdown() {
   tbBreakdownOpen = true;
@@ -3417,8 +3410,6 @@ function syncSecurity(s) {
 
 // ── Skills view ──────────────────────────────────────────────────────────────────
 
-let _bundledSkillsLoaded = false;
-
 function loadBundledSkills() {
   if (_bundledSkillsLoaded) return;
   _bundledSkillsLoaded = true;
@@ -3459,13 +3450,9 @@ function loadBundledSkills() {
 // Load bundled skills when the page loads
 loadBundledSkills();
 // Pre-load ClawHub skills for the Browse tab
-let _clawHubLoaded = false;
 loadClawHubSkills();
 // Load installed skills
 loadInstalledSkills();
-
-/** Pending install — one slot: { code, filename, source: 'url'|'file' } */
-let _pendingInstall = null;
 
 function syncSkills(s) {
   const skills = (s.skills || []).filter(sk => sk.author === 'user');
@@ -3895,12 +3882,6 @@ function dismissUndo() {
 
 // ── Channels view ───────────────────────────────────────────────────────────
 
-let channelsData = null;
-let channelsLoaded = false;
-let tgSetupOpen = false;
-let tgValidated = false;
-let tgBotUsername = '';
-
 async function syncChannelsView() {
   if (channelsLoaded) return; // only fetch once, refresh via button
   await loadChannels();
@@ -4150,7 +4131,6 @@ async function restartGateway() {
 
 const CHAT_SESSION_KEY = 'armorclaw-dashboard-' + Date.now();
 
-let chatDebugLog = [];
 function chatDbg(msg) {
   const ts = new Date().toISOString().slice(11,23);
   const line = ts + ' ' + msg;
@@ -4162,7 +4142,6 @@ function chatDbg(msg) {
 }
 
 // Triple-click header toggles debug panel
-let chatClickCount = 0, chatClickTimer = null;
 document.getElementById('chat-panel-hdr')?.addEventListener('click', () => {
   chatClickCount++;
   if (chatClickTimer) clearTimeout(chatClickTimer);
@@ -4179,25 +4158,10 @@ document.getElementById('chat-panel-hdr')?.addEventListener('click', () => {
   }
 });
 
-let chatGatewayUrl = 'ws://127.0.0.1:18789';
-let chatGatewayToken = '';
-let chatWs = null;
-let chatConnected = false;
-let chatAuthenticated = false;
-let chatResponding = false;
-let chatPendingId = null;
-let chatResponseBuffer = '';
-let chatLastUserMessage = '';
-let chatMsgIdCounter = 0;
-let chatConnectId = null;
-let chatChallengeNonce = null;
-
 // Retry state
-let chatRetryAttempts = 0;
 const CHAT_MAX_RETRIES = 10;
 const CHAT_BASE_DELAY = 3000;
 const CHAT_MAX_DELAY = 30000;
-let chatRetryTimer = null;
 
 function chatRetryDelay() {
   return Math.min(CHAT_BASE_DELAY * Math.pow(2, chatRetryAttempts), CHAT_MAX_DELAY);
@@ -4483,9 +4447,6 @@ function chatUpdateLastAgent(text) {
 // ── Token tracking ──────────────────────────────────────────────────────────
 // After each chat completion, query the gateway for usage data and report it
 // to ArmorClaw's token tracker so the budget widget stays accurate.
-
-let chatLastSessionTokens = { input: 0, output: 0 };
-let chatUsagePendingCallbacks = {};
 
 function chatRecordUsage(inputText, outputText, runId) {
   // Query the gateway for session usage via the existing WebSocket
