@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArmorClaw — Your AI assistant. Your computer. Your control.</title>
+  <meta name="description" content="ArmorClaw is a secure AI assistant that runs on your computer. Your conversations never leave your machine. Built for freelancers, agents, and advisors who take privacy seriously.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ac-bg: #0D0F14;
+      --ac-surface: #13161E;
+      --ac-surface2: #1A1D27;
+      --ac-border: #2A2D3A;
+      --ac-border-strong: #3A3D4E;
+      --ac-text: #E8E6FF;
+      --ac-muted: #8B8DA8;
+      --ac-hint: #5A5C75;
+      --ac-teal: #1DE9B6;
+      --ac-teal-light: #0D2E26;
+      --ac-purple: #9B6DFF;
+      --ac-purple-light: #1A1030;
+      --ac-amber: #FFB347;
+      --ac-amber-light: #2A1F0A;
+      --ac-red: #FF5370;
+      --ac-blue: #82AAFF;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--ac-bg);
+      color: var(--ac-text);
+      font-size: 16px;
+      line-height: 1.6;
+      font-weight: 400;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ── Nav ── */
+    nav {
+      padding: 20px 0;
+      border-bottom: 0.5px solid var(--ac-border);
+    }
+    nav .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .wordmark {
+      font-family: 'DM Mono', monospace;
+      font-size: 18px;
+      font-weight: 400;
+      color: var(--ac-teal);
+      text-decoration: none;
+      letter-spacing: -0.5px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      align-items: center;
+    }
+    .nav-links a {
+      color: var(--ac-muted);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 400;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--ac-text); }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 96px 0 80px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: 44px;
+      font-weight: 600;
+      line-height: 1.15;
+      margin-bottom: 24px;
+      letter-spacing: -0.5px;
+    }
+    .hero h1 .highlight {
+      color: var(--ac-teal);
+    }
+    .hero .subtitle {
+      font-size: 18px;
+      color: var(--ac-muted);
+      max-width: 580px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+    .hero .cta-row {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 32px;
+      background: var(--ac-teal);
+      color: var(--ac-bg);
+      font-size: 15px;
+      font-weight: 500;
+      border: none;
+      border-radius: 8px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: box-shadow 0.2s;
+    }
+    .btn-download:hover {
+      box-shadow: 0 0 24px rgba(29, 233, 182, 0.35);
+    }
+    .cta-note {
+      font-size: 13px;
+      color: var(--ac-hint);
+    }
+
+    /* ── Story section ── */
+    .story {
+      padding: 80px 0;
+      border-top: 0.5px solid var(--ac-border);
+    }
+    .story-content {
+      max-width: 640px;
+    }
+    .story h2 {
+      font-size: 28px;
+      font-weight: 500;
+      margin-bottom: 24px;
+      line-height: 1.3;
+    }
+    .story p {
+      color: var(--ac-muted);
+      margin-bottom: 16px;
+      font-size: 16px;
+      line-height: 1.7;
+    }
+    .story p:last-child { margin-bottom: 0; }
+
+    /* ── Features ── */
+    .features {
+      padding: 80px 0;
+      border-top: 0.5px solid var(--ac-border);
+    }
+    .features h2 {
+      font-size: 28px;
+      font-weight: 500;
+      margin-bottom: 48px;
+    }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .feature-card {
+      padding: 24px;
+      background: var(--ac-surface);
+      border: 0.5px solid var(--ac-border);
+      border-radius: 12px;
+    }
+    .feature-card h3 {
+      font-size: 16px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+    .feature-card p {
+      font-size: 14px;
+      color: var(--ac-muted);
+      line-height: 1.6;
+    }
+    .feature-card .accent-bar {
+      width: 32px;
+      height: 3px;
+      border-radius: 2px;
+      margin-bottom: 16px;
+    }
+
+    /* ── Provider choice ── */
+    .providers {
+      padding: 80px 0;
+      border-top: 0.5px solid var(--ac-border);
+    }
+    .providers h2 {
+      font-size: 28px;
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+    .providers .intro {
+      color: var(--ac-muted);
+      margin-bottom: 40px;
+      max-width: 580px;
+      font-size: 16px;
+    }
+    .provider-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+    }
+    .provider-card {
+      padding: 24px;
+      background: var(--ac-surface);
+      border: 0.5px solid var(--ac-border);
+      border-radius: 12px;
+    }
+    .provider-card .tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .provider-card .tag.local {
+      background: var(--ac-teal-light);
+      color: var(--ac-teal);
+    }
+    .provider-card .tag.cloud {
+      background: var(--ac-purple-light);
+      color: var(--ac-purple);
+    }
+    .provider-card h3 {
+      font-size: 16px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+    .provider-card p {
+      font-size: 14px;
+      color: var(--ac-muted);
+      line-height: 1.6;
+    }
+
+    /* ── Pricing ── */
+    .pricing {
+      padding: 80px 0;
+      border-top: 0.5px solid var(--ac-border);
+      text-align: center;
+    }
+    .pricing h2 {
+      font-size: 28px;
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+    .pricing .intro {
+      color: var(--ac-muted);
+      margin-bottom: 40px;
+      font-size: 16px;
+    }
+    .pricing-card {
+      max-width: 400px;
+      margin: 0 auto;
+      padding: 32px;
+      background: var(--ac-surface);
+      border: 0.5px solid var(--ac-border);
+      border-radius: 12px;
+      text-align: left;
+    }
+    .pricing-card .price {
+      font-size: 36px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .pricing-card .price span {
+      font-size: 16px;
+      font-weight: 400;
+      color: var(--ac-muted);
+    }
+    .pricing-card .trial {
+      font-size: 14px;
+      color: var(--ac-teal);
+      margin-bottom: 24px;
+    }
+    .pricing-card .includes {
+      font-size: 14px;
+      color: var(--ac-muted);
+      line-height: 1.8;
+    }
+    .pricing-card .includes strong {
+      color: var(--ac-text);
+      font-weight: 500;
+    }
+
+    /* ── Footer ── */
+    footer {
+      padding: 48px 0;
+      border-top: 0.5px solid var(--ac-border);
+    }
+    footer .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .footer-left {
+      font-size: 13px;
+      color: var(--ac-hint);
+    }
+    .footer-links {
+      display: flex;
+      gap: 24px;
+    }
+    .footer-links a {
+      font-size: 13px;
+      color: var(--ac-muted);
+      text-decoration: none;
+    }
+    .footer-links a:hover { color: var(--ac-text); }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .hero { padding: 64px 0 56px; }
+      .hero h1 { font-size: 32px; }
+      .hero .subtitle { font-size: 16px; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .provider-cards { grid-template-columns: 1fr; }
+      .nav-links { gap: 20px; }
+      .story, .features, .providers, .pricing { padding: 56px 0; }
+    }
+
+    @media (max-width: 480px) {
+      .hero h1 { font-size: 28px; }
+      .nav-links a { font-size: 13px; }
+      .container { padding: 0 16px; }
+      .hero .cta-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav>
+    <div class="container">
+      <a href="/" class="wordmark">ArmorClaw</a>
+      <div class="nav-links">
+        <a href="#how-it-works">How it works</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#" class="btn-download" style="padding:8px 20px; font-size:13px;">Download</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <h1>An AI assistant that<br><span class="highlight">never leaves your computer</span></h1>
+      <p class="subtitle">
+        ArmorClaw handles your email, calendar, files, and browser tasks
+        without sending your conversations or client data to anyone you
+        didn't choose. Built for people who want AI leverage without
+        giving up control.
+      </p>
+      <div class="cta-row">
+        <a href="#" class="btn-download">Download for macOS</a>
+        <span class="cta-note">Free for 30 days. No credit card required.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Story -->
+  <section class="story">
+    <div class="container">
+      <div class="story-content">
+        <h2>We built this because we couldn't find it</h2>
+        <p>
+          Every AI tool we tried wanted us to hand over our conversations,
+          our contacts, our client notes. That's a non-starter if you're
+          managing real relationships and real money.
+        </p>
+        <p>
+          ArmorClaw runs entirely on your machine. When you ask it to draft
+          a follow-up or research a contact, that work happens locally. You
+          see every step before it executes. You approve what matters. You
+          undo what doesn't land right.
+        </p>
+        <p>
+          We designed it for the professional who isn't a developer but
+          takes their work seriously. Real estate agents managing dozens of
+          active relationships. Financial advisors who can't afford a data
+          breach. Freelancers who wear every hat and need leverage without
+          sacrificing control.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features" id="how-it-works">
+    <div class="container">
+      <h2>What it does for you</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Morning briefing</h3>
+          <p>
+            Every morning, ArmorClaw checks in on Telegram with what happened
+            yesterday, what's on your calendar today, and what needs your
+            attention. Like a good assistant, it doesn't wait to be asked.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-purple);"></div>
+          <h3>Everything visible</h3>
+          <p>
+            A plain-English dashboard shows every action the agent takes,
+            every permission it uses, and every dollar it spends on AI.
+            Nothing happens in the background without your awareness.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-blue);"></div>
+          <h3>Approval before action</h3>
+          <p>
+            Before ArmorClaw sends an email or does anything irreversible,
+            it asks you first. And if something doesn't look right, you
+            have 60 seconds to undo it with one tap.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-amber);"></div>
+          <h3>Your budget, your limit</h3>
+          <p>
+            Set a monthly spending cap on AI usage. ArmorClaw tracks every
+            token and stops before you go over. No surprise bills. If you
+            run a local model, your cost is zero.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Provider choice -->
+  <section class="providers">
+    <div class="container">
+      <h2>You choose where your conversations go</h2>
+      <p class="intro">
+        ArmorClaw doesn't lock you into one AI provider. During setup,
+        you pick the one that fits your priorities.
+      </p>
+      <div class="provider-cards">
+        <div class="provider-card">
+          <span class="tag local">Local</span>
+          <h3>Ollama</h3>
+          <p>
+            Runs a model on your own hardware. Nothing leaves your computer.
+            No API key. No cost. The most private option available.
+          </p>
+        </div>
+        <div class="provider-card">
+          <span class="tag cloud">Cloud</span>
+          <h3>Anthropic (Claude)</h3>
+          <p>
+            Powerful cloud AI. Conversations go directly from your computer
+            to Anthropic's servers. You bring your own API key and pay
+            Anthropic directly.
+          </p>
+        </div>
+        <div class="provider-card">
+          <span class="tag cloud">Cloud</span>
+          <h3>OpenAI (GPT)</h3>
+          <p>
+            Powerful cloud AI. Conversations go directly from your computer
+            to OpenAI's servers. You bring your own API key and pay
+            OpenAI directly.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="pricing" id="pricing">
+    <div class="container">
+      <h2>Simple pricing</h2>
+      <p class="intro">One plan. Everything included. Cancel anytime.</p>
+      <div class="pricing-card">
+        <div class="price">$19.99 <span>/ month</span></div>
+        <div class="trial">Free for your first 30 days</div>
+        <div class="includes">
+          <strong>Includes:</strong> all ArmorClaw skills (email triage,
+          file management, browser automation), daily briefings, scheduled
+          recipes, one-tap undo, full audit trail, budget controls, Telegram
+          integration, and every update we ship. You bring your own API key
+          or run a free local model.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-left">
+        Shuriken Labs LLC &middot; Milan, Michigan
+      </div>
+      <div class="footer-links">
+        <a href="/privacy">Privacy Policy</a>
+        <a href="/terms">Terms of Service</a>
+        <a href="mailto:PLACEHOLDER@armorclaw.com">Contact</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
