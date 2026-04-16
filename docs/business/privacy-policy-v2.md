@@ -98,7 +98,7 @@ ArmorClaw is not intended for use by anyone under the age of 18. We do not knowi
 
 ## Data retention
 
-We retain your name and email address for as long as your subscription is active, plus [ATTORNEY: Specify retention period, typically 30-90 days] after cancellation for billing reconciliation. After that period, we delete your account information from our systems.
+We retain your name and email address for as long as your subscription is active, plus 60 days after cancellation for billing reconciliation and chargeback resolution. After that period, we delete your account information from our systems.
 
 Stripe retains payment records according to their own retention policy and legal obligations.
 
@@ -133,13 +133,17 @@ Email: [EMAIL]
 
 [REMOVE THIS SECTION BEFORE PUBLISHING]
 
-Items requiring attorney review:
+### Resolved (2026-04-16)
 
-1. **State privacy law compliance.** We claim compliance with CCPA, CPA, VCDPA, and others. Verify the rights section covers all required elements for states with active comprehensive privacy laws.
-2. **GPC requirement.** Confirm whether a desktop app with no web analytics needs to honor GPC signals, or whether this is only relevant for the landing page/marketing site.
-3. **Data retention period.** Specify the post-cancellation retention period.
-4. **Children's age threshold.** Confirm 18 is the correct threshold vs. 13 (COPPA) vs. 16 (some state laws).
-5. **Telegram liability.** Confirm the disclosure about Telegram message transit is sufficient.
-6. **Third-party components disclaimer.** Confirm the Advanced view disclaimer adequately limits liability for user-installed extensions.
-7. **"No sale" claim.** Verify this holds under the broad CCPA definition of "sale" (which includes sharing for cross-context behavioral advertising). Should be clean given we share nothing, but confirm.
-8. **Contact email.** Needs a real email address. Consider privacy@[domain] or legal@[domain].
+- **Data retention period:** 60 days post-cancellation — incorporated (covers billing reconciliation and Stripe chargeback window).
+
+### Still open
+
+1. **State privacy law compliance.** Verify the rights section covers all required elements for states with active comprehensive privacy laws (CCPA, CPA, VCDPA, and others).
+2. **GPC requirement.** Confirm whether a desktop app with no web analytics needs to honor GPC signals, or whether this is only relevant for the landing page/marketing site. If desktop-only is exempt, remove that line.
+3. **Children's age threshold.** Confirm 18 is the correct threshold vs. 13 (COPPA) vs. 16 (some state laws) for a B2C SaaS product.
+4. **Telegram liability.** Confirm the Telegram transit disclosure is sufficient.
+5. **Third-party components disclaimer.** Confirm the Advanced view disclaimer adequately limits liability for user-installed extensions.
+6. **"No sale" claim.** Verify this holds under the broad CCPA definition of "sale." Should be clean given we share nothing, but confirm.
+7. **Contact email.** Replace [EMAIL] with hello@armorclaw.app once inbox is live. Consider a dedicated privacy@armorclaw.app address.
+8. **Effective date / last updated.** Set once docs are published to armorclaw.app.
