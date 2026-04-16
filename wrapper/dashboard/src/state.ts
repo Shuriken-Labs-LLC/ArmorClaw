@@ -51,6 +51,8 @@ export interface DashboardState {
 
   // ── Settings ──
   selectedProvider: string;
+  /** Stripe Customer Portal URL from STRIPE_CUSTOMER_PORTAL_URL env var. Null hides the subscription card. */
+  _stripePortalUrl: string | null;
 
   // ── Token Burn ──
   tbBreakdownOpen: boolean;
@@ -108,6 +110,7 @@ export const INITIAL_STATE: Readonly<DashboardState> = {
   undoDismissed: false,
   undoTickerId: null,
   selectedProvider: "",
+  _stripePortalUrl: null,
   tbBreakdownOpen: false,
   _bundledSkillsLoaded: false,
   _clawHubLoaded: false,

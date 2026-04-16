@@ -495,6 +495,12 @@ export interface DashboardSnapshot {
   };
   /** Tailscale HTTPS URL for this device, or null if Tailscale is not active. */
   tailscaleUrl: string | null;
+  /**
+   * Stripe Customer Portal URL for subscription management.
+   * Null when STRIPE_CUSTOMER_PORTAL_URL is not set — hides the subscription
+   * card in Settings so customers aren't shown a broken link.
+   */
+  stripeCustomerPortalUrl: string | null;
   security: SecurityStats;
   tokenBurn: {
     todayTokens: ReturnType<typeof getTodayTokens>;
@@ -551,6 +557,7 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
       outlook: false,
     },
     tailscaleUrl: getTailscaleUrl(),
+    stripeCustomerPortalUrl: env["STRIPE_CUSTOMER_PORTAL_URL"] ?? null,
     security: getSecurityStats(),
     tokenBurn: {
       todayTokens: getTodayTokens(),

@@ -2155,6 +2155,7 @@
 // tbBreakdownOpen, _bundledSkillsLoaded, _pendingInstall, advancedPollTimer,
 // advancedGatewayOnline, _updateBannerDismissed, _lastAgentStatus,
 // _lastApprovalIds, _lastChannelIds, _lastBudgetKey, _lastFeedKey,
+// _stripePortalUrl,
 // _clawHubLoaded, channelsData, channelsLoaded, tgSetupOpen, tgValidated,
 // tgBotUsername, chatDebugLog, chatClickCount, chatClickTimer, chatGatewayUrl,
 // chatGatewayToken, chatWs, chatConnected, chatAuthenticated, chatResponding,
@@ -2800,6 +2801,15 @@ function syncSettings(s) {
   // ── Budget input ──
   const bi = document.getElementById('s-budget-input');
   if (bi && document.activeElement !== bi) bi.value = String(b.monthlyBudgetUSD);
+
+  // ── Stripe Customer Portal ──
+  // Hide the subscription card entirely when STRIPE_CUSTOMER_PORTAL_URL is not set.
+  // Avoids showing a broken link to users before Stripe production is configured.
+  _stripePortalUrl = s.stripeCustomerPortalUrl || null;
+  const subscriptionCard = document.getElementById('subscription-card');
+  if (subscriptionCard) {
+    subscriptionCard.style.display = _stripePortalUrl ? '' : 'none';
+  }
 }
 
 // ── Inline chat removed — use ⌘⇧Space floating window instead ───────────────
@@ -2807,9 +2817,8 @@ function syncSettings(s) {
 // ── Subscription ─────────────────────────────────────────────────────────────
 
 function manageSubscription() {
-  // Placeholder — real Stripe Customer Portal URL added when Stripe is set up
-  const portalUrl = 'https://armorclaw.ai/account';
-  window.open(portalUrl, '_blank');
+  if (!_stripePortalUrl) return;
+  window.open(_stripePortalUrl, '_blank');
 }
 
 // ── Memory ───────────────────────────────────────────────────────────────────
