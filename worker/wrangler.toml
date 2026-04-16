@@ -1,0 +1,16 @@
+name = "armorclaw-billing"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Custom domain — set in Cloudflare dashboard after first deploy:
+#   billing.armorclaw.app  →  this Worker
+# Secrets (set with `wrangler secret put`, never in this file):
+#   STRIPE_SECRET_KEY      sk_test_… or sk_live_…
+#   STRIPE_WEBHOOK_SECRET  whsec_…
+#
+# Local dev secrets live in .dev.vars (gitignored).
+
+[[kv_namespaces]]
+binding = "KV"
+id = "PLACEHOLDER"
+preview_id = "PLACEHOLDER"

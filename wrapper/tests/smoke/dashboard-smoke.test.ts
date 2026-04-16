@@ -5,80 +5,63 @@
  *   1. Zero JS console errors (catches TDZ, undeclared vars, etc.)
  *   2. Sidebar nav renders all 8 items
  *
- * Run: npm run test:smoke (from wrapper/launcher/)
+ * Run: npx vitest run tests/smoke/dashboard-smoke.test.ts (from wrapper/)
  */
 
-import { execSync } from "node:child_process";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const launcherDir = join(__dirname, "..", "..", "launcher");
-
-// ── 1. Build TypeScript ─────────────────────────────────────────────────────
-
-console.log("[smoke] Building TypeScript…");
-execSync("npm run build:ts", { cwd: launcherDir, stdio: "inherit" });
-
-// ── 2. Start dashboard server ───────────────────────────────────────────────
-
-const { startServer } = await import("../../dashboard/server.ts");
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { clearDashboardStateForTesting, startServer } from "../../dashboard/server.ts";
 
 const SMOKE_PORT = 7390;
-const { close } = await startServer(SMOKE_PORT);
-console.log(`[smoke] Dashboard listening on http://127.0.0.1:${SMOKE_PORT}`);
 
-// ── 3. Launch headless browser ──────────────────────────────────────────────
-
-const { chromium } = await import("playwright-core");
-const browser = await chromium.launch({ headless: true });
-
-try {
-  const page = await browser.newPage();
-
-  // Collect all JS errors thrown in the page context
+describe("dashboard smoke", () => {
+  let close: () => Promise<void>;
+  let browser: import("playwright-core").Browser | null = null;
   const pageErrors: Error[] = [];
-  page.on("pageerror", (err) => pageErrors.push(err));
+  let navCount = 0;
 
-  // Use 'domcontentloaded' — 'networkidle' never fires because the SSE
-  // connection stays open permanently.
-  await page.goto(`http://127.0.0.1:${SMOKE_PORT}`, {
-    waitUntil: "domcontentloaded",
-    timeout: 8_000,
+  beforeAll(async () => {
+    ({ close } = await startServer(SMOKE_PORT));
+
+    const { chromium } = await import("playwright-core");
+    browser = await chromium.launch({ headless: true });
+
+    const page = await browser.newPage();
+    page.on("pageerror", (err) => pageErrors.push(err));
+
+    // Use 'domcontentloaded' — 'networkidle' never fires because the SSE
+    // connection stays open permanently.
+    await page.goto(`http://127.0.0.1:${SMOKE_PORT}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 8_000,
+    });
+
+    // Give inline <script> time to execute (boot builds nav synchronously,
+    // but SSE/chat init may trigger async errors we want to catch).
+    await page.waitForTimeout(1_000);
+
+    navCount = await page.evaluate(
+      () => document.querySelectorAll("#sidebar-nav .nav-item").length,
+    );
+  }, 60_000);
+
+  afterAll(async () => {
+    if (browser) {
+      await browser.close();
+    }
+    if (close) {
+      await close();
+    }
+    // Stop the license cache refresh timer so the worker process can exit
+    // cleanly. unref() on the interval handle is not enough under vitest's
+    // forced-teardown path.
+    clearDashboardStateForTesting();
   });
 
-  // Give inline <script> time to execute (boot builds nav synchronously,
-  // but SSE/chat init may trigger async errors we want to catch).
-  await page.waitForTimeout(1_000);
+  it("has zero JS page errors on load", () => {
+    expect(pageErrors).toEqual([]);
+  });
 
-  // ── 4. Assert zero page errors ──────────────────────────────────────────
-
-  if (pageErrors.length > 0) {
-    console.error("[smoke] FAIL — JS errors in dashboard:");
-    for (const err of pageErrors) {
-      console.error(`  • ${err.message}`);
-    }
-    process.exitCode = 1;
-  } else {
-    console.log("[smoke] PASS — zero JS page errors");
-  }
-
-  // ── 5. Assert sidebar nav item count ────────────────────────────────────
-
-  const navCount = await page.evaluate(
-    () => document.querySelectorAll("#sidebar-nav .nav-item").length,
-  );
-
-  if (navCount !== 8) {
-    console.error(`[smoke] FAIL — expected 8 sidebar nav items, got ${navCount}`);
-    process.exitCode = 1;
-  } else {
-    console.log("[smoke] PASS — 8 sidebar nav items rendered");
-  }
-} finally {
-  // ── 6. Teardown ───────────────────────────────────────────────────────────
-
-  await browser.close();
-  await close();
-  console.log("[smoke] Server closed.");
-}
+  it("renders 8 sidebar nav items", () => {
+    expect(navCount).toBe(8);
+  });
+});

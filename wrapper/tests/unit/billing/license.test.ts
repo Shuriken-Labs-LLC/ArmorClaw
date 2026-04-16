@@ -14,6 +14,7 @@ import {
   createTrialLicense,
   daysRemaining,
   loadLicense,
+  pollForActivation,
   setLicensePathForTesting,
   validateStripeSubscription,
 } from "../../../billing/license.ts";
@@ -55,6 +56,7 @@ function readLicense(): License {
 }
 
 const DAY_MS = 86_400_000;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ── computeTrialEnd ───────────────────────────────────────────────────────────
 
@@ -137,6 +139,17 @@ describe("createTrialLicense", () => {
     expect(lic.stripeCustomerId).toBeUndefined();
     expect(lic.stripeSubscriptionId).toBeUndefined();
   });
+
+  it("generates a UUID-shaped installId", () => {
+    const lic = createTrialLicense();
+    expect(lic.installId).toMatch(UUID_RE);
+  });
+
+  it("generates a unique installId per call", () => {
+    const a = createTrialLicense();
+    const b = createTrialLicense();
+    expect(a.installId).not.toBe(b.installId);
+  });
 });
 
 // ── loadLicense — first install ───────────────────────────────────────────────
@@ -153,6 +166,38 @@ describe("loadLicense — first install", () => {
     const ondisk = readLicense();
     expect(ondisk.tier).toBe("trial");
     expect(ondisk.trialStartedAt).toBe("2026-03-01T00:00:00.000Z");
+  });
+
+  it("persists installId to disk on first install", async () => {
+    const lic = await loadLicense({ now: new Date("2026-03-01T00:00:00.000Z") });
+    const ondisk = readLicense();
+    expect(ondisk.installId).toBe(lic.installId);
+    expect(ondisk.installId).toMatch(UUID_RE);
+  });
+
+  it("preserves installId across loads (never regenerated)", async () => {
+    const first = await loadLicense({ now: new Date("2026-03-01T00:00:00.000Z") });
+    const second = await loadLicense({ now: new Date("2026-03-02T00:00:00.000Z") });
+    expect(second.installId).toBe(first.installId);
+  });
+});
+
+// ── loadLicense — installId backfill ──────────────────────────────────────────
+
+describe("loadLicense — installId backfill", () => {
+  it("backfills installId for licenses written before the field existed", async () => {
+    // Simulate a pre-installId license file
+    const legacy = {
+      tier: "trial",
+      trialStartedAt: "2026-03-01T00:00:00.000Z",
+      trialEndsAt: "2026-03-31T00:00:00.000Z",
+      valid: true,
+    } as unknown as License;
+    writeLicense(legacy);
+
+    const lic = await loadLicense({ now: new Date("2026-03-05T00:00:00.000Z") });
+    expect(lic.installId).toMatch(UUID_RE);
+    expect(readLicense().installId).toBe(lic.installId);
   });
 });
 
@@ -215,6 +260,7 @@ describe("loadLicense — pro tier", () => {
   function proLicense(active = true): License {
     return {
       tier: "pro",
+      installId: "11111111-1111-1111-1111-111111111111",
       trialStartedAt: "2026-01-01T00:00:00.000Z",
       trialEndsAt: "2026-01-31T00:00:00.000Z",
       stripeCustomerId: "cus_123",
@@ -252,57 +298,196 @@ describe("loadLicense — pro tier", () => {
 // ── validateStripeSubscription ────────────────────────────────────────────────
 
 describe("validateStripeSubscription", () => {
-  it("returns false when no subscriptionId is present", async () => {
-    const lic = createTrialLicense();
-    const result = await validateStripeSubscription(lic);
-    expect(result).toBe(false);
-  });
-
-  it("returns true when remote says active", async () => {
-    const lic: License = {
+  function license(overrides: Partial<License> = {}): License {
+    return {
       tier: "pro",
+      installId: "22222222-2222-2222-2222-222222222222",
       trialStartedAt: "2026-01-01T00:00:00.000Z",
       trialEndsAt: "2026-01-31T00:00:00.000Z",
       stripeSubscriptionId: "sub_123",
       valid: true,
+      ...overrides,
     };
+  }
+
+  it("returns false when no installId is present", async () => {
+    const lic = { ...license(), installId: "" } as License;
+    const result = await validateStripeSubscription(lic);
+    expect(result).toBe(false);
+  });
+
+  it("posts { installId } to the validation endpoint", async () => {
+    const lic = license();
     const fetchFn = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ active: true }),
     });
-    const result = await validateStripeSubscription(lic, {
+    await validateStripeSubscription(lic, { fetchFn: fetchFn as unknown as typeof fetch });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    const [, init] = fetchFn.mock.calls[0];
+    const body = JSON.parse((init as { body: string }).body) as { installId: string };
+    expect(body.installId).toBe(lic.installId);
+  });
+
+  it("uses billing.armorclaw.app by default", async () => {
+    const lic = license();
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ active: true }),
+    });
+    await validateStripeSubscription(lic, { fetchFn: fetchFn as unknown as typeof fetch });
+    const [url] = fetchFn.mock.calls[0];
+    expect(url).toBe("https://billing.armorclaw.app/validate");
+  });
+
+  it("returns true when remote says active", async () => {
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ active: true }),
+    });
+    const result = await validateStripeSubscription(license(), {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
     expect(result).toBe(true);
   });
 
   it("returns cached valid on non-ok response", async () => {
-    const lic: License = {
-      tier: "pro",
-      trialStartedAt: "2026-01-01T00:00:00.000Z",
-      trialEndsAt: "2026-01-31T00:00:00.000Z",
-      stripeSubscriptionId: "sub_123",
-      valid: true,
-    };
     const fetchFn = vi.fn().mockResolvedValue({ ok: false });
-    const result = await validateStripeSubscription(lic, {
+    const result = await validateStripeSubscription(license({ valid: true }), {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
     expect(result).toBe(true); // cached
   });
 
   it("returns cached valid on network error", async () => {
-    const lic: License = {
-      tier: "pro",
-      trialStartedAt: "2026-01-01T00:00:00.000Z",
-      trialEndsAt: "2026-01-31T00:00:00.000Z",
-      stripeSubscriptionId: "sub_123",
-      valid: false,
-    };
     const fetchFn = vi.fn().mockRejectedValue(new Error("network down"));
-    const result = await validateStripeSubscription(lic, {
+    const result = await validateStripeSubscription(license({ valid: false }), {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
     expect(result).toBe(false); // cached false
+  });
+});
+
+// ── pollForActivation ─────────────────────────────────────────────────────────
+
+describe("pollForActivation", () => {
+  const trialLicense: License = {
+    tier: "trial",
+    installId: "33333333-3333-3333-3333-333333333333",
+    trialStartedAt: "2026-03-01T00:00:00.000Z",
+    trialEndsAt: "2026-03-31T00:00:00.000Z",
+    valid: true,
+  };
+
+  it("returns license unchanged when tier is not trial", async () => {
+    const proLic: License = { ...trialLicense, tier: "pro" };
+    const fetchFn = vi.fn();
+    const result = await pollForActivation(proLic, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result).toBe(proLic);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("returns license unchanged when installId is missing", async () => {
+    const noId = { ...trialLicense, installId: "" } as License;
+    const fetchFn = vi.fn();
+    const result = await pollForActivation(noId, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result).toBe(noId);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("promotes to pro when worker reports active subscription", async () => {
+    writeLicense(trialLicense);
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          active: true,
+          subscriptionId: "sub_NEW",
+          customerId: "cus_NEW",
+        }),
+    });
+    const result = await pollForActivation(trialLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.tier).toBe("pro");
+    expect(result.stripeSubscriptionId).toBe("sub_NEW");
+    expect(result.stripeCustomerId).toBe("cus_NEW");
+    expect(result.valid).toBe(true);
+    expect(result.installId).toBe(trialLicense.installId);
+  });
+
+  it("persists promotion to disk", async () => {
+    writeLicense(trialLicense);
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          active: true,
+          subscriptionId: "sub_NEW",
+          customerId: "cus_NEW",
+        }),
+    });
+    await pollForActivation(trialLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    const ondisk = readLicense();
+    expect(ondisk.tier).toBe("pro");
+    expect(ondisk.stripeSubscriptionId).toBe("sub_NEW");
+  });
+
+  it("returns trial unchanged when worker says active:false", async () => {
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ active: false }),
+    });
+    const result = await pollForActivation(trialLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.tier).toBe("trial");
+  });
+
+  it("returns trial unchanged when worker says active without ids", async () => {
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ active: true }), // missing ids
+    });
+    const result = await pollForActivation(trialLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.tier).toBe("trial");
+  });
+
+  it("returns trial unchanged on non-ok response", async () => {
+    const fetchFn = vi.fn().mockResolvedValue({ ok: false });
+    const result = await pollForActivation(trialLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result).toBe(trialLicense);
+  });
+
+  it("returns trial unchanged on network error (never throws)", async () => {
+    const fetchFn = vi.fn().mockRejectedValue(new Error("offline"));
+    const result = await pollForActivation(trialLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result).toBe(trialLicense);
+  });
+
+  it("posts { installId } to the validation endpoint", async () => {
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ active: false }),
+    });
+    await pollForActivation(trialLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    const [url, init] = fetchFn.mock.calls[0];
+    expect(url).toBe("https://billing.armorclaw.app/validate");
+    const body = JSON.parse((init as { body: string }).body) as { installId: string };
+    expect(body.installId).toBe(trialLicense.installId);
   });
 });

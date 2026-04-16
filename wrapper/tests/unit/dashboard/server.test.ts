@@ -574,7 +574,7 @@ describe("getDashboardSnapshot", () => {
   it("connectedServices reflects .env keys", async () => {
     vi.mocked(readFileSync).mockImplementation((path: unknown) => {
       if (String(path).endsWith(".env")) {
-        return "GOOGLE_OAUTH_ACCESS_TOKEN=ya29.test\n";
+        return "ARMORCLAW_GMAIL_CONNECTED=true\n";
       }
       throw new Error("ENOENT");
     });

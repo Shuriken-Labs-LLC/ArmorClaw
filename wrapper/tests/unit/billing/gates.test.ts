@@ -18,6 +18,7 @@ import type { License } from "../../../billing/license.ts";
 function makeLicense(tier: "trial" | "pro" | "expired", valid = tier !== "expired"): License {
   return {
     tier,
+    installId: "00000000-0000-0000-0000-000000000000",
     trialStartedAt: "2026-01-01T00:00:00.000Z",
     trialEndsAt: "2026-01-31T00:00:00.000Z",
     valid,

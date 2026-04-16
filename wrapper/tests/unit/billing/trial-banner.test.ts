@@ -29,6 +29,7 @@ function trialLicense(start: Date, overrides: Partial<License> = {}): License {
   const trialEndsAt = new Date(start.getTime() + 30 * DAY_MS).toISOString();
   return {
     tier: "trial",
+    installId: "00000000-0000-0000-0000-000000000000",
     trialStartedAt,
     trialEndsAt,
     valid: true,

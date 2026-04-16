@@ -124,7 +124,7 @@ describe("dashboard smoke", () => {
 
   // ── state.ts (PR 2) ────────────────────────────────────────────────────────
 
-  it("INITIAL_STATE exports all 41 expected keys with correct initial values", () => {
+  it("INITIAL_STATE exports all 42 expected keys with correct initial values", () => {
     expect(INITIAL_STATE.activeView).toBe("home");
     expect(INITIAL_STATE.dashState).toBeNull();
     expect(INITIAL_STATE.undoDismissed).toBe(false);
@@ -181,7 +181,7 @@ describe("dashboard smoke", () => {
     expect(INITIAL_STATE.chatLastSessionTokens).toEqual({ input: 0, output: 0 });
     expect(INITIAL_STATE.chatUsagePendingCallbacks).toEqual({});
 
-    expect(Object.keys(INITIAL_STATE)).toHaveLength(41);
+    expect(Object.keys(INITIAL_STATE)).toHaveLength(42);
   });
 
   it("generated /dashboard-lib.js contains state var declarations", () => {

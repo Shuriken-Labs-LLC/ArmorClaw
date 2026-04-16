@@ -19,6 +19,8 @@ import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import express from "express";
+import { daysRemaining, loadLicense, pollForActivation } from "../billing/license.ts";
+import type { License } from "../billing/license.ts";
 import { type AgentStatus, getAgentStatus, setAgentStatus } from "../lib/agent-status.ts";
 import { getModelAdapterState } from "../lib/model-adapter.ts";
 import { getBackupParentDir, getLauncherDataPath } from "../lib/platform-paths.ts";
@@ -122,6 +124,60 @@ export function getTailscaleUrl(): string | null {
 export function resetTailscaleCacheForTesting(): void {
   _tailscaleUrl = undefined;
   _tailscaleCheckedAt = 0;
+}
+
+// ── License cache ─────────────────────────────────────────────────────────────
+//
+// loadLicense() does file I/O and (for pro tier) hits the billing Worker.
+// The SSE stream pushes every 5 s — re-running that on each tick is wasteful
+// and would tie SSE liveness to network availability. We cache the License
+// at server start and refresh it in the background every 60 s.
+
+const LICENSE_REFRESH_INTERVAL_MS = 60_000;
+let _cachedLicense: License | null = null;
+let _licenseRefreshTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Load the license once and start the 60 s refresh loop. Idempotent —
+ * second call is a no-op. Also runs pollForActivation() so a trial install
+ * gets promoted to pro on the first dashboard launch after checkout.
+ */
+export async function primeLicenseCache(): Promise<License> {
+  if (_cachedLicense) {
+    return _cachedLicense;
+  }
+
+  const initial = await loadLicense();
+  _cachedLicense = await pollForActivation(initial);
+
+  if (!_licenseRefreshTimer) {
+    _licenseRefreshTimer = setInterval(() => {
+      void (async () => {
+        try {
+          _cachedLicense = await loadLicense();
+        } catch {
+          /* keep last-known-good */
+        }
+      })();
+    }, LICENSE_REFRESH_INTERVAL_MS);
+    _licenseRefreshTimer.unref?.();
+  }
+
+  return _cachedLicense;
+}
+
+/** Synchronously read whatever the cache currently holds. */
+export function getCachedLicense(): License | null {
+  return _cachedLicense;
+}
+
+/** Stop the refresh timer and forget the cached license. Test-only. */
+export function clearLicenseCacheForTesting(): void {
+  if (_licenseRefreshTimer) {
+    clearInterval(_licenseRefreshTimer);
+    _licenseRefreshTimer = null;
+  }
+  _cachedLicense = null;
 }
 
 // ── .env reader ───────────────────────────────────────────────────────────────
@@ -501,6 +557,18 @@ export interface DashboardSnapshot {
    * card in Settings so customers aren't shown a broken link.
    */
   stripeCustomerPortalUrl: string | null;
+  /**
+   * License snapshot used by the trial banner and expired overlay.
+   * Read from the in-process cache — refreshed every 60 s, never awaited
+   * on the SSE hot path.
+   */
+  license: {
+    tier: string;
+    daysLeft: number;
+    trialEndsAt: string;
+    installId: string;
+    valid: boolean;
+  };
   security: SecurityStats;
   tokenBurn: {
     todayTokens: ReturnType<typeof getTodayTokens>;
@@ -515,6 +583,25 @@ export interface DashboardSnapshot {
 
 /** Cached channel links — resolved once per server lifetime to avoid API spam. */
 let _channelLinksCache: ChannelLink[] | null = null;
+
+/**
+ * Build the license sub-snapshot from the cached License. Returns a safe
+ * default when the cache hasn't been primed yet — the dashboard treats
+ * { tier: "trial", daysLeft: 30, valid: true } as "still trialing".
+ */
+function licenseSnapshot(): DashboardSnapshot["license"] {
+  const lic = getCachedLicense();
+  if (!lic) {
+    return { tier: "trial", daysLeft: 30, trialEndsAt: "", installId: "", valid: true };
+  }
+  return {
+    tier: lic.tier,
+    daysLeft: daysRemaining(lic.trialEndsAt),
+    trialEndsAt: lic.trialEndsAt,
+    installId: lic.installId,
+    valid: lic.valid,
+  };
+}
 
 export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
   const env = readEnvConfig();
@@ -558,6 +645,7 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
     },
     tailscaleUrl: getTailscaleUrl(),
     stripeCustomerPortalUrl: env["STRIPE_CUSTOMER_PORTAL_URL"] ?? null,
+    license: licenseSnapshot(),
     security: getSecurityStats(),
     tokenBurn: {
       todayTokens: getTodayTokens(),
@@ -1712,6 +1800,12 @@ export async function startServer(
     server.listen(port, "127.0.0.1", resolve);
     server.once("error", reject);
   });
+  // Prime the license cache + start the 60 s refresh loop. Fire-and-forget so
+  // a slow billing Worker can't delay server startup; the SSE snapshot uses a
+  // safe fallback until the first load resolves.
+  void primeLicenseCache().catch(() => {
+    /* loadLicense never throws, but defensively swallow anyway */
+  });
   const addr = server.address() as { port: number };
   return { port: addr.port, close: () => new Promise((resolve) => server.close(() => resolve())) };
 }
@@ -1723,5 +1817,6 @@ export function clearDashboardStateForTesting(): void {
   _channelLinksCache = null;
   _telegramUsername = undefined;
   resetTailscaleCacheForTesting();
+  clearLicenseCacheForTesting();
   listeners.clear();
 }
