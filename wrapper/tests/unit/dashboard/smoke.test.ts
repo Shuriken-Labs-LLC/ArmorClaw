@@ -181,7 +181,7 @@ describe("dashboard smoke", () => {
     expect(INITIAL_STATE.chatLastSessionTokens).toEqual({ input: 0, output: 0 });
     expect(INITIAL_STATE.chatUsagePendingCallbacks).toEqual({});
 
-    expect(Object.keys(INITIAL_STATE)).toHaveLength(42);
+    expect(Object.keys(INITIAL_STATE)).toHaveLength(43);
   });
 
   it("generated /dashboard-lib.js contains state var declarations", () => {
@@ -263,5 +263,26 @@ describe("dashboard smoke", () => {
     expect(html).toContain("showView(");
     expect(html).toContain("openDrawer()");
     expect(html).toContain("closeDrawer()");
+  });
+
+  // ── Subscribe button (subscription card) ──────────────────────────────────
+
+  it("subscription card renders Subscribe button with correct href when inactive", () => {
+    const html = readFileSync(HTML_PATH, "utf-8");
+    // The inline JS builds checkout href as: paymentLinkBase + '?client_reference_id=' + encodeURIComponent(installId)
+    expect(html).toContain("client_reference_id");
+    expect(html).toContain("encodeURIComponent(installId)");
+    expect(html).toContain("Subscribe to ArmorClaw");
+  });
+
+  it("subscription card renders Manage subscription link when active", () => {
+    const html = readFileSync(HTML_PATH, "utf-8");
+    expect(html).toContain("Manage subscription");
+    expect(html).toContain("ArmorClaw — Active");
+  });
+
+  it("subscription card shows fallback text when active but no portal URL", () => {
+    const html = readFileSync(HTML_PATH, "utf-8");
+    expect(html).toContain("Subscription managed by Stripe");
   });
 });

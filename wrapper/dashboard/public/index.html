@@ -1958,19 +1958,9 @@
         </div>
 
         <!-- 9. Subscription -->
-        <div class="card settings-card" id="subscription-card">
+        <div class="card settings-card" id="subscription-card" style="display:none">
           <div class="card-hdr"><span class="card-title">Subscription</span></div>
-          <div class="settings-row">
-            <div class="settings-row-label">Plan</div>
-            <div class="settings-row-body">
-              <div class="settings-row-val" id="s-plan-val">ArmorClaw v1</div>
-              <div style="display:flex; gap:8px; margin-top:8px;">
-                <button class="btn-settings" onclick="manageSubscription()" type="button">
-                  Manage subscription
-                </button>
-              </div>
-            </div>
-          </div>
+          <div id="subscription-card-body"></div>
         </div>
 
         <!-- 10. Launch on startup -->
@@ -2807,24 +2797,60 @@ function syncSettings(s) {
   const bi = document.getElementById('s-budget-input');
   if (bi && document.activeElement !== bi) bi.value = String(b.monthlyBudgetUSD);
 
-  // ── Stripe Customer Portal ──
-  // Hide the subscription card entirely when STRIPE_CUSTOMER_PORTAL_URL is not set.
-  // Avoids showing a broken link to users before Stripe production is configured.
+  // ── Subscription card ──
   _stripePortalUrl = s.stripeCustomerPortalUrl || null;
+  _paymentLinkBase = s.paymentLinkBase || '';
   const subscriptionCard = document.getElementById('subscription-card');
-  if (subscriptionCard) {
-    subscriptionCard.style.display = _stripePortalUrl ? '' : 'none';
+  const subscriptionBody = document.getElementById('subscription-card-body');
+  if (subscriptionCard && subscriptionBody) {
+    const lic = s.license || {};
+    const tier = lic.tier || 'inactive';
+    const installId = lic.installId || '';
+    if (tier === 'inactive') {
+      subscriptionCard.style.display = '';
+      const checkoutHref = _paymentLinkBase
+        ? _paymentLinkBase + '?client_reference_id=' + encodeURIComponent(installId)
+        : '';
+      subscriptionBody.innerHTML =
+        '<div class="settings-row">' +
+          '<div class="settings-row-label">Plan</div>' +
+          '<div class="settings-row-body">' +
+            '<div class="settings-row-val">Activate your subscription</div>' +
+            '<p style="font-size:13px;color:var(--ac-muted);margin:4px 0 8px">First month free, then $19.99/mo. Cancel anytime.</p>' +
+            (checkoutHref
+              ? '<a href="' + escAttr(checkoutHref) + '" target="_blank" rel="noopener" class="btn-settings" style="display:inline-block;text-decoration:none;text-align:center;background:var(--ac-teal);color:var(--ac-bg);font-weight:500">Subscribe to ArmorClaw</a>'
+              : '') +
+          '</div>' +
+        '</div>';
+    } else if (tier === 'active' && _stripePortalUrl) {
+      subscriptionCard.style.display = '';
+      subscriptionBody.innerHTML =
+        '<div class="settings-row">' +
+          '<div class="settings-row-label">Plan</div>' +
+          '<div class="settings-row-body">' +
+            '<div class="settings-row-val">ArmorClaw — Active</div>' +
+            '<div style="display:flex;gap:8px;margin-top:8px">' +
+              '<a href="' + escAttr(_stripePortalUrl) + '" target="_blank" rel="noopener" class="btn-settings" style="display:inline-block;text-decoration:none;text-align:center">Manage subscription</a>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    } else if (tier === 'active') {
+      subscriptionCard.style.display = '';
+      subscriptionBody.innerHTML =
+        '<div class="settings-row">' +
+          '<div class="settings-row-label">Plan</div>' +
+          '<div class="settings-row-body">' +
+            '<div class="settings-row-val">ArmorClaw — Active</div>' +
+            '<p style="font-size:13px;color:var(--ac-muted);margin:4px 0 0">Subscription managed by Stripe</p>' +
+          '</div>' +
+        '</div>';
+    } else {
+      subscriptionCard.style.display = 'none';
+    }
   }
 }
 
 // ── Inline chat removed — use ⌘⇧Space floating window instead ───────────────
-
-// ── Subscription ─────────────────────────────────────────────────────────────
-
-function manageSubscription() {
-  if (!_stripePortalUrl) return;
-  window.open(_stripePortalUrl, '_blank');
-}
 
 // ── Memory ───────────────────────────────────────────────────────────────────
 

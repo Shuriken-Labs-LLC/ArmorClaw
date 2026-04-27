@@ -21,6 +21,7 @@ import { join } from "node:path";
 import express from "express";
 import { loadLicense, pollForActivation } from "../billing/license.ts";
 import type { License } from "../billing/license.ts";
+import { STRIPE_DEFAULTS } from "../billing/stripe-redirect.ts";
 import { type AgentStatus, getAgentStatus, setAgentStatus } from "../lib/agent-status.ts";
 import { getModelAdapterState } from "../lib/model-adapter.ts";
 import { getBackupParentDir, getLauncherDataPath } from "../lib/platform-paths.ts";
@@ -558,6 +559,11 @@ export interface DashboardSnapshot {
    */
   stripeCustomerPortalUrl: string | null;
   /**
+   * Stripe Payment Link base URL for checkout.
+   * Used client-side to build the full checkout URL with client_reference_id.
+   */
+  paymentLinkBase: string;
+  /**
    * License snapshot used by the trial banner and expired overlay.
    * Read from the in-process cache — refreshed every 60 s, never awaited
    * on the SSE hot path.
@@ -640,6 +646,7 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
     },
     tailscaleUrl: getTailscaleUrl(),
     stripeCustomerPortalUrl: env["STRIPE_CUSTOMER_PORTAL_URL"] ?? null,
+    paymentLinkBase: env["STRIPE_PAYMENT_LINK"] ?? STRIPE_DEFAULTS.paymentLink,
     license: licenseSnapshot(),
     security: getSecurityStats(),
     tokenBurn: {

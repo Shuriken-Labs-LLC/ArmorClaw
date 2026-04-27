@@ -497,6 +497,7 @@ describe("getDashboardSnapshot", () => {
     expect(snap).toHaveProperty("recipes");
     expect(snap).toHaveProperty("connectedServices");
     expect(snap).toHaveProperty("tailscaleUrl");
+    expect(snap).toHaveProperty("paymentLinkBase");
     expect(snap).toHaveProperty("security");
     expect(snap).toHaveProperty("serverTime");
   });
@@ -581,6 +582,26 @@ describe("getDashboardSnapshot", () => {
     const snap = await getDashboardSnapshot();
     expect(snap.connectedServices.gmail).toBe(true);
     expect(snap.connectedServices.outlook).toBe(false);
+  });
+
+  it("paymentLinkBase falls back to STRIPE_DEFAULTS when env is unset", async () => {
+    vi.mocked(readFileSync).mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
+    const { STRIPE_DEFAULTS } = await import("../../../billing/stripe-redirect.ts");
+    const snap = await getDashboardSnapshot();
+    expect(snap.paymentLinkBase).toBe(STRIPE_DEFAULTS.paymentLink);
+  });
+
+  it("paymentLinkBase reads from STRIPE_PAYMENT_LINK env var", async () => {
+    vi.mocked(readFileSync).mockImplementation((path: unknown) => {
+      if (String(path).endsWith(".env")) {
+        return "STRIPE_PAYMENT_LINK=https://buy.stripe.com/custom\n";
+      }
+      throw new Error("ENOENT");
+    });
+    const snap = await getDashboardSnapshot();
+    expect(snap.paymentLinkBase).toBe("https://buy.stripe.com/custom");
   });
 
   it("serverTime is a recent ISO 8601 string", async () => {
