@@ -37,7 +37,7 @@ export interface License {
 
 const TRIAL_DAYS = 30;
 const MS_PER_DAY = 86_400_000;
-const VALIDATION_URL = "https://billing.armorclaw.app/validate";
+const VALIDATION_URL = "https://armorclaw-billing.armorclaw.workers.dev/validate";
 
 // ── File path (injectable for testing) ────────────────────────────────────────
 
