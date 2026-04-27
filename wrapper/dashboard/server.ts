@@ -19,7 +19,7 @@ import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import express from "express";
-import { daysRemaining, loadLicense, pollForActivation } from "../billing/license.ts";
+import { loadLicense, pollForActivation } from "../billing/license.ts";
 import type { License } from "../billing/license.ts";
 import { type AgentStatus, getAgentStatus, setAgentStatus } from "../lib/agent-status.ts";
 import { getModelAdapterState } from "../lib/model-adapter.ts";
@@ -564,8 +564,6 @@ export interface DashboardSnapshot {
    */
   license: {
     tier: string;
-    daysLeft: number;
-    trialEndsAt: string;
     installId: string;
     valid: boolean;
   };
@@ -586,18 +584,15 @@ let _channelLinksCache: ChannelLink[] | null = null;
 
 /**
  * Build the license sub-snapshot from the cached License. Returns a safe
- * default when the cache hasn't been primed yet — the dashboard treats
- * { tier: "trial", daysLeft: 30, valid: true } as "still trialing".
+ * default when the cache hasn't been primed yet.
  */
 function licenseSnapshot(): DashboardSnapshot["license"] {
   const lic = getCachedLicense();
   if (!lic) {
-    return { tier: "trial", daysLeft: 30, trialEndsAt: "", installId: "", valid: true };
+    return { tier: "inactive", installId: "", valid: false };
   }
   return {
     tier: lic.tier,
-    daysLeft: daysRemaining(lic.trialEndsAt),
-    trialEndsAt: lic.trialEndsAt,
     installId: lic.installId,
     valid: lic.valid,
   };

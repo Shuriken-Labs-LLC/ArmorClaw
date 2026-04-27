@@ -1,9 +1,8 @@
 /**
  * Feature gates — controls what the agent can do based on license tier.
  *
- * trial:   full access to everything
- * pro:     full access to everything
- * expired: agent pauses, no skills run, dashboard shows expiry screen
+ * active:   full access to everything
+ * inactive: agent pauses, no skills run
  */
 
 import type { License, LicenseTier } from "./license.ts";
@@ -21,10 +20,10 @@ export interface GateResult {
 
 /** Can the agent run skills? */
 export function canRunSkills(license: License): GateResult {
-  if (license.tier === "expired" || !license.valid) {
+  if (!license.valid) {
     return {
       allowed: false,
-      reason: "Your trial has ended. Subscribe to keep your agent running — $19/month.",
+      reason: "Your subscription is inactive. Subscribe to keep your agent running — $19/month.",
     };
   }
   return { allowed: true };
@@ -54,5 +53,5 @@ export function canAccessDashboard(_license: License): GateResult {
 
 /** True if the tier grants full agent access. */
 export function isFullAccess(tier: LicenseTier): boolean {
-  return tier === "trial" || tier === "pro";
+  return tier === "active";
 }

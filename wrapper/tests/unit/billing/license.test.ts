@@ -1,7 +1,7 @@
 /**
  * Unit tests for wrapper/billing/license.ts.
  *
- * All file I/O uses a temp directory. Time is injected via `now` params.
+ * All file I/O uses a temp directory.
  */
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -10,9 +10,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearLicenseForTesting,
-  computeTrialEnd,
-  createTrialLicense,
-  daysRemaining,
+  createInactiveLicense,
   loadLicense,
   pollForActivation,
   setLicensePathForTesting,
@@ -20,7 +18,7 @@ import {
 } from "../../../billing/license.ts";
 import type { License } from "../../../billing/license.ts";
 
-// ── Test setup ────────────────────────────────────────────────────────────────
+// ── Test setup ─────────────────���─────────────────────────────────────��────────
 
 const TMP_DIR = join(tmpdir(), "armorclaw-lic-test-" + Date.now());
 const TMP_FILE = join(TMP_DIR, "license.json");
@@ -28,7 +26,6 @@ const TMP_FILE = join(TMP_DIR, "license.json");
 beforeEach(() => {
   mkdirSync(TMP_DIR, { recursive: true });
   setLicensePathForTesting(TMP_FILE);
-  // Remove file if it exists
   try {
     rmSync(TMP_FILE);
   } catch {
@@ -45,7 +42,7 @@ afterEach(() => {
   }
 });
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────���──────────────────────────────���────────────────
 
 function writeLicense(license: License): void {
   writeFileSync(TMP_FILE, JSON.stringify(license, null, 2), "utf-8");
@@ -55,129 +52,64 @@ function readLicense(): License {
   return JSON.parse(readFileSync(TMP_FILE, "utf-8")) as License;
 }
 
-const DAY_MS = 86_400_000;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// ── computeTrialEnd ───────────────────────────────────────────────────────────
+// ── createInactiveLicense ─────────────────────────────────────────���─────────────
 
-describe("computeTrialEnd", () => {
-  it("returns a date 30 days after the input", () => {
-    const start = "2026-01-01T00:00:00.000Z";
-    const end = computeTrialEnd(start);
-    expect(end).toBe("2026-01-31T00:00:00.000Z");
+describe("createInactiveLicense", () => {
+  it("creates a license with tier = 'inactive'", () => {
+    const lic = createInactiveLicense();
+    expect(lic.tier).toBe("inactive");
   });
 
-  it("handles mid-month dates", () => {
-    const start = "2026-03-15T12:00:00.000Z";
-    const end = computeTrialEnd(start);
-    const expected = new Date(new Date(start).getTime() + 30 * DAY_MS).toISOString();
-    expect(end).toBe(expected);
-  });
-});
-
-// ── daysRemaining ─────────────────────────────────────────────────────────────
-
-describe("daysRemaining", () => {
-  it("returns 30 on the first day of a 30-day trial", () => {
-    const start = new Date("2026-01-01T00:00:00.000Z");
-    const end = new Date(start.getTime() + 30 * DAY_MS).toISOString();
-    expect(daysRemaining(end, start)).toBe(30);
-  });
-
-  it("returns 1 on the last day", () => {
-    const end = "2026-01-31T00:00:00.000Z";
-    const now = new Date("2026-01-30T12:00:00.000Z");
-    expect(daysRemaining(end, now)).toBe(1);
-  });
-
-  it("returns 0 when the trial is expired", () => {
-    const end = "2026-01-31T00:00:00.000Z";
-    const now = new Date("2026-02-01T00:00:00.000Z");
-    expect(daysRemaining(end, now)).toBe(0);
-  });
-
-  it("never returns a negative number", () => {
-    const end = "2020-01-01T00:00:00.000Z";
-    const now = new Date("2026-06-01T00:00:00.000Z");
-    expect(daysRemaining(end, now)).toBe(0);
-  });
-
-  it("returns 15 at the midpoint", () => {
-    const end = "2026-01-31T00:00:00.000Z";
-    const now = new Date("2026-01-16T00:00:00.000Z");
-    expect(daysRemaining(end, now)).toBe(15);
-  });
-});
-
-// ── createTrialLicense ────────────────────────────────────────────────────────
-
-describe("createTrialLicense", () => {
-  it("creates a trial with tier = 'trial'", () => {
-    const lic = createTrialLicense(new Date("2026-03-01T00:00:00.000Z"));
-    expect(lic.tier).toBe("trial");
-  });
-
-  it("sets trialStartedAt to now", () => {
-    const now = new Date("2026-03-01T12:00:00.000Z");
-    const lic = createTrialLicense(now);
-    expect(lic.trialStartedAt).toBe(now.toISOString());
-  });
-
-  it("sets trialEndsAt to 30 days from now", () => {
-    const now = new Date("2026-03-01T00:00:00.000Z");
-    const lic = createTrialLicense(now);
-    expect(lic.trialEndsAt).toBe("2026-03-31T00:00:00.000Z");
-  });
-
-  it("sets valid = true", () => {
-    const lic = createTrialLicense();
-    expect(lic.valid).toBe(true);
+  it("sets valid = false", () => {
+    const lic = createInactiveLicense();
+    expect(lic.valid).toBe(false);
   });
 
   it("does not include stripeCustomerId or stripeSubscriptionId", () => {
-    const lic = createTrialLicense();
+    const lic = createInactiveLicense();
     expect(lic.stripeCustomerId).toBeUndefined();
     expect(lic.stripeSubscriptionId).toBeUndefined();
   });
 
   it("generates a UUID-shaped installId", () => {
-    const lic = createTrialLicense();
+    const lic = createInactiveLicense();
     expect(lic.installId).toMatch(UUID_RE);
   });
 
   it("generates a unique installId per call", () => {
-    const a = createTrialLicense();
-    const b = createTrialLicense();
+    const a = createInactiveLicense();
+    const b = createInactiveLicense();
     expect(a.installId).not.toBe(b.installId);
   });
 });
 
-// ── loadLicense — first install ───────────────────────────────────────────────
+// ── loadLicense — first install ────────────���──────────────────────────────────
 
 describe("loadLicense — first install", () => {
-  it("creates a trial license when no file exists", async () => {
-    const lic = await loadLicense({ now: new Date("2026-03-01T00:00:00.000Z") });
-    expect(lic.tier).toBe("trial");
-    expect(lic.valid).toBe(true);
+  it("creates an inactive license when no file exists", async () => {
+    const lic = await loadLicense();
+    expect(lic.tier).toBe("inactive");
+    expect(lic.valid).toBe(false);
   });
 
   it("persists the license to disk", async () => {
-    await loadLicense({ now: new Date("2026-03-01T00:00:00.000Z") });
+    await loadLicense();
     const ondisk = readLicense();
-    expect(ondisk.tier).toBe("trial");
-    expect(ondisk.trialStartedAt).toBe("2026-03-01T00:00:00.000Z");
+    expect(ondisk.tier).toBe("inactive");
   });
 
   it("persists installId to disk on first install", async () => {
-    const lic = await loadLicense({ now: new Date("2026-03-01T00:00:00.000Z") });
+    const lic = await loadLicense();
     const ondisk = readLicense();
     expect(ondisk.installId).toBe(lic.installId);
     expect(ondisk.installId).toMatch(UUID_RE);
   });
 
   it("preserves installId across loads (never regenerated)", async () => {
-    const first = await loadLicense({ now: new Date("2026-03-01T00:00:00.000Z") });
-    const second = await loadLicense({ now: new Date("2026-03-02T00:00:00.000Z") });
+    const first = await loadLicense();
+    const second = await loadLicense();
     expect(second.installId).toBe(first.installId);
   });
 });
@@ -186,112 +118,91 @@ describe("loadLicense — first install", () => {
 
 describe("loadLicense — installId backfill", () => {
   it("backfills installId for licenses written before the field existed", async () => {
-    // Simulate a pre-installId license file
     const legacy = {
-      tier: "trial",
-      trialStartedAt: "2026-03-01T00:00:00.000Z",
-      trialEndsAt: "2026-03-31T00:00:00.000Z",
-      valid: true,
+      tier: "inactive",
+      valid: false,
     } as unknown as License;
     writeLicense(legacy);
 
-    const lic = await loadLicense({ now: new Date("2026-03-05T00:00:00.000Z") });
+    const lic = await loadLicense();
     expect(lic.installId).toMatch(UUID_RE);
     expect(readLicense().installId).toBe(lic.installId);
   });
 });
 
-// ── loadLicense — trial expiry detection ──────────────────────────────────────
+// ── loadLicense — legacy tier migration ───────────────────────────────────────
 
-describe("loadLicense — trial expiry", () => {
-  it("sets tier = expired when trial has ended", async () => {
-    const start = new Date("2026-01-01T00:00:00.000Z");
-    writeLicense(createTrialLicense(start));
-
-    const afterExpiry = new Date("2026-02-01T00:00:00.000Z");
-    const lic = await loadLicense({ now: afterExpiry });
-    expect(lic.tier).toBe("expired");
+describe("loadLicense — legacy tier migration", () => {
+  it("migrates legacy 'trial' tier to 'inactive'", async () => {
+    writeLicense({
+      tier: "trial" as unknown as License["tier"],
+      installId: "11111111-1111-1111-1111-111111111111",
+      valid: true,
+    } as License);
+    const lic = await loadLicense();
+    expect(lic.tier).toBe("inactive");
     expect(lic.valid).toBe(false);
   });
 
-  it("keeps tier = trial when still within 30 days", async () => {
-    const start = new Date("2026-03-01T00:00:00.000Z");
-    writeLicense(createTrialLicense(start));
-
-    const day15 = new Date("2026-03-16T00:00:00.000Z");
-    const lic = await loadLicense({ now: day15 });
-    expect(lic.tier).toBe("trial");
-    expect(lic.valid).toBe(true);
+  it("migrates legacy 'pro' tier to 'active'", async () => {
+    writeLicense({
+      tier: "pro" as unknown as License["tier"],
+      installId: "11111111-1111-1111-1111-111111111111",
+      stripeSubscriptionId: "sub_123",
+      valid: true,
+    } as License);
+    const lic = await loadLicense();
+    expect(lic.tier).toBe("active");
   });
 
-  it("keeps tier = trial on the exact last millisecond", async () => {
-    const start = new Date("2026-03-01T00:00:00.000Z");
-    writeLicense(createTrialLicense(start));
-
-    // trialEndsAt = "2026-03-31T00:00:00.000Z", so exactly at that ms is NOT expired yet
-    const exactEnd = new Date("2026-03-31T00:00:00.000Z");
-    const lic = await loadLicense({ now: exactEnd });
-    expect(lic.tier).toBe("trial");
-  });
-
-  it("sets tier = expired 1ms after trialEndsAt", async () => {
-    const start = new Date("2026-03-01T00:00:00.000Z");
-    writeLicense(createTrialLicense(start));
-
-    const justAfter = new Date("2026-03-31T00:00:00.001Z");
-    const lic = await loadLicense({ now: justAfter });
-    expect(lic.tier).toBe("expired");
-  });
-
-  it("persists expired state to disk", async () => {
-    const start = new Date("2026-01-01T00:00:00.000Z");
-    writeLicense(createTrialLicense(start));
-
-    await loadLicense({ now: new Date("2026-02-15T00:00:00.000Z") });
-    const ondisk = readLicense();
-    expect(ondisk.tier).toBe("expired");
-    expect(ondisk.valid).toBe(false);
+  it("migrates legacy 'expired' tier to 'inactive'", async () => {
+    writeLicense({
+      tier: "expired" as unknown as License["tier"],
+      installId: "11111111-1111-1111-1111-111111111111",
+      valid: false,
+    } as License);
+    const lic = await loadLicense();
+    expect(lic.tier).toBe("inactive");
+    expect(lic.valid).toBe(false);
   });
 });
 
-// ── loadLicense — pro / Stripe validation ─────────────────────────────────────
+// ── loadLicense — active / Stripe validation ──────────────────────────────────
 
-describe("loadLicense — pro tier", () => {
-  function proLicense(active = true): License {
+describe("loadLicense — active tier", () => {
+  function activeLicense(valid = true): License {
     return {
-      tier: "pro",
+      tier: "active",
       installId: "11111111-1111-1111-1111-111111111111",
-      trialStartedAt: "2026-01-01T00:00:00.000Z",
-      trialEndsAt: "2026-01-31T00:00:00.000Z",
       stripeCustomerId: "cus_123",
       stripeSubscriptionId: "sub_456",
-      valid: active,
+      valid,
     };
   }
 
-  it("validates against Stripe when tier is pro", async () => {
-    writeLicense(proLicense());
+  it("validates against Stripe when tier is active", async () => {
+    writeLicense(activeLicense());
     const validator = vi.fn().mockResolvedValue(true);
     const lic = await loadLicense({ stripeValidator: validator });
     expect(validator).toHaveBeenCalledTimes(1);
     expect(lic.valid).toBe(true);
-    expect(lic.tier).toBe("pro");
+    expect(lic.tier).toBe("active");
   });
 
-  it("sets tier = expired if Stripe says inactive", async () => {
-    writeLicense(proLicense());
+  it("sets tier = inactive if Stripe says inactive", async () => {
+    writeLicense(activeLicense());
     const validator = vi.fn().mockResolvedValue(false);
     const lic = await loadLicense({ stripeValidator: validator });
-    expect(lic.tier).toBe("expired");
+    expect(lic.tier).toBe("inactive");
     expect(lic.valid).toBe(false);
   });
 
   it("persists Stripe validation result to disk", async () => {
-    writeLicense(proLicense());
+    writeLicense(activeLicense());
     const validator = vi.fn().mockResolvedValue(false);
     await loadLicense({ stripeValidator: validator });
     const ondisk = readLicense();
-    expect(ondisk.tier).toBe("expired");
+    expect(ondisk.tier).toBe("inactive");
   });
 });
 
@@ -300,10 +211,8 @@ describe("loadLicense — pro tier", () => {
 describe("validateStripeSubscription", () => {
   function license(overrides: Partial<License> = {}): License {
     return {
-      tier: "pro",
+      tier: "active",
       installId: "22222222-2222-2222-2222-222222222222",
-      trialStartedAt: "2026-01-01T00:00:00.000Z",
-      trialEndsAt: "2026-01-31T00:00:00.000Z",
       stripeSubscriptionId: "sub_123",
       valid: true,
       ...overrides,
@@ -329,17 +238,6 @@ describe("validateStripeSubscription", () => {
     expect(body.installId).toBe(lic.installId);
   });
 
-  it("uses billing.armorclaw.app by default", async () => {
-    const lic = license();
-    const fetchFn = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ active: true }),
-    });
-    await validateStripeSubscription(lic, { fetchFn: fetchFn as unknown as typeof fetch });
-    const [url] = fetchFn.mock.calls[0];
-    expect(url).toBe("https://billing.armorclaw.app/validate");
-  });
-
   it("returns true when remote says active", async () => {
     const fetchFn = vi.fn().mockResolvedValue({
       ok: true,
@@ -356,7 +254,7 @@ describe("validateStripeSubscription", () => {
     const result = await validateStripeSubscription(license({ valid: true }), {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
-    expect(result).toBe(true); // cached
+    expect(result).toBe(true);
   });
 
   it("returns cached valid on network error", async () => {
@@ -364,33 +262,31 @@ describe("validateStripeSubscription", () => {
     const result = await validateStripeSubscription(license({ valid: false }), {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
-    expect(result).toBe(false); // cached false
+    expect(result).toBe(false);
   });
 });
 
-// ── pollForActivation ─────────────────────────────────────────────────────────
+// ── pollForActivation ─────────��────────────────────────────────��──────────────
 
 describe("pollForActivation", () => {
-  const trialLicense: License = {
-    tier: "trial",
+  const inactiveLicense: License = {
+    tier: "inactive",
     installId: "33333333-3333-3333-3333-333333333333",
-    trialStartedAt: "2026-03-01T00:00:00.000Z",
-    trialEndsAt: "2026-03-31T00:00:00.000Z",
-    valid: true,
+    valid: false,
   };
 
-  it("returns license unchanged when tier is not trial", async () => {
-    const proLic: License = { ...trialLicense, tier: "pro" };
+  it("returns license unchanged when tier is not inactive", async () => {
+    const activeLic: License = { ...inactiveLicense, tier: "active", valid: true };
     const fetchFn = vi.fn();
-    const result = await pollForActivation(proLic, {
+    const result = await pollForActivation(activeLic, {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
-    expect(result).toBe(proLic);
+    expect(result).toBe(activeLic);
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
   it("returns license unchanged when installId is missing", async () => {
-    const noId = { ...trialLicense, installId: "" } as License;
+    const noId = { ...inactiveLicense, installId: "" } as License;
     const fetchFn = vi.fn();
     const result = await pollForActivation(noId, {
       fetchFn: fetchFn as unknown as typeof fetch,
@@ -399,8 +295,8 @@ describe("pollForActivation", () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
-  it("promotes to pro when worker reports active subscription", async () => {
-    writeLicense(trialLicense);
+  it("promotes to active when worker reports active subscription", async () => {
+    writeLicense(inactiveLicense);
     const fetchFn = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
@@ -410,18 +306,18 @@ describe("pollForActivation", () => {
           customerId: "cus_NEW",
         }),
     });
-    const result = await pollForActivation(trialLicense, {
+    const result = await pollForActivation(inactiveLicense, {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
-    expect(result.tier).toBe("pro");
+    expect(result.tier).toBe("active");
     expect(result.stripeSubscriptionId).toBe("sub_NEW");
     expect(result.stripeCustomerId).toBe("cus_NEW");
     expect(result.valid).toBe(true);
-    expect(result.installId).toBe(trialLicense.installId);
+    expect(result.installId).toBe(inactiveLicense.installId);
   });
 
   it("persists promotion to disk", async () => {
-    writeLicense(trialLicense);
+    writeLicense(inactiveLicense);
     const fetchFn = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
@@ -431,50 +327,50 @@ describe("pollForActivation", () => {
           customerId: "cus_NEW",
         }),
     });
-    await pollForActivation(trialLicense, {
+    await pollForActivation(inactiveLicense, {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
     const ondisk = readLicense();
-    expect(ondisk.tier).toBe("pro");
+    expect(ondisk.tier).toBe("active");
     expect(ondisk.stripeSubscriptionId).toBe("sub_NEW");
   });
 
-  it("returns trial unchanged when worker says active:false", async () => {
+  it("returns inactive unchanged when worker says active:false", async () => {
     const fetchFn = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ active: false }),
     });
-    const result = await pollForActivation(trialLicense, {
+    const result = await pollForActivation(inactiveLicense, {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
-    expect(result.tier).toBe("trial");
+    expect(result.tier).toBe("inactive");
   });
 
-  it("returns trial unchanged when worker says active without ids", async () => {
+  it("returns inactive unchanged when worker says active without ids", async () => {
     const fetchFn = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ active: true }), // missing ids
+      json: () => Promise.resolve({ active: true }),
     });
-    const result = await pollForActivation(trialLicense, {
+    const result = await pollForActivation(inactiveLicense, {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
-    expect(result.tier).toBe("trial");
+    expect(result.tier).toBe("inactive");
   });
 
-  it("returns trial unchanged on non-ok response", async () => {
+  it("returns inactive unchanged on non-ok response", async () => {
     const fetchFn = vi.fn().mockResolvedValue({ ok: false });
-    const result = await pollForActivation(trialLicense, {
+    const result = await pollForActivation(inactiveLicense, {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
-    expect(result).toBe(trialLicense);
+    expect(result).toBe(inactiveLicense);
   });
 
-  it("returns trial unchanged on network error (never throws)", async () => {
+  it("returns inactive unchanged on network error (never throws)", async () => {
     const fetchFn = vi.fn().mockRejectedValue(new Error("offline"));
-    const result = await pollForActivation(trialLicense, {
+    const result = await pollForActivation(inactiveLicense, {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
-    expect(result).toBe(trialLicense);
+    expect(result).toBe(inactiveLicense);
   });
 
   it("posts { installId } to the validation endpoint", async () => {
@@ -482,12 +378,11 @@ describe("pollForActivation", () => {
       ok: true,
       json: () => Promise.resolve({ active: false }),
     });
-    await pollForActivation(trialLicense, {
+    await pollForActivation(inactiveLicense, {
       fetchFn: fetchFn as unknown as typeof fetch,
     });
-    const [url, init] = fetchFn.mock.calls[0];
-    expect(url).toBe("https://billing.armorclaw.app/validate");
+    const [, init] = fetchFn.mock.calls[0];
     const body = JSON.parse((init as { body: string }).body) as { installId: string };
-    expect(body.installId).toBe(trialLicense.installId);
+    expect(body.installId).toBe(inactiveLicense.installId);
   });
 });

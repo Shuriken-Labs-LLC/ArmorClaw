@@ -15,12 +15,10 @@ import type { License } from "../../../billing/license.ts";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function makeLicense(tier: "trial" | "pro" | "expired", valid = tier !== "expired"): License {
+function makeLicense(tier: "active" | "inactive", valid = tier === "active"): License {
   return {
     tier,
     installId: "00000000-0000-0000-0000-000000000000",
-    trialStartedAt: "2026-01-01T00:00:00.000Z",
-    trialEndsAt: "2026-01-31T00:00:00.000Z",
     valid,
   };
 }
@@ -28,27 +26,23 @@ function makeLicense(tier: "trial" | "pro" | "expired", valid = tier !== "expire
 // ── canRunSkills ──────────────────────────────────────────────────────────────
 
 describe("canRunSkills", () => {
-  it("allows trial", () => {
-    expect(canRunSkills(makeLicense("trial")).allowed).toBe(true);
+  it("allows active", () => {
+    expect(canRunSkills(makeLicense("active")).allowed).toBe(true);
   });
 
-  it("allows pro", () => {
-    expect(canRunSkills(makeLicense("pro")).allowed).toBe(true);
-  });
-
-  it("blocks expired", () => {
-    const result = canRunSkills(makeLicense("expired"));
+  it("blocks inactive", () => {
+    const result = canRunSkills(makeLicense("inactive"));
     expect(result.allowed).toBe(false);
     expect(result.reason).toBeDefined();
   });
 
   it("blocks invalid license (valid: false)", () => {
-    const lic = makeLicense("trial", false);
+    const lic = makeLicense("active", false);
     expect(canRunSkills(lic).allowed).toBe(false);
   });
 
   it("blocked reason mentions $19/month", () => {
-    const result = canRunSkills(makeLicense("expired"));
+    const result = canRunSkills(makeLicense("inactive"));
     expect(result.reason).toContain("$19/month");
   });
 });
@@ -56,59 +50,51 @@ describe("canRunSkills", () => {
 // ── canRunRecipes ─────────────────────────────────────────────────────────────
 
 describe("canRunRecipes", () => {
-  it("allows trial", () => {
-    expect(canRunRecipes(makeLicense("trial")).allowed).toBe(true);
+  it("allows active", () => {
+    expect(canRunRecipes(makeLicense("active")).allowed).toBe(true);
   });
 
-  it("blocks expired", () => {
-    expect(canRunRecipes(makeLicense("expired")).allowed).toBe(false);
+  it("blocks inactive", () => {
+    expect(canRunRecipes(makeLicense("inactive")).allowed).toBe(false);
   });
 });
 
 // ── canExportData — always allowed ────────────────────────────────────────────
 
 describe("canExportData", () => {
-  it("allows trial", () => {
-    expect(canExportData(makeLicense("trial")).allowed).toBe(true);
+  it("allows active", () => {
+    expect(canExportData(makeLicense("active")).allowed).toBe(true);
   });
 
-  it("allows pro", () => {
-    expect(canExportData(makeLicense("pro")).allowed).toBe(true);
-  });
-
-  it("allows expired — never traps the user", () => {
-    expect(canExportData(makeLicense("expired")).allowed).toBe(true);
+  it("allows inactive — never traps the user", () => {
+    expect(canExportData(makeLicense("inactive")).allowed).toBe(true);
   });
 });
 
 // ── canAccessSettings — always allowed ────────────────────────────────────────
 
 describe("canAccessSettings", () => {
-  it("allows expired", () => {
-    expect(canAccessSettings(makeLicense("expired")).allowed).toBe(true);
+  it("allows inactive", () => {
+    expect(canAccessSettings(makeLicense("inactive")).allowed).toBe(true);
   });
 });
 
 // ── canAccessDashboard — always allowed ───────────────────────────────────────
 
 describe("canAccessDashboard", () => {
-  it("allows expired", () => {
-    expect(canAccessDashboard(makeLicense("expired")).allowed).toBe(true);
+  it("allows inactive", () => {
+    expect(canAccessDashboard(makeLicense("inactive")).allowed).toBe(true);
   });
 });
 
 // ── isFullAccess ──────────────────────────────────────────────────────────────
 
 describe("isFullAccess", () => {
-  it("trial = full access", () => {
-    expect(isFullAccess("trial")).toBe(true);
+  it("active = full access", () => {
+    expect(isFullAccess("active")).toBe(true);
   });
 
-  it("pro = full access", () => {
-    expect(isFullAccess("pro")).toBe(true);
-  });
-
-  it("expired = no full access", () => {
-    expect(isFullAccess("expired")).toBe(false);
+  it("inactive = no full access", () => {
+    expect(isFullAccess("inactive")).toBe(false);
   });
 });

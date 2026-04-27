@@ -1,10 +1,14 @@
 /**
  * License management — persists to ~/.armorclaw/license.json.
  *
- * On first install: creates a 30-day trial with a fresh installId.
- * On each startup: checks expiry, validates Stripe subscription if pro,
- *                  and (if trial) polls the billing Worker to see whether
- *                  the user has completed checkout since last run.
+ * Two states:
+ *   active   — Stripe subscription confirmed
+ *   inactive — no checkout yet, or Stripe subscription lapsed
+ *
+ * The free month is configured on the Stripe price object, not in the app.
+ * On first install: creates an inactive license with a fresh installId.
+ * On each startup: validates Stripe subscription if active, and polls the
+ *                  billing Worker to see whether the user has completed checkout.
  * Never blocks startup on network failure — uses cached result.
  *
  * All I/O and time are injectable for testing.
@@ -17,16 +21,12 @@ import { join } from "node:path";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type LicenseTier = "trial" | "pro" | "expired";
+export type LicenseTier = "active" | "inactive";
 
 export interface License {
   tier: LicenseTier;
   /** UUID — set once on first install, never regenerated. Used as Stripe client_reference_id. */
   installId: string;
-  /** ISO 8601 — set once on first install, never changes. */
-  trialStartedAt: string;
-  /** trialStartedAt + 30 days. */
-  trialEndsAt: string;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   /** True when the license allows the agent to run. */
@@ -35,8 +35,6 @@ export interface License {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TRIAL_DAYS = 30;
-const MS_PER_DAY = 86_400_000;
 const VALIDATION_URL = "https://armorclaw-billing.armorclaw.workers.dev/validate";
 
 // ── File path (injectable for testing) ────────────────────────────────────────
@@ -50,19 +48,6 @@ function licensePath(): string {
 /** Override the file path. Pass null to restore the default. Test use only. */
 export function setLicensePathForTesting(path: string | null): void {
   _filePathOverride = path;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-export function computeTrialEnd(startIso: string): string {
-  const start = new Date(startIso);
-  return new Date(start.getTime() + TRIAL_DAYS * MS_PER_DAY).toISOString();
-}
-
-export function daysRemaining(trialEndsAt: string, now: Date = new Date()): number {
-  const end = new Date(trialEndsAt);
-  const diff = end.getTime() - now.getTime();
-  return Math.max(0, Math.ceil(diff / MS_PER_DAY));
 }
 
 // ── Read / write ──────────────────────────────────────────────────────────────
@@ -86,17 +71,13 @@ function writeLicenseFile(license: License): void {
   }
 }
 
-// ── Trial creation ────────────────────────────────────────────────────────────
+// ── License creation ──────────────────────────────────────────────────────────
 
-export function createTrialLicense(now: Date = new Date()): License {
-  const trialStartedAt = now.toISOString();
-  const trialEndsAt = computeTrialEnd(trialStartedAt);
+export function createInactiveLicense(): License {
   return {
-    tier: "trial",
+    tier: "inactive",
     installId: randomUUID(),
-    trialStartedAt,
-    trialEndsAt,
-    valid: true,
+    valid: false,
   };
 }
 
@@ -155,8 +136,6 @@ export async function validateStripeSubscription(
 // ── Main entry point ──────────────────────────────────────────────────────────
 
 export interface LoadLicenseOptions {
-  /** Override current time. */
-  now?: Date;
   /** Override Stripe validation. */
   stripeValidator?: (license: License) => Promise<boolean>;
 }
@@ -164,19 +143,18 @@ export interface LoadLicenseOptions {
 /**
  * Load (or create) the license and check its status.
  *
- * First install:  creates a trial license with a fresh installId.
- * Trial expired:  sets tier = "expired", valid = false.
- * Pro:            validates against Stripe (async, fallback to cache).
+ * First install:  creates an inactive license with a fresh installId.
+ * Active:         validates against Stripe (async, fallback to cache).
+ *                 If Stripe says no, sets tier = "inactive", valid = false.
  *
  * Always returns a License — never throws.
  */
 export async function loadLicense(options: LoadLicenseOptions = {}): Promise<License> {
-  const now = options.now ?? new Date();
   let license = readLicenseFile();
 
-  // First install — create trial
+  // First install — create inactive license
   if (!license) {
-    license = createTrialLicense(now);
+    license = createInactiveLicense();
     writeLicenseFile(license);
     return license;
   }
@@ -187,31 +165,35 @@ export async function loadLicense(options: LoadLicenseOptions = {}): Promise<Lic
     writeLicenseFile(license);
   }
 
-  // Trial expiry check
-  if (license.tier === "trial" && now.getTime() > new Date(license.trialEndsAt).getTime()) {
-    license.tier = "expired";
-    license.valid = false;
-    writeLicenseFile(license);
-    return license;
-  }
-
-  // Pro — validate Stripe subscription
-  if (license.tier === "pro" && license.stripeSubscriptionId) {
-    const validator = options.stripeValidator ?? ((l: License) => validateStripeSubscription(l));
-    const active = await validator(license);
-    license.valid = active;
-    if (!active) {
-      license.tier = "expired";
+  // Migrate legacy tier values to active/inactive
+  if (!["active", "inactive"].includes(license.tier)) {
+    const legacyTier = license.tier as string;
+    if (legacyTier === "pro") {
+      license.tier = "active";
+    } else {
+      license.tier = "inactive";
+      license.valid = false;
     }
     writeLicenseFile(license);
     return license;
   }
 
-  // Trial still active or other state — return as-is
+  // Active — validate Stripe subscription
+  if (license.tier === "active" && license.stripeSubscriptionId) {
+    const validator = options.stripeValidator ?? ((l: License) => validateStripeSubscription(l));
+    const active = await validator(license);
+    license.valid = active;
+    if (!active) {
+      license.tier = "inactive";
+    }
+    writeLicenseFile(license);
+    return license;
+  }
+
   return license;
 }
 
-// ── Trial → Pro activation poll ───────────────────────────────────────────────
+// ── Inactive → Active activation poll ─────────────────────────────────────────
 
 export interface PollForActivationOptions {
   /** Override the fetch function (default: globalThis.fetch). */
@@ -221,10 +203,10 @@ export interface PollForActivationOptions {
 }
 
 /**
- * If the license is on `trial` and has an installId, ask the billing Worker
+ * If the license is `inactive` and has an installId, ask the billing Worker
  * whether the user has completed checkout since last run. If the Worker
  * returns { active: true, subscriptionId, customerId }, promote the license
- * to `pro` and persist.
+ * to `active` and persist.
  *
  * Never throws — fails silently and returns the input license unchanged on
  * any network or parse failure. Safe to call on every startup.
@@ -233,7 +215,7 @@ export async function pollForActivation(
   license: License,
   options: PollForActivationOptions = {},
 ): Promise<License> {
-  if (license.tier !== "trial" || !license.installId) {
+  if (license.tier !== "inactive" || !license.installId) {
     return license;
   }
 
@@ -253,7 +235,7 @@ export async function pollForActivation(
     if (body.active === true && body.subscriptionId && body.customerId) {
       const promoted: License = {
         ...license,
-        tier: "pro",
+        tier: "active",
         stripeCustomerId: body.customerId,
         stripeSubscriptionId: body.subscriptionId,
         valid: true,
