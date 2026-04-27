@@ -12,12 +12,12 @@ import {
 describe("buildCheckoutUrl", () => {
   it("returns the default payment link when no options", () => {
     const url = buildCheckoutUrl();
-    expect(url).toBe("https://buy.stripe.com/test_7sYdR3gog8xJ4bu8mx7ok00");
+    expect(url).toBe("https://buy.stripe.com/14A00l5Up1HM6eG9qjfjG01");
   });
 
   it("uses the new Stripe test payment link as the default base", () => {
     const url = buildCheckoutUrl({ installId: "abc" });
-    expect(url.startsWith("https://buy.stripe.com/test_7sYdR3gog8xJ4bu8mx7ok00?")).toBe(true);
+    expect(url.startsWith("https://buy.stripe.com/14A00l5Up1HM6eG9qjfjG01?")).toBe(true);
   });
 
   it("includes prefilled_email when email is provided", () => {
@@ -93,7 +93,7 @@ describe("buildCancelUrl", () => {
 
 describe("STRIPE_DEFAULTS", () => {
   it("exposes the new test payment link", () => {
-    expect(STRIPE_DEFAULTS.paymentLink).toBe("https://buy.stripe.com/test_7sYdR3gog8xJ4bu8mx7ok00");
+    expect(STRIPE_DEFAULTS.paymentLink).toBe("https://buy.stripe.com/14A00l5Up1HM6eG9qjfjG01");
   });
 
   it("exposes armorclaw.app as the success base", () => {

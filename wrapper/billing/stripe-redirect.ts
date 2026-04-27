@@ -21,7 +21,7 @@ export interface CheckoutUrlOptions {
 
 // ── Default values ────────────────────────────────────────────────────────────
 
-const DEFAULT_PAYMENT_LINK = "https://buy.stripe.com/test_7sYdR3gog8xJ4bu8mx7ok00";
+const DEFAULT_PAYMENT_LINK = "https://buy.stripe.com/14A00l5Up1HM6eG9qjfjG01";
 /** Used by buildCancelUrl as the fallback dashboard origin (kept for cancel URL). */
 const DEFAULT_SUCCESS_BASE = "https://armorclaw.app";
 
