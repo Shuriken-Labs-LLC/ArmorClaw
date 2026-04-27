@@ -99,4 +99,10 @@ describe("STRIPE_DEFAULTS", () => {
   it("exposes armorclaw.app as the success base", () => {
     expect(STRIPE_DEFAULTS.successBase).toBe("https://armorclaw.app");
   });
+
+  it("exposes the live Customer Portal URL", () => {
+    expect(STRIPE_DEFAULTS.customerPortalUrl).toBe(
+      "https://billing.stripe.com/p/login/7sYbJ3gz31HMfPg7ibfjG00",
+    );
+  });
 });

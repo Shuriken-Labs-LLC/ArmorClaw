@@ -554,10 +554,9 @@ export interface DashboardSnapshot {
   tailscaleUrl: string | null;
   /**
    * Stripe Customer Portal URL for subscription management.
-   * Null when STRIPE_CUSTOMER_PORTAL_URL is not set — hides the subscription
-   * card in Settings so customers aren't shown a broken link.
+   * Defaults to STRIPE_DEFAULTS.customerPortalUrl when env var is unset.
    */
-  stripeCustomerPortalUrl: string | null;
+  stripeCustomerPortalUrl: string;
   /**
    * Stripe Payment Link base URL for checkout.
    * Used client-side to build the full checkout URL with client_reference_id.
@@ -645,7 +644,7 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
       outlook: false,
     },
     tailscaleUrl: getTailscaleUrl(),
-    stripeCustomerPortalUrl: env["STRIPE_CUSTOMER_PORTAL_URL"] ?? null,
+    stripeCustomerPortalUrl: env["STRIPE_CUSTOMER_PORTAL_URL"] ?? STRIPE_DEFAULTS.customerPortalUrl,
     paymentLinkBase: env["STRIPE_PAYMENT_LINK"] ?? STRIPE_DEFAULTS.paymentLink,
     license: licenseSnapshot(),
     security: getSecurityStats(),

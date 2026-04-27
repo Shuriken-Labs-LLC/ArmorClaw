@@ -24,6 +24,7 @@ export interface CheckoutUrlOptions {
 const DEFAULT_PAYMENT_LINK = "https://buy.stripe.com/14A00l5Up1HM6eG9qjfjG01";
 /** Used by buildCancelUrl as the fallback dashboard origin (kept for cancel URL). */
 const DEFAULT_SUCCESS_BASE = "https://armorclaw.app";
+const DEFAULT_CUSTOMER_PORTAL_URL = "https://billing.stripe.com/p/login/7sYbJ3gz31HMfPg7ibfjG00";
 
 // ── Main function ─────────────────────────────────────────────────────────────
 
@@ -58,8 +59,14 @@ export function buildCancelUrl(dashboardUrl = "http://127.0.0.1:7390"): string {
   return `${dashboardUrl}/#billing`;
 }
 
-/** Exposed for tests + downstream consumers. */
+/**
+ * Exposed for tests + downstream consumers.
+ * customerPortalUrl is intentionally a hardcoded default rather than a required
+ * env var — it's a public Stripe-hosted link, not a secret. The .env override
+ * (STRIPE_CUSTOMER_PORTAL_URL) is still respected when set.
+ */
 export const STRIPE_DEFAULTS = {
   paymentLink: DEFAULT_PAYMENT_LINK,
   successBase: DEFAULT_SUCCESS_BASE,
+  customerPortalUrl: DEFAULT_CUSTOMER_PORTAL_URL,
 } as const;

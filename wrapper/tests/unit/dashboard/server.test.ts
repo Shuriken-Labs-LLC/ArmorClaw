@@ -498,6 +498,8 @@ describe("getDashboardSnapshot", () => {
     expect(snap).toHaveProperty("connectedServices");
     expect(snap).toHaveProperty("tailscaleUrl");
     expect(snap).toHaveProperty("paymentLinkBase");
+    expect(snap).toHaveProperty("stripeCustomerPortalUrl");
+    expect(typeof snap.stripeCustomerPortalUrl).toBe("string");
     expect(snap).toHaveProperty("security");
     expect(snap).toHaveProperty("serverTime");
   });
@@ -591,6 +593,26 @@ describe("getDashboardSnapshot", () => {
     const { STRIPE_DEFAULTS } = await import("../../../billing/stripe-redirect.ts");
     const snap = await getDashboardSnapshot();
     expect(snap.paymentLinkBase).toBe(STRIPE_DEFAULTS.paymentLink);
+  });
+
+  it("stripeCustomerPortalUrl falls back to STRIPE_DEFAULTS when env is unset", async () => {
+    vi.mocked(readFileSync).mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
+    const { STRIPE_DEFAULTS } = await import("../../../billing/stripe-redirect.ts");
+    const snap = await getDashboardSnapshot();
+    expect(snap.stripeCustomerPortalUrl).toBe(STRIPE_DEFAULTS.customerPortalUrl);
+  });
+
+  it("stripeCustomerPortalUrl reads from env var when set", async () => {
+    vi.mocked(readFileSync).mockImplementation((path: unknown) => {
+      if (String(path).endsWith(".env")) {
+        return "STRIPE_CUSTOMER_PORTAL_URL=https://billing.stripe.com/custom\n";
+      }
+      throw new Error("ENOENT");
+    });
+    const snap = await getDashboardSnapshot();
+    expect(snap.stripeCustomerPortalUrl).toBe("https://billing.stripe.com/custom");
   });
 
   it("paymentLinkBase reads from STRIPE_PAYMENT_LINK env var", async () => {
