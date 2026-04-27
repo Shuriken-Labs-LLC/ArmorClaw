@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArmorClaw — Your AI agent. Runs on your computer.</title>
+  <meta name="description" content="ArmorClaw is an AI agent that works autonomously on your behalf — triaging email, managing files, and automating tasks — from your computer, reachable from your phone. Built for agents, advisors, and freelancers who need real leverage.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ac-bg: #0D0F14;
+      --ac-surface: #13161E;
+      --ac-surface2: #1A1D27;
+      --ac-border: #2A2D3A;
+      --ac-border-strong: #3A3D4E;
+      --ac-text: #E8E6FF;
+      --ac-muted: #8B8DA8;
+      --ac-hint: #5A5C75;
+      --ac-teal: #1DE9B6;
+      --ac-teal-light: #0D2E26;
+      --ac-purple: #9B6DFF;
+      --ac-purple-light: #1A1030;
+      --ac-amber: #FFB347;
+      --ac-amber-light: #2A1F0A;
+      --ac-red: #FF5370;
+      --ac-blue: #82AAFF;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--ac-bg);
+      color: var(--ac-text);
+      font-size: 16px;
+      line-height: 1.6;
+      font-weight: 400;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ── Nav ── */
+    nav {
+      padding: 20px 0;
+      border-bottom: 0.5px solid var(--ac-border);
+    }
+    nav .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .wordmark {
+      font-family: 'DM Mono', monospace;
+      font-size: 18px;
+      font-weight: 400;
+      color: var(--ac-teal);
+      text-decoration: none;
+      letter-spacing: -0.5px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      align-items: center;
+    }
+    .nav-links a {
+      color: var(--ac-muted);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 400;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--ac-text); }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 96px 0 80px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: 44px;
+      font-weight: 600;
+      line-height: 1.15;
+      margin-bottom: 24px;
+      letter-spacing: -0.5px;
+    }
+    .hero h1 .highlight {
+      color: var(--ac-teal);
+    }
+    .hero .subtitle {
+      font-size: 18px;
+      color: var(--ac-muted);
+      max-width: 580px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+    .hero .cta-row {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 32px;
+      background: var(--ac-teal);
+      color: var(--ac-bg);
+      font-size: 15px;
+      font-weight: 500;
+      border: none;
+      border-radius: 8px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: box-shadow 0.2s;
+    }
+    .btn-download:hover {
+      box-shadow: 0 0 24px rgba(29, 233, 182, 0.35);
+    }
+    .cta-note {
+      font-size: 13px;
+      color: var(--ac-hint);
+    }
+
+    /* ── Story section ── */
+    .story {
+      padding: 80px 0;
+      border-top: 0.5px solid var(--ac-border);
+    }
+    .story-content {
+      max-width: 640px;
+    }
+    .story h2 {
+      font-size: 28px;
+      font-weight: 500;
+      margin-bottom: 24px;
+      line-height: 1.3;
+    }
+    .story p {
+      color: var(--ac-muted);
+      margin-bottom: 16px;
+      font-size: 16px;
+      line-height: 1.7;
+    }
+    .story p:last-child { margin-bottom: 0; }
+
+    /* ── Features ── */
+    .features {
+      padding: 80px 0;
+      border-top: 0.5px solid var(--ac-border);
+    }
+    .features h2 {
+      font-size: 28px;
+      font-weight: 500;
+      margin-bottom: 48px;
+    }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .feature-card {
+      padding: 24px;
+      background: var(--ac-surface);
+      border: 0.5px solid var(--ac-border);
+      border-radius: 12px;
+    }
+    .feature-card h3 {
+      font-size: 16px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+    .feature-card p {
+      font-size: 14px;
+      color: var(--ac-muted);
+      line-height: 1.6;
+    }
+    .feature-card .accent-bar {
+      width: 32px;
+      height: 3px;
+      border-radius: 2px;
+      margin-bottom: 16px;
+    }
+
+    /* ── Provider choice ── */
+    .providers {
+      padding: 80px 0;
+      border-top: 0.5px solid var(--ac-border);
+    }
+    .providers h2 {
+      font-size: 28px;
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+    .providers .intro {
+      color: var(--ac-muted);
+      margin-bottom: 40px;
+      max-width: 580px;
+      font-size: 16px;
+    }
+    .provider-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+    }
+    .provider-card {
+      padding: 24px;
+      background: var(--ac-surface);
+      border: 0.5px solid var(--ac-border);
+      border-radius: 12px;
+    }
+    .provider-card .tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .provider-card .tag.local {
+      background: var(--ac-teal-light);
+      color: var(--ac-teal);
+    }
+    .provider-card .tag.cloud {
+      background: var(--ac-purple-light);
+      color: var(--ac-purple);
+    }
+    .provider-card h3 {
+      font-size: 16px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+    .provider-card p {
+      font-size: 14px;
+      color: var(--ac-muted);
+      line-height: 1.6;
+    }
+
+    /* ── Pricing ── */
+    .pricing {
+      padding: 80px 0;
+      border-top: 0.5px solid var(--ac-border);
+      text-align: center;
+    }
+    .pricing h2 {
+      font-size: 28px;
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+    .pricing .intro {
+      color: var(--ac-muted);
+      margin-bottom: 40px;
+      font-size: 16px;
+    }
+    .pricing-card {
+      max-width: 400px;
+      margin: 0 auto;
+      padding: 32px;
+      background: var(--ac-surface);
+      border: 0.5px solid var(--ac-border);
+      border-radius: 12px;
+      text-align: left;
+    }
+    .pricing-card .price {
+      font-size: 36px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .pricing-card .price span {
+      font-size: 16px;
+      font-weight: 400;
+      color: var(--ac-muted);
+    }
+    .pricing-card .trial {
+      font-size: 14px;
+      color: var(--ac-teal);
+      margin-bottom: 24px;
+    }
+    .pricing-card .includes {
+      font-size: 14px;
+      color: var(--ac-muted);
+      line-height: 1.8;
+    }
+    .pricing-card .includes strong {
+      color: var(--ac-text);
+      font-weight: 500;
+    }
+    .pricing-card .subscribe-btn {
+      display: block;
+      width: 100%;
+      margin-top: 24px;
+      padding: 14px 0;
+      background: var(--ac-teal);
+      color: #0D0F14;
+      font-size: 15px;
+      font-weight: 500;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .pricing-card .subscribe-btn:hover { opacity: 0.88; }
+    .pricing-card .renewal-notice {
+      margin-top: 16px;
+      font-size: 12px;
+      color: var(--ac-hint);
+      line-height: 1.6;
+    }
+
+    /* ── Footer ── */
+    footer {
+      padding: 48px 0;
+      border-top: 0.5px solid var(--ac-border);
+    }
+    footer .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .footer-left {
+      font-size: 13px;
+      color: var(--ac-hint);
+    }
+    .footer-links {
+      display: flex;
+      gap: 24px;
+    }
+    .footer-links a {
+      font-size: 13px;
+      color: var(--ac-muted);
+      text-decoration: none;
+    }
+    .footer-links a:hover { color: var(--ac-text); }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .hero { padding: 64px 0 56px; }
+      .hero h1 { font-size: 32px; }
+      .hero .subtitle { font-size: 16px; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .provider-cards { grid-template-columns: 1fr; }
+      .nav-links { gap: 20px; }
+      .story, .features, .providers, .pricing { padding: 56px 0; }
+    }
+
+    @media (max-width: 480px) {
+      .hero h1 { font-size: 28px; }
+      .nav-links a { font-size: 13px; }
+      .container { padding: 0 16px; }
+      .hero .cta-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav>
+    <div class="container">
+      <a href="/" class="wordmark">ArmorClaw</a>
+      <div class="nav-links">
+        <a href="#how-it-works">How it works</a>
+        <a href="#security">Security</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#" class="btn-download" style="padding:8px 20px; font-size:13px;">Download</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <h1>An AI agent that<br><span class="highlight">works while you're working</span></h1>
+      <p class="subtitle">
+        ArmorClaw handles your inbox, drafts replies, manages files, and
+        automates tasks — on a schedule, while your Mac is running.
+        Message it from Telegram and it reports back. Your data stays on
+        your computer, and the agent can only touch one folder you choose.
+      </p>
+      <div class="cta-row">
+        <a href="#" class="btn-download">Download for macOS</a>
+        <span class="cta-note">Free for 30 days. No credit card required.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Story -->
+  <section class="story">
+    <div class="container">
+      <div class="story-content">
+        <h2>We wanted an agent that actually did things</h2>
+        <p>
+          Most AI tools are chat windows. You open them when you have time,
+          ask a question, get an answer. That's useful, but it's not leverage.
+          Leverage is an agent that works through your backlog on a schedule.
+          That sends you a summary before you get back to your desk. That
+          handles the repetitive stuff without you having to remember to ask.
+        </p>
+        <p>
+          ArmorClaw runs on your own machine, so your client conversations and
+          business data don't live on someone else's server. The agent is
+          confined to a single folder you pick during setup — it can't reach
+          your Desktop, your other apps, or anything outside that boundary.
+          That's not a limitation; it's the point. You get the automation
+          without handing over the keys to your whole computer.
+        </p>
+        <p>
+          We built it for the professional who doesn't have an engineering
+          team. Real estate agents who need to stay on top of a pipeline.
+          Financial advisors who can't afford to let anything slip. Freelancers
+          who bill by the hour and need to spend it on the right things.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features" id="how-it-works">
+    <div class="container">
+      <h2>How it works for you</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Works from your phone</h3>
+          <p>
+            Text ArmorClaw on Telegram and it gets to work. Triage your inbox,
+            draft a follow-up, look something up. Every morning it sends you
+            a briefing without being asked — what came in, what's ahead, what
+            needs a decision.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-amber);"></div>
+          <h3>Token transparency</h3>
+          <p>
+            Every task shows the exact AI cost in dollars. Set a monthly cap
+            and ArmorClaw stops before you hit it. No surprise bills. If you
+            run Ollama locally, your cost is zero — ArmorClaw tracks that too.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-blue);"></div>
+          <h3>You approve the irreversible stuff</h3>
+          <p>
+            ArmorClaw drafts emails and queues up actions — it doesn't send
+            until you say so. A plain-English dashboard shows every task it
+            ran and every permission it used. If something doesn't look right,
+            you have 60 seconds to undo it.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-purple);"></div>
+          <h3>Running in 15 minutes</h3>
+          <p>
+            A step-by-step setup wizard. No terminal, no config files, no
+            engineering team required. Connect your email account, choose your
+            files folder, and link Telegram. It's running before you finish
+            your coffee.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Wedge: what ArmorClaw adds over raw OpenClaw -->
+  <section class="features" id="security">
+    <div class="container">
+      <h2>Hardened on top of OpenClaw</h2>
+      <p style="color:var(--ac-muted);margin-bottom:40px;max-width:640px;font-size:16px;line-height:1.7;">
+        ArmorClaw is built on OpenClaw, the open-source agent runtime. OpenClaw is powerful and flexible — designed for engineers building their own agents. ArmorClaw is what you get when you wrap it in the security layer, approval flow, and setup wizard that make it deployable by someone who's never opened a terminal.
+      </p>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Prompt injection filter</h3>
+          <p>
+            Every input is screened for instruction-override patterns before
+            it reaches the model. Malicious content hidden in emails or web
+            pages is caught, logged, and rejected. OpenClaw doesn't have this.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-purple);"></div>
+          <h3>Permission manifests</h3>
+          <p>
+            Every skill declares what it can access — read email, write files,
+            control the browser — and is blocked at load time if it tries to
+            exceed that. No runtime privilege escalation.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-blue);"></div>
+          <h3>The agent stays in one folder</h3>
+          <p>
+            You choose a folder during setup. The agent can only read or write
+            inside it — not your Desktop, not your Downloads, not ArmorClaw
+            itself. Path traversal attempts are rejected and logged.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-amber);"></div>
+          <h3>Plain-English audit log</h3>
+          <p>
+            Every action the agent has taken, with timestamp, skill name,
+            outcome, and duration — in a searchable dashboard. Export to
+            CSV anytime. No telemetry leaves your machine.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Provider choice -->
+  <section class="providers">
+    <div class="container">
+      <h2>You choose where your conversations go</h2>
+      <p class="intro">
+        ArmorClaw doesn't lock you into one AI provider. During setup,
+        you pick the one that fits your priorities.
+      </p>
+      <div class="provider-cards">
+        <div class="provider-card">
+          <span class="tag local">Local</span>
+          <h3>Ollama</h3>
+          <p>
+            Runs a model on your own hardware. Nothing leaves your computer.
+            No API key. No cost. The most private option available.
+          </p>
+        </div>
+        <div class="provider-card">
+          <span class="tag cloud">Cloud</span>
+          <h3>Anthropic (Claude)</h3>
+          <p>
+            Powerful cloud AI. Conversations go directly from your computer
+            to Anthropic's servers. You bring your own API key and pay
+            Anthropic directly.
+          </p>
+        </div>
+        <div class="provider-card">
+          <span class="tag cloud">Cloud</span>
+          <h3>OpenAI (GPT)</h3>
+          <p>
+            Powerful cloud AI. Conversations go directly from your computer
+            to OpenAI's servers. You bring your own API key and pay
+            OpenAI directly.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Honest cautions -->
+  <section class="features" id="cautions">
+    <div class="container">
+      <h2>A few things to know before you delegate</h2>
+      <p style="color:var(--ac-muted);margin-bottom:40px;max-width:640px;font-size:16px;line-height:1.7;">
+        AI agents are capable and occasionally wrong. Here's what you should keep in mind going in.
+      </p>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-amber);"></div>
+          <h3>Your Mac has to be running</h3>
+          <p>
+            ArmorClaw runs on your computer. Scheduled tasks, morning
+            briefings, and Telegram messages all require the Mac to be
+            on and the app to be open. If the machine sleeps, the agent
+            stops.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-amber);"></div>
+          <h3>Cloud providers still see your prompts</h3>
+          <p>
+            If you pick Anthropic or OpenAI, the text of your conversations
+            goes to their servers. That's inherent to using cloud AI. For
+            total privacy, run Ollama locally — then nothing leaves your
+            machine.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-amber);"></div>
+          <h3>Start with low-stakes work</h3>
+          <p>
+            Give the agent simple tasks first — inbox triage, research,
+            drafts — before delegating anything with real consequences.
+            Build trust by reviewing what it did, not by assuming it was
+            right.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-amber);"></div>
+          <h3>Approvals only work if you read</h3>
+          <p>
+            ArmorClaw drafts emails and queues up actions, asking before
+            sending or committing. That safety net only works if you
+            actually read what's in front of you — not reflexively tap
+            approve.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-amber);"></div>
+          <h3>Don't point it at untrusted content</h3>
+          <p>
+            The injection filter catches common attacks, but no filter is
+            perfect. Don't let the agent process emails, files, or web
+            pages from sources you wouldn't trust with your account
+            credentials.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-amber);"></div>
+          <h3>Set a token budget</h3>
+          <p>
+            Autonomous agents can get expensive fast if something loops.
+            ArmorClaw's budget cap hard-stops the AI provider when you hit
+            your limit — use it. $20/month is the default; tune it to
+            what you're comfortable with.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="pricing" id="pricing">
+    <div class="container">
+      <h2>Simple pricing</h2>
+      <p class="intro">One plan. Everything included. Cancel anytime.</p>
+      <div class="pricing-card">
+        <div class="price">$19.99 <span>/ month</span></div>
+        <div class="trial">Free for your first 30 days</div>
+        <div class="includes">
+          <strong>Includes:</strong> email triage and drafting, file
+          management, browser automation, daily briefings, scheduled recipes,
+          one-tap undo, full audit trail, token transparency dashboard,
+          Telegram integration, and every update we ship. You bring your own
+          API key or run a free local model.
+        </div>
+        <!-- [SUBSCRIBE_LINK] Replace href with Stripe payment link before launch -->
+        <a href="#" class="subscribe-btn">Start free trial</a>
+        <!-- FTC/ROSCA-required auto-renewal disclosure — keep this text near the subscribe button -->
+        <p class="renewal-notice">
+          FREE TRIAL + AUTO-RENEWAL NOTICE: Your free trial ends 30 days after signup.
+          Unless you cancel before then, you authorize ArmorClaw to charge $19.99 plus
+          applicable taxes on that date and every month thereafter until canceled.
+          Cancel anytime in&nbsp;Settings.
+          <a href="/terms" style="color:var(--ac-muted);text-decoration:underline;">Terms of Service</a>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-left">
+        Shuriken Labs LLC &middot; Milan, Michigan
+      </div>
+      <div class="footer-links">
+        <a href="/privacy">Privacy Policy</a>
+        <a href="/terms">Terms of Service</a>
+        <a href="mailto:hello@armorclaw.app">Contact</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
