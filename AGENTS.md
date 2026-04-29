@@ -138,7 +138,7 @@ Constraints: dedicated Chromium profile at `~/.armorclaw/browser-profile` only �
 
 ## Skill registry — `wrapper/lib/skill-registry.ts`
 
-In-memory, rebuilt on every daemon restart. Bundled and user-created skills register at load time for dashboard visibility, token attribution, digest mentions, and undo integration.
+In-memory, rebuilt on every daemon restart. Only bundled skills register — user-authored skill loading was removed in 0.3.0 (Phase 1a of the security overhaul).
 
 ```typescript
 interface ArmorClawSkillManifest {
@@ -146,7 +146,7 @@ interface ArmorClawSkillManifest {
   displayName: string; // shown in activity feed
   description: string; // one sentence
   version: string; // semver
-  author: "bundled" | "user";
+  author: "bundled";
   permissionManifest: PermissionLevel[];
   undoable: boolean; // must also export undo() if true
   recipeEligible: boolean;
@@ -162,11 +162,9 @@ Registry rules:
 - Duplicate `skillId` → throws `SkillRegistryError`.
 - `undoable: true` without exported `undo()` → throws `SkillRegistryError` at load time, never at runtime.
 - Unregistered skills still execute safely (security layer catches all tool calls) but appear as "Unknown skill" in dashboard.
-- No persistent registry file. Discovery errors are logged and skipped — daemon doesn't crash.
+- No persistent registry file. No filesystem auto-discovery. The registry only contains skills that bundled code explicitly registers at startup.
 
-Query functions (read-only): `getSkill()`, `getAllSkills()`, `getBundledSkills()`, `getUserSkills()`, `isUndoable()`, `isRecipeEligible()`.
-
-Auto-discovery: scans `~/.armorclaw/skills/` at daemon startup for `.ts`/`.js` files.
+Query functions (read-only): `getSkill()`, `getAllSkills()`, `getBundledSkills()`, `isUndoable()`, `isRecipeEligible()`.
 
 ---
 
@@ -430,7 +428,7 @@ cp -r ~/armorclaw/wrapper/launcher/dist/mac-arm64/ArmorClaw.app /Applications/
 - **Memory — Layer 2:** OpenClaw vector search indexes sandbox. Configured via `memory.paths` in `openclaw.json`.
 - **Platform config paths** (`wrapper/lib/platform-paths.ts`): Mac `~/Library/Application Support/armorclaw-launcher/`, Windows `%APPDATA%\armorclaw-launcher\`, Linux `~/.config/armorclaw-launcher/`. Never hardcode Mac paths — use `getLauncherDataPath()`.
 - **Advanced view:** BrowserView at `http://127.0.0.1:18789`. Sidebar offset 200px, banner offset 90px. Managed by `wrapper/launcher/dashboard-window.ts`.
-- **Skills config:** `armorclaw-launcher/skills.json`. **Channels config:** `armorclaw-launcher/channels.json`.
+- **Channels config:** `armorclaw-launcher/channels.json`. (Skills config no longer written — user skills are not supported.)
 - **OpenClaw version monitoring:** Watch `https://github.com/openclaw/openclaw/releases.atom`. Pin version in `package.json`. Schema changes to channels/providers/gateway protocol can silently break ArmorClaw.
 
 ---
@@ -454,7 +452,7 @@ cp -r ~/armorclaw/wrapper/launcher/dist/mac-arm64/ArmorClaw.app /Applications/
 - Skip the daily digest when budget is hit — send the budget warning message instead.
 - Use monospace fonts for end-user-visible UI text.
 - Use a light theme.
-- Allow a user skill to bypass the permission engine by skipping registration.
+- Re-introduce user-skill loading in any form. Auto-discovery from `~/.armorclaw/skills/`, GitHub URL fetch+install, ClawHub catalog browse, and `skills.json` write paths were all removed in Phase 1a of the security overhaul (0.3.0). If user skills come back later they require a redesign with hash-pinning, signed manifests, and sandboxed execution — not just re-enabling.
 - Persist the skill registry to disk.
 - Allow a skill with `undoable: true` to load without exporting `undo()`.
 - Bypass the ArmorClaw security layer from the Advanced view — it is a visibility pass-through, not a security bypass.

@@ -38,8 +38,6 @@
     "../config/system-prompt.ts",
     "../lib/model-adapter.ts",
     "../lib/skill-registry.ts",
-    "../marketplace/importer.ts",
-    "../marketplace/verifier.ts",
     "../recipes/store.ts",
     "../recipes/types.ts",
     "../recipes/library/index.ts",

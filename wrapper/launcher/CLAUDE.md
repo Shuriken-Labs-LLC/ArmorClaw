@@ -29,7 +29,7 @@ wrapper/
     system-prompt.ts — agent system prompt + memory file management
   lib/
     model-adapter.ts — Anthropic/OpenAI/Ollama completion abstraction
-    skill-registry.ts — skill manifest registration + user skill auto-discovery
+    skill-registry.ts — bundled-skill manifest registration (no user-skill loading)
     platform-paths.ts — cross-platform config directory resolution
   security/
     audit-logger.ts  — NDJSON audit log to ~/.armorclaw/audit.log (OpenClaw plugin)
@@ -39,9 +39,6 @@ wrapper/
     pricing.ts       — per-model pricing table (Anthropic, OpenAI; Ollama = free)
   undo/
     registry.ts      — single-slot undo registry (60s expiry)
-  marketplace/
-    importer.ts      — GitHub URL validation, fetch, install to ~/.armorclaw/skills/
-    verifier.ts      — static analysis of skill source (dangerous patterns, permissions, domains)
   recipes/
     types.ts         — Recipe, RecipeState, RecipeWithState interfaces
     store.ts         — recipe state persistence to ~/.armorclaw/recipes.json
@@ -63,7 +60,6 @@ wrapper/
 | `~/.armorclaw/`                   | Config dir (audit.log, tokens, memory, recipes) |
 | `~/.armorclaw/install-path.txt`   | Repo root written by wizard Step 6 |
 | `~/.armorclaw/memory.md`          | Agent long-term memory file        |
-| `~/.armorclaw/skills/`            | User-installed skill files         |
 | `~/.openclaw/openclaw.json`       | OpenClaw config (gateway token lives here) |
 | `<repo-root>/.env`               | API keys, provider config, sandbox dir |
 

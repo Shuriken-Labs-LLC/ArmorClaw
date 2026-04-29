@@ -1,6 +1,3 @@
-import { readdirSync } from "node:fs";
-import { join } from "node:path";
-import { type AuditEntry, writeAuditEntry } from "../security/audit-logger.ts";
 import { HARD_BANNED_PERMISSIONS, PermissionLoadError } from "../security/permissions.ts";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -10,7 +7,9 @@ export type PermissionLevel = string;
 
 /**
  * Full manifest every skill must supply when calling `registerSkill()`.
- * Bundled and user-created skills share the same shape.
+ *
+ * Only bundled skills are supported. User-created skills were removed in 0.3.0
+ * (Phase 1a of the security overhaul) — see CLAUDE.md hard stops for the rationale.
  */
 export interface ArmorClawSkillManifest {
   /** Unique kebab-case identifier, e.g. "my-lead-scorer". */
@@ -21,8 +20,8 @@ export interface ArmorClawSkillManifest {
   description: string;
   /** Semver string: "1.0.0". */
   version: string;
-  /** Provenance: bundled = shipped with ArmorClaw; user = vibe-coded by the user. */
-  author: "bundled" | "user";
+  /** Provenance: always "bundled" — user-authored skills are not loaded. */
+  author: "bundled";
   /** Permission levels this skill requires. Hard-banned levels are rejected at load time. */
   permissionManifest: PermissionLevel[];
   /** true = skill must also export undo(); shown as undoable in dashboard. */
@@ -45,7 +44,7 @@ export class SkillRegistryError extends Error {
 
 // ── Registry ──────────────────────────────────────────────────────────────────
 
-// Module-level; rebuilt on every daemon restart via scanUserSkills()
+// Module-level; rebuilt on every daemon restart by bundled skills calling registerSkill().
 const registry = new Map<string, Readonly<ArmorClawSkillManifest>>();
 
 // ── Registration ──────────────────────────────────────────────────────────────
@@ -98,19 +97,14 @@ export function getSkill(skillId: string): Readonly<ArmorClawSkillManifest> | un
   return registry.get(skillId);
 }
 
-/** Returns all registered manifests (bundled and user). */
+/** Returns all registered manifests. All manifests are bundled. */
 export function getAllSkills(): ReadonlyArray<Readonly<ArmorClawSkillManifest>> {
   return [...registry.values()];
 }
 
-/** Returns only manifests with `author: "bundled"`. */
+/** Returns only manifests with `author: "bundled"` — currently equivalent to `getAllSkills()`. */
 export function getBundledSkills(): ReadonlyArray<Readonly<ArmorClawSkillManifest>> {
   return [...registry.values()].filter((s) => s.author === "bundled");
-}
-
-/** Returns only manifests with `author: "user"`. */
-export function getUserSkills(): ReadonlyArray<Readonly<ArmorClawSkillManifest>> {
-  return [...registry.values()].filter((s) => s.author === "user");
 }
 
 /** Returns `true` if the skill is registered and declares `undoable: true`. */
@@ -121,58 +115,6 @@ export function isUndoable(skillId: string): boolean {
 /** Returns `true` if the skill is registered and declares `recipeEligible: true`. */
 export function isRecipeEligible(skillId: string): boolean {
   return registry.get(skillId)?.recipeEligible ?? false;
-}
-
-// ── Auto-discovery ────────────────────────────────────────────────────────────
-
-/**
- * Function signature for the dynamic importer used by `scanUserSkills`.
- * Defaults to `import(filePath)` but is injectable for test isolation.
- */
-type SkillImporter = (filePath: string) => Promise<Record<string, unknown>>;
-
-/**
- * Scan a directory for user skill files (`.ts` / `.js`), import each one,
- * and call its default export (the skill setup function).
- *
- * Discovery errors (missing directory, bad import, registration rejection) are
- * written to the audit log with `outcome: "error"` and `skill: "registry"`.
- * They never crash the daemon — the bad file is skipped and the rest load normally.
- *
- * @param dir       Directory to scan, typically `~/.armorclaw/skills/`.
- * @param importer  Override the default `import()` for test injection.
- */
-export async function scanUserSkills(
-  dir: string,
-  importer: SkillImporter = (p) => import(p) as Promise<Record<string, unknown>>,
-): Promise<void> {
-  let files: string[];
-  try {
-    files = readdirSync(dir).filter((f) => f.endsWith(".ts") || f.endsWith(".js"));
-  } catch {
-    // Directory absent or unreadable — not an error condition, nothing to load
-    return;
-  }
-
-  for (const file of files) {
-    const filePath = join(dir, file);
-    try {
-      const mod = await importer(filePath);
-      if (typeof mod.default === "function") {
-        (mod.default as () => unknown)();
-      }
-    } catch {
-      const auditEntry: AuditEntry = {
-        timestamp: new Date().toISOString(),
-        skill: "registry",
-        permissionsUsed: [],
-        inputSummary: `Failed to load skill: ${file}`.slice(0, 80),
-        outcome: "error",
-        durationMs: 0,
-      };
-      writeAuditEntry(auditEntry);
-    }
-  }
 }
 
 // ── Testing helper ────────────────────────────────────────────────────────────

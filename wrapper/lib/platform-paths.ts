@@ -16,7 +16,7 @@ import { join } from "node:path";
 
 /**
  * Electron-style "userData" path for the launcher. This is where
- * skills.json, channels.json, and other launcher config live.
+ * channels.json and other launcher config live.
  */
 export function getLauncherDataPath(): string {
   switch (process.platform) {

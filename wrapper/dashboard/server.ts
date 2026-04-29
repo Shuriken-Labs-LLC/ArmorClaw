@@ -27,13 +27,6 @@ import { getModelAdapterState } from "../lib/model-adapter.ts";
 import { getBackupParentDir, getLauncherDataPath } from "../lib/platform-paths.ts";
 import { getAllSkills } from "../lib/skill-registry.ts";
 import {
-  fetchSkillSource,
-  installSkill,
-  isValidGitHubUrl,
-  sanitizeFilename,
-} from "../marketplace/importer.ts";
-import { verifySkillSource } from "../marketplace/verifier.ts";
-import {
   getAllRecipes,
   activateRecipe,
   deactivateRecipe,
@@ -707,45 +700,6 @@ export function getBundledSkillStatuses(env: Record<string, string>): BundledSki
   ];
 }
 
-// ── Skills config (~/Library/Application Support/armorclaw-launcher/skills.json) ──
-
-export interface InstalledSkillEntry {
-  id: string;
-  name: string;
-  description: string;
-  capabilities: string[];
-  source: "clawhub" | "github";
-  sourceUrl: string;
-  enabled: boolean;
-  installedAt: string;
-}
-
-export interface SkillsConfig {
-  installed: InstalledSkillEntry[];
-}
-
-function skillsConfigPath(): string {
-  return join(getLauncherDataPath(), "skills.json");
-}
-
-export function readSkillsConfig(): SkillsConfig {
-  try {
-    const raw = readFileSync(skillsConfigPath(), "utf-8");
-    const parsed = JSON.parse(raw) as SkillsConfig;
-    if (!Array.isArray(parsed.installed)) {
-      return { installed: [] };
-    }
-    return parsed;
-  } catch {
-    return { installed: [] };
-  }
-}
-
-export function writeSkillsConfig(config: SkillsConfig): void {
-  mkdirSync(getLauncherDataPath(), { recursive: true });
-  writeFileSync(skillsConfigPath(), JSON.stringify(config, null, 2) + "\n", "utf-8");
-}
-
 // ── Channels config (~/Library/Application Support/armorclaw-launcher/channels.json) ──
 
 export interface ChannelsConfig {
@@ -1212,182 +1166,10 @@ export function createApp(): express.Application {
     res.send(header + rows);
   });
 
-  // ── Skills: analyze from GitHub URL ──
-  app.post("/api/skills/analyze-url", async (req, res) => {
-    const { url } = req.body as { url?: unknown };
-    if (typeof url !== "string" || !url.trim()) {
-      res.status(422).json({ ok: false, message: "url is required" });
-      return;
-    }
-    if (!isValidGitHubUrl(url.trim())) {
-      res.status(422).json({ ok: false, message: "URL must be a GitHub or GitHub Gist HTTPS URL" });
-      return;
-    }
-    try {
-      const { code, filename } = await fetchSkillSource(url.trim());
-      const report = verifySkillSource(code);
-      res.json({ ok: true, report, code, filename });
-    } catch (err) {
-      res
-        .status(422)
-        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
-    }
-  });
-
-  // ── Skills: analyze from uploaded file ──
-  app.post("/api/skills/analyze-file", (req, res) => {
-    const { content, filename } = req.body as { content?: unknown; filename?: unknown };
-    if (typeof content !== "string" || !content.trim()) {
-      res.status(422).json({ ok: false, message: "content (base64) is required" });
-      return;
-    }
-    if (typeof filename !== "string" || !filename.trim()) {
-      res.status(422).json({ ok: false, message: "filename is required" });
-      return;
-    }
-    try {
-      const safe = sanitizeFilename(filename.trim());
-      const code = Buffer.from(content.trim(), "base64").toString("utf-8");
-      const report = verifySkillSource(code);
-      res.json({ ok: true, report, code, filename: safe });
-    } catch (err) {
-      res
-        .status(422)
-        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
-    }
-  });
-
-  // ── Skills: install (re-verifies server-side) ──
-  app.post("/api/skills/install", (req, res) => {
-    const { code, filename } = req.body as { code?: unknown; filename?: unknown };
-    if (typeof code !== "string" || !code) {
-      res.status(422).json({ ok: false, message: "code is required" });
-      return;
-    }
-    if (typeof filename !== "string" || !filename) {
-      res.status(422).json({ ok: false, message: "filename is required" });
-      return;
-    }
-    const report = verifySkillSource(code);
-    if (!report.safe) {
-      res.status(403).json({
-        ok: false,
-        message: "Skill contains dangerous patterns and cannot be installed without override",
-        report,
-      });
-      return;
-    }
-    try {
-      const dest = installSkill(code, filename);
-      notifyListeners();
-      res.json({ ok: true, dest });
-    } catch (err) {
-      res
-        .status(422)
-        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
-    }
-  });
-
   // ── Skills: bundled skill status ──
   app.get("/api/skills/bundled", (_req, res) => {
     const env = readEnvConfig();
     res.json(getBundledSkillStatuses(env));
-  });
-
-  // ── Skills: installed skills (from skills.json) ──
-  app.get("/api/skills/installed", (_req, res) => {
-    const config = readSkillsConfig();
-    res.json({ ok: true, skills: config.installed });
-  });
-
-  // ── Skills: install from GitHub URL (with CONFIRM gate) ──
-  app.post("/api/skills/github/install", async (req, res) => {
-    const { url, confirm } = req.body as { url?: unknown; confirm?: unknown };
-    if (typeof url !== "string" || !url.trim()) {
-      res.status(422).json({ ok: false, message: "url is required" });
-      return;
-    }
-    if (confirm !== "CONFIRM") {
-      res.status(422).json({ ok: false, message: "You must type CONFIRM to install from GitHub" });
-      return;
-    }
-    if (!isValidGitHubUrl(url.trim())) {
-      res.status(422).json({ ok: false, message: "URL must be a GitHub HTTPS URL" });
-      return;
-    }
-    try {
-      const { code, filename } = await fetchSkillSource(url.trim());
-      const report = verifySkillSource(code);
-      if (!report.safe) {
-        res.status(403).json({ ok: false, message: "Skill contains dangerous patterns", report });
-        return;
-      }
-      const dest = installSkill(code, filename);
-      // Also track in skills.json
-      const config = readSkillsConfig();
-      const id = filename.replace(/\.(ts|js)$/, "");
-      if (!config.installed.some((i) => i.id === id)) {
-        config.installed.push({
-          id,
-          name: filename,
-          description: `Installed from GitHub: ${url.trim()}`,
-          capabilities: report.permissionsFound,
-          source: "github",
-          sourceUrl: url.trim(),
-          enabled: true,
-          installedAt: new Date().toISOString(),
-        });
-        writeSkillsConfig(config);
-      }
-      notifyListeners();
-      res.json({ ok: true, dest, report });
-    } catch (err) {
-      res
-        .status(422)
-        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
-    }
-  });
-
-  // ── Skills: toggle enable/disable ──
-  app.post("/api/skills/installed/:id/toggle", (req, res) => {
-    const { id } = req.params;
-    const config = readSkillsConfig();
-    const skill = config.installed.find((s) => s.id === id);
-    if (!skill) {
-      res.status(404).json({ ok: false, message: "Skill not found" });
-      return;
-    }
-    skill.enabled = !skill.enabled;
-    try {
-      writeSkillsConfig(config);
-      notifyListeners();
-      res.json({ ok: true, enabled: skill.enabled });
-    } catch (err) {
-      res
-        .status(500)
-        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
-    }
-  });
-
-  // ── Skills: remove installed skill ──
-  app.post("/api/skills/installed/:id/remove", (req, res) => {
-    const { id } = req.params;
-    const config = readSkillsConfig();
-    const idx = config.installed.findIndex((s) => s.id === id);
-    if (idx === -1) {
-      res.status(404).json({ ok: false, message: "Skill not found" });
-      return;
-    }
-    config.installed.splice(idx, 1);
-    try {
-      writeSkillsConfig(config);
-      notifyListeners();
-      res.json({ ok: true });
-    } catch (err) {
-      res
-        .status(500)
-        .json({ ok: false, message: String(err instanceof Error ? err.message : err) });
-    }
   });
 
   // ── Recipes ──
