@@ -16,7 +16,7 @@
 /** Canonical provenance tags. Extend only with paired test coverage. */
 export type SourceTag =
   | "user-direct" // typed in chat window, Telegram, dashboard
-  | "user-file" // file the user explicitly opened or referenced this session
+  | "user-file" // file content the agent reads from disk (sandbox or user-pointed)
   | "external-email" // read from the user's inbox via email-calendar skill
   | "external-web" // fetched by the browser skill
   | "external-attachment" // file attached to an external email
@@ -56,9 +56,9 @@ export type TrustLevel = "trusted" | "untrusted";
 
 const TRUST_BY_TAG: Readonly<Record<SourceTag, TrustLevel>> = {
   "user-direct": "trusted",
-  "user-file": "trusted",
   system: "trusted",
   "retrieved-memory": "trusted",
+  "user-file": "untrusted",
   "external-email": "untrusted",
   "external-web": "untrusted",
   "external-attachment": "untrusted",

@@ -47,14 +47,14 @@ describe("ALL_SOURCE_TAGS", () => {
 // ── trustLevel ───────────────────────────────────────────────────────────────
 
 describe("trustLevel", () => {
-  it("returns trusted for user-direct, user-file, system, retrieved-memory", () => {
+  it("returns trusted for user-direct, system, retrieved-memory", () => {
     expect(trustLevel("user-direct")).toBe("trusted");
-    expect(trustLevel("user-file")).toBe("trusted");
     expect(trustLevel("system")).toBe("trusted");
     expect(trustLevel("retrieved-memory")).toBe("trusted");
   });
 
-  it("returns untrusted for external-email, external-web, external-attachment, retrieved-vector", () => {
+  it("returns untrusted for user-file, external-email, external-web, external-attachment, retrieved-vector", () => {
+    expect(trustLevel("user-file")).toBe("untrusted");
     expect(trustLevel("external-email")).toBe("untrusted");
     expect(trustLevel("external-web")).toBe("untrusted");
     expect(trustLevel("external-attachment")).toBe("untrusted");

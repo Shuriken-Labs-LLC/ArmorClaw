@@ -110,6 +110,21 @@ Every skill invocation logs: ISO 8601 timestamp, skill name+version, permission 
 
 Logs → `~/.armorclaw/audit.log` (NDJSON). Logger must never throw — fail silently to in-memory buffer. `npm run export:audit` produces CSV.
 
+### Source-tagger — `wrapper/security/source-tagger.ts`
+
+Subscribed to OpenClaw's `tool_result_persist` lifecycle hook (mutation rights). Wraps external tool-result content in `<external-content>` framing via `renderForModel()` before it reaches the model's next-turn context. Allowlist-style: only tools listed in `TOOL_TO_SOURCE_TAG` get tagged. Unmapped tools pass through unchanged.
+
+Current map:
+
+| Tool                                 | Source tag     |
+| ------------------------------------ | -------------- |
+| `web_fetch`, `web_search`, `browser` | `external-web` |
+| `read`, `grep`                       | `user-file`    |
+
+Mutation contract: returns a new message object with framed text content; `event.message` is never mutated in place. Image and other non-text content blocks pass through. Synchronous handler (the OpenClaw runtime calls `tool_result_persist` synchronously in the session-transcript append hot path).
+
+Phase 2 adds a content classifier on the same hook (rejects on injection-likelihood threshold) and may consolidate the source-tagger's framing with OpenClaw's existing per-tool wrapping (`src/security/external-content.ts`). Memory tagging (`before_prompt_build`) and vector tagging (`registerContextEngine`) are separate phases.
+
 ---
 
 ## Source tagging — `wrapper/lib/source-tag.ts`
@@ -121,11 +136,11 @@ Tag values:
 | Tag                   | Trust     | Origin                                                       |
 | --------------------- | --------- | ------------------------------------------------------------ |
 | `user-direct`         | trusted   | typed in chat window, Telegram, dashboard                    |
-| `user-file`           | trusted   | file the user explicitly opened or referenced this session   |
 | `system`              | trusted   | wrapper-internal text, system prompt                         |
 | `retrieved-memory`    | trusted   | pulled from `memory.md` (writes are gated separately)        |
+| `user-file`           | untrusted | file content the agent reads from disk (sandbox or pointed)  |
 | `external-email`      | untrusted | read from inbox via email-calendar skill                     |
-| `external-web`        | untrusted | fetched by browser skill                                     |
+| `external-web`        | untrusted | fetched by browser/web tools                                 |
 | `external-attachment` | untrusted | file attached to an external email                           |
 | `retrieved-vector`    | untrusted | OpenClaw vector index (may include indexed external content) |
 

@@ -4,6 +4,7 @@ import { initRecipeScheduler } from "./recipes/index.ts";
 import { registerAuditLogger } from "./security/audit-logger.ts";
 import { registerInjectionFilter } from "./security/injection-filter.ts";
 import { registerPermissionFilter } from "./security/permissions.ts";
+import { registerSourceTagger } from "./security/source-tagger.ts";
 
 // ── ArmorClaw plugin entry point ──────────────────────────────────────────────
 //
@@ -28,6 +29,10 @@ const armorClawPlugin = {
     registerInjectionFilter(api);
     registerPermissionFilter(api);
     registerAuditLogger(api);
+    // Source-tagger fires on tool_result_persist (different hook from the
+    // before/after_tool_call trio above) — registration order has no effect
+    // on correctness, but grouping under Security architecture is intentional.
+    registerSourceTagger(api);
     // Start recipe scheduler after security hooks are in place
     initRecipeScheduler();
   },
