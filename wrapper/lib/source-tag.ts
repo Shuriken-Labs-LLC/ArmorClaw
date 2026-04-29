@@ -1,9 +1,10 @@
 /**
  * Source tagging — every input the model sees carries provenance metadata.
  *
- * Phase 1b foundation. Subsequent refactors (Phases 1c, 1d) attach tags at
- * skill ingestion boundaries. The injection filter and memory write gate
- * (Phase 2) consume these tags to enforce trust.
+ * Phase 1b foundation; Phase 1c added the source-tagger plugin; Phase 2c
+ * expanded the union with `external-bash`. Subsequent refactors attach
+ * tags at skill ingestion boundaries. The injection filter and memory
+ * write gate (Phase 2) consume these tags to enforce trust.
  *
  * Trust classification is intentionally conservative:
  *   - Anything originating from outside the user's direct typing is untrusted.
@@ -11,15 +12,18 @@
  *     persisted memory (which itself was gated on write) is trusted.
  *   - Vector-retrieved chunks are untrusted by default because the index
  *     may include content from external sources (emails, web pages, files).
+ *   - Shell command output is untrusted by default because the source-tagger
+ *     cannot discriminate "read email via himalaya" from "ls" by tool name.
  */
 
-/** Canonical provenance tags. Extend only with paired test coverage. */
+/** Canonical provenance tags (9 total). Extend only with paired test coverage. */
 export type SourceTag =
   | "user-direct" // typed in chat window, Telegram, dashboard
   | "user-file" // file content the agent reads from disk (sandbox or user-pointed)
   | "external-email" // read from the user's inbox via email-calendar skill
   | "external-web" // fetched by the browser skill
   | "external-attachment" // file attached to an external email
+  | "external-bash" // shell command output via OpenClaw's bash/exec tools; untrusted by default because shell commands can read or invoke any external resource
   | "retrieved-memory" // pulled from memory.md at session start or via recall
   | "retrieved-vector" // pulled from the OpenClaw vector index
   | "system"; // wrapper-internal text, system prompt, CLAUDE.md content
@@ -31,6 +35,7 @@ export const ALL_SOURCE_TAGS: ReadonlyArray<SourceTag> = [
   "external-email",
   "external-web",
   "external-attachment",
+  "external-bash",
   "retrieved-memory",
   "retrieved-vector",
   "system",
@@ -62,6 +67,7 @@ const TRUST_BY_TAG: Readonly<Record<SourceTag, TrustLevel>> = {
   "external-email": "untrusted",
   "external-web": "untrusted",
   "external-attachment": "untrusted",
+  "external-bash": "untrusted",
   "retrieved-vector": "untrusted",
 };
 

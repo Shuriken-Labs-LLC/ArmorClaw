@@ -116,12 +116,18 @@ Subscribed to OpenClaw's `tool_result_persist` lifecycle hook (mutation rights).
 
 Current map:
 
-| Tool                                 | Source tag     |
-| ------------------------------------ | -------------- |
-| `web_fetch`, `web_search`, `browser` | `external-web` |
-| `read`, `grep`                       | `user-file`    |
+| Tool                                 | Source tag      |
+| ------------------------------------ | --------------- |
+| `web_fetch`, `web_search`, `browser` | `external-web`  |
+| `read`, `grep`                       | `user-file`     |
+| `bash`, `exec`                       | `external-bash` |
+| `pdf`, `image`                       | `user-file`     |
 
 Mutation contract: returns a new message object with framed text content; `event.message` is never mutated in place. Image and other non-text content blocks pass through. Synchronous handler (the OpenClaw runtime calls `tool_result_persist` synchronously in the session-transcript append hot path).
+
+Tools `bash` and `exec` are tagged `external-bash` by default. The exemption list `BASH_EXEMPT_PREFIXES` (empty by default) lets us exempt specific known-safe command prefixes (`pwd`, `whoami`, etc.) from framing. The exemption mechanism is wired but the per-command lookup is a no-op until Phase 2a introduces the side channel for tool-call params.
+
+Tools `pdf` and `image` are tagged `user-file` (untrusted) for v1. Phase 3 may introduce a `media-attachment` distinction.
 
 Phase 2 adds a content classifier on the same hook (rejects on injection-likelihood threshold) and may consolidate the source-tagger's framing with OpenClaw's existing per-tool wrapping (`src/security/external-content.ts`). Memory tagging (`before_prompt_build`) and vector tagging (`registerContextEngine`) are separate phases.
 
@@ -142,6 +148,7 @@ Tag values:
 | `external-email`      | untrusted | read from inbox via email-calendar skill                     |
 | `external-web`        | untrusted | fetched by browser/web tools                                 |
 | `external-attachment` | untrusted | file attached to an external email                           |
+| `external-bash`       | untrusted | shell command output via OpenClaw's `bash`/`exec` tools      |
 | `retrieved-vector`    | untrusted | OpenClaw vector index (may include indexed external content) |
 
 **Rules:**

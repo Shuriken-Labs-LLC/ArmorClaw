@@ -23,14 +23,69 @@ import { renderForModel, tag, type SourceTag } from "../lib/source-tag.ts";
  * Update this map when OpenClaw adds new external-content tools.
  */
 export const TOOL_TO_SOURCE_TAG: Readonly<Record<string, SourceTag>> = Object.freeze({
-  // External web content
+  // External web content (Phase 1c)
   web_fetch: "external-web",
   web_search: "external-web",
   browser: "external-web",
-  // File content read from disk
+  // File content read from disk (Phase 1c — user-file is untrusted post-1c)
   read: "user-file",
   grep: "user-file",
+  // ── Phase 2c additions ─────────────────────────────────────────────
+  // Shell commands — untrusted by default. The model reads email via
+  // bash/exec shelling out to CLI tools (himalaya, mutt, etc.); the
+  // source-tagger cannot discriminate by tool name, so we treat all
+  // bash/exec output as untrusted. See BASH_EXEMPT_PREFIXES below for
+  // commands whose output is known-safe.
+  bash: "external-bash",
+  exec: "external-bash",
+  // Media tools — content can be from anywhere (downloaded, sandbox,
+  // web-fetched). Treated as user-file (untrusted post-Phase-1c) for
+  // consistent framing. Phase 3 may add a media-attachment distinction.
+  pdf: "user-file",
+  image: "user-file",
 });
+
+/**
+ * Bash/exec commands whose output is known-safe and does not need framing.
+ *
+ * Empty by default. Add prefixes only when concrete pain emerges from
+ * over-tagging benign commands. Match is prefix-based on the trimmed
+ * command string.
+ *
+ * Examples (NOT added by default):
+ *   "pwd"       → "/Users/foo"
+ *   "whoami"    → "foo"
+ *   "date"      → "Wed Apr 29 ..."
+ *
+ * Exemption is best-effort. If unsure, leave the prefix out.
+ */
+export const BASH_EXEMPT_PREFIXES: ReadonlySet<string> = Object.freeze(new Set<string>([]));
+
+function isBashCommand(toolName: string): boolean {
+  return toolName === "bash" || toolName === "exec";
+}
+
+/**
+ * Decide whether a bash/exec invocation is exempt from source-tagging.
+ *
+ * For bash/exec, the actual command lives in the corresponding tool CALL
+ * (before_tool_call.params.command or similar), not in the tool RESULT we
+ * receive at tool_result_persist. We can't see the command directly here
+ * without a side channel.
+ *
+ * Phase 2c choice: implement the exemption mechanism but leave the command
+ * lookup as a no-op for now (always returns false). Phase 2a (classifier)
+ * will introduce a side channel that captures tool-call params at
+ * before_tool_call so downstream gates can inspect them. Until then, the
+ * exemption set being empty means this is a no-op anyway.
+ */
+function isExemptBashCommand(
+  _toolName: string,
+  _toolCallId: string | undefined,
+  _message: unknown,
+): boolean {
+  return false;
+}
 
 // ── Hook handler ─────────────────────────────────────────────────────────────
 
@@ -81,6 +136,14 @@ export function frameToolResult(
   }
   const sourceTag = TOOL_TO_SOURCE_TAG[toolName];
   if (!sourceTag) {
+    return undefined;
+  }
+  // Bash/exec exemption check — see Phase 2a (classifier) for the side-channel
+  // that will populate this. Currently always false because the command isn't
+  // visible at tool_result_persist; the exempt-branch body is unreachable
+  // until Phase 2a wires the side channel.
+  /* v8 ignore next 3 — exempt branch unreachable until Phase 2a side channel */
+  if (isBashCommand(toolName) && isExemptBashCommand(toolName, event.toolCallId, event.message)) {
     return undefined;
   }
   const message = event.message as { role?: string; content?: unknown } | null | undefined;

@@ -22,9 +22,9 @@ import * as sourceTagModule from "../../../lib/source-tag.ts";
 // ── ALL_SOURCE_TAGS ──────────────────────────────────────────────────────────
 
 describe("ALL_SOURCE_TAGS", () => {
-  it("contains all 8 known tags", () => {
-    expect(ALL_SOURCE_TAGS).toHaveLength(8);
-    expect(new Set(ALL_SOURCE_TAGS).size).toBe(8);
+  it("contains all 9 known tags", () => {
+    expect(ALL_SOURCE_TAGS).toHaveLength(9);
+    expect(new Set(ALL_SOURCE_TAGS).size).toBe(9);
   });
 
   it("includes every documented tag", () => {
@@ -34,6 +34,7 @@ describe("ALL_SOURCE_TAGS", () => {
       "external-email",
       "external-web",
       "external-attachment",
+      "external-bash",
       "retrieved-memory",
       "retrieved-vector",
       "system",
@@ -53,11 +54,12 @@ describe("trustLevel", () => {
     expect(trustLevel("retrieved-memory")).toBe("trusted");
   });
 
-  it("returns untrusted for user-file, external-email, external-web, external-attachment, retrieved-vector", () => {
+  it("returns untrusted for user-file, external-email, external-web, external-attachment, external-bash, retrieved-vector", () => {
     expect(trustLevel("user-file")).toBe("untrusted");
     expect(trustLevel("external-email")).toBe("untrusted");
     expect(trustLevel("external-web")).toBe("untrusted");
     expect(trustLevel("external-attachment")).toBe("untrusted");
+    expect(trustLevel("external-bash")).toBe("untrusted");
     expect(trustLevel("retrieved-vector")).toBe("untrusted");
   });
 
@@ -230,7 +232,12 @@ describe("renderForModel", () => {
   });
 
   it("frames every untrusted tag, not just external-email", () => {
-    const cases: SourceTag[] = ["external-web", "external-attachment", "retrieved-vector"];
+    const cases: SourceTag[] = [
+      "external-web",
+      "external-attachment",
+      "external-bash",
+      "retrieved-vector",
+    ];
     for (const src of cases) {
       const out = renderForModel([tag("payload", src)]);
       expect(out).toContain(`<external-content source="${src}"`);

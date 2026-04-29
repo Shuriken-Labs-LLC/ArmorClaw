@@ -8,6 +8,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ALL_SOURCE_TAGS, renderForModel, tag } from "../../../lib/source-tag.ts";
 import sourceTaggerPlugin, {
+  BASH_EXEMPT_PREFIXES,
   frameToolResult,
   registerSourceTagger,
   TOOL_TO_SOURCE_TAG,
@@ -68,13 +69,17 @@ describe("TOOL_TO_SOURCE_TAG", () => {
     expect(Object.isFrozen(TOOL_TO_SOURCE_TAG)).toBe(true);
   });
 
-  it("contains the five expected mappings", () => {
+  it("contains the nine expected mappings (Phase 1c + Phase 2c)", () => {
     expect(TOOL_TO_SOURCE_TAG).toEqual({
       web_fetch: "external-web",
       web_search: "external-web",
       browser: "external-web",
       read: "user-file",
       grep: "user-file",
+      bash: "external-bash",
+      exec: "external-bash",
+      pdf: "user-file",
+      image: "user-file",
     });
   });
 
@@ -82,6 +87,19 @@ describe("TOOL_TO_SOURCE_TAG", () => {
     for (const tagValue of Object.values(TOOL_TO_SOURCE_TAG)) {
       expect(ALL_SOURCE_TAGS).toContain(tagValue);
     }
+  });
+});
+
+// ── BASH_EXEMPT_PREFIXES ──────────────────────────────────────────────────────
+
+describe("BASH_EXEMPT_PREFIXES", () => {
+  it("is a frozen Set", () => {
+    expect(BASH_EXEMPT_PREFIXES).toBeInstanceOf(Set);
+    expect(Object.isFrozen(BASH_EXEMPT_PREFIXES)).toBe(true);
+  });
+
+  it("is empty by default (Phase 2c — exemption mechanism is scaffolded but unwired)", () => {
+    expect(BASH_EXEMPT_PREFIXES.size).toBe(0);
   });
 });
 
@@ -329,7 +347,10 @@ describe("registerSourceTagger", () => {
   it("registered handler returns undefined for unmapped tools", () => {
     const api = makeMockApi();
     registerSourceTagger(api as never);
-    const event = eventFor("exec", toolResultMessage("exec", [textBlock("body")]));
+    const event = eventFor(
+      "weather_lookup",
+      toolResultMessage("weather_lookup", [textBlock("body")]),
+    );
     expect(api.capturedHandler!(event, {})).toBeUndefined();
   });
 });
