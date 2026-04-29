@@ -2,6 +2,7 @@ import { emptyPluginConfigSchema, type OpenClawPluginApi } from "openclaw/plugin
 import { validateGatewayHost } from "./config/gateway.ts";
 import { initRecipeScheduler } from "./recipes/index.ts";
 import { registerAuditLogger } from "./security/audit-logger.ts";
+import { registerInboundContentClassifier } from "./security/inbound-content-classifier.ts";
 import { registerInjectionFilter } from "./security/injection-filter.ts";
 import { registerPermissionFilter } from "./security/permissions.ts";
 import { registerSourceTagger } from "./security/source-tagger.ts";
@@ -33,6 +34,11 @@ const armorClawPlugin = {
     // before/after_tool_call trio above) — registration order has no effect
     // on correctness, but grouping under Security architecture is intentional.
     registerSourceTagger(api);
+    // Inbound content classifier fires on before_prompt_build (hard-mitigation
+    // pair to the source-tagger's soft framing). Walks the messages array
+    // each turn, scores any framed external content the source-tagger
+    // produced, and prepends a system-context warning for high-risk blocks.
+    registerInboundContentClassifier(api);
     // Start recipe scheduler after security hooks are in place
     initRecipeScheduler();
   },

@@ -27,6 +27,18 @@ export interface CompletionResult {
   outputTokens: number;
 }
 
+/**
+ * Options for completeTagged calls. All optional. Used by the inbound content
+ * classifier to route to a cheap-variant model (modelOverride) and to apply a
+ * shorter deadline (timeoutMs) than the default 60s for production calls.
+ */
+export interface CompleteOptions {
+  /** Provider-specific model identifier to use instead of the default. */
+  readonly modelOverride?: string;
+  /** Per-call request timeout in ms; falls back to the provider's default. */
+  readonly timeoutMs?: number;
+}
+
 export interface IModelAdapter {
   complete(prompt: string): Promise<CompletionResult>;
 }
@@ -111,7 +123,10 @@ export async function probeOllama(): Promise<{ reachable: boolean; models: strin
 
 // ── Provider implementations ─────────────────────────────────────────────────
 
-async function completeWithAnthropic(prompt: string): Promise<CompletionResult> {
+async function completeWithAnthropic(
+  prompt: string,
+  options?: CompleteOptions,
+): Promise<CompletionResult> {
   const apiKey = process.env["ANTHROPIC_API_KEY"]?.trim();
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY not configured");
@@ -125,11 +140,11 @@ async function completeWithAnthropic(prompt: string): Promise<CompletionResult> 
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
+      model: options?.modelOverride ?? "claude-sonnet-4-6",
       max_tokens: 4096,
       messages: [{ role: "user", content: prompt }],
     }),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(options?.timeoutMs ?? 60_000),
   });
 
   if (!res.ok) {
@@ -152,7 +167,10 @@ async function completeWithAnthropic(prompt: string): Promise<CompletionResult> 
   };
 }
 
-async function completeWithOpenAI(prompt: string): Promise<CompletionResult> {
+async function completeWithOpenAI(
+  prompt: string,
+  options?: CompleteOptions,
+): Promise<CompletionResult> {
   const apiKey = process.env["OPENAI_API_KEY"]?.trim();
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY not configured");
@@ -165,10 +183,10 @@ async function completeWithOpenAI(prompt: string): Promise<CompletionResult> {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4o",
+      model: options?.modelOverride ?? "gpt-4o",
       messages: [{ role: "user", content: prompt }],
     }),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(options?.timeoutMs ?? 60_000),
   });
 
   if (!res.ok) {
@@ -191,16 +209,19 @@ async function completeWithOpenAI(prompt: string): Promise<CompletionResult> {
   };
 }
 
-async function completeWithOllama(prompt: string): Promise<CompletionResult> {
+async function completeWithOllama(
+  prompt: string,
+  options?: CompleteOptions,
+): Promise<CompletionResult> {
   const base = getOllamaBaseUrl();
   // Prefer the smallest available model for speed; fall back to llama3.2
-  const model = _ollamaModels[0] ?? "llama3.2:latest";
+  const model = options?.modelOverride ?? _ollamaModels[0] ?? "llama3.2:latest";
 
   const res = await fetch(`${base}/api/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model, prompt, stream: false }),
-    signal: AbortSignal.timeout(120_000), // local models can be slow
+    signal: AbortSignal.timeout(options?.timeoutMs ?? 120_000), // local models can be slow
   });
 
   if (!res.ok) {
@@ -224,14 +245,18 @@ async function completeWithOllama(prompt: string): Promise<CompletionResult> {
   };
 }
 
-function completeWith(provider: ProviderName, prompt: string): Promise<CompletionResult> {
+function completeWith(
+  provider: ProviderName,
+  prompt: string,
+  options?: CompleteOptions,
+): Promise<CompletionResult> {
   switch (provider) {
     case "anthropic":
-      return completeWithAnthropic(prompt);
+      return completeWithAnthropic(prompt, options);
     case "openai":
-      return completeWithOpenAI(prompt);
+      return completeWithOpenAI(prompt, options);
     case "ollama":
-      return completeWithOllama(prompt);
+      return completeWithOllama(prompt, options);
   }
 }
 
@@ -244,9 +269,14 @@ function completeWith(provider: ProviderName, prompt: string): Promise<Completio
  *
  * Skills should prefer this entry point over `complete(prompt)` once their
  * input pipelines have been refactored (Phases 1c, 1d).
+ *
+ * `options.modelOverride` selects a specific model identifier (used by the
+ * Phase 2a inbound content classifier to route to a cheap variant). Without
+ * an override the provider's default model is used.
  */
 export async function completeTagged(
   inputs: ReadonlyArray<TaggedInput>,
+  options?: CompleteOptions,
 ): Promise<CompletionResult> {
   const primary = getPrimaryProvider();
 
@@ -255,7 +285,7 @@ export async function completeTagged(
   }
 
   const rendered = renderForModel(inputs);
-  const result = await completeWith(primary, rendered);
+  const result = await completeWith(primary, rendered, options);
   _activeProvider = primary;
   return result;
 }

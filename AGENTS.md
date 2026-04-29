@@ -129,7 +129,27 @@ Tools `bash` and `exec` are tagged `external-bash` by default. The exemption lis
 
 Tools `pdf` and `image` are tagged `user-file` (untrusted) for v1. Phase 3 may introduce a `media-attachment` distinction.
 
-Phase 2 adds a content classifier on the same hook (rejects on injection-likelihood threshold) and may consolidate the source-tagger's framing with OpenClaw's existing per-tool wrapping (`src/security/external-content.ts`). Memory tagging (`before_prompt_build`) and vector tagging (`registerContextEngine`) are separate phases.
+Phase 2 adds a content classifier on `before_prompt_build` (see below — Phase 2a `inbound-content-classifier.ts`) and may consolidate the source-tagger's framing with OpenClaw's existing per-tool wrapping (`src/security/external-content.ts`). Memory tagging (`before_prompt_build`) and vector tagging (`registerContextEngine`) are separate phases.
+
+### Inbound content classifier — `wrapper/security/inbound-content-classifier.ts`
+
+Subscribed to OpenClaw's `before_prompt_build` lifecycle hook (async; mutation rights are limited to system context). Each turn, walks the messages array for content the source-tagger framed as untrusted, classifies each previously-unseen block via the cheap variant of the user's configured model provider (`CLASSIFIER_MODEL_BY_PROVIDER` in `wrapper/config/classifier.ts`), and aggregates warnings into a single `prependSystemContext` for the upcoming model turn.
+
+Decisions per score (default thresholds 0.7 reject / 0.4 warn):
+
+- `score >= 0.7`: listed under "HIGH-RISK CONTENT REJECTED BY CLASSIFIER" in system context. Model is instructed to treat as data only and refuse user requests acting on it. Original content remains in the message log; audit log retains record.
+- `0.4 <= score < 0.7`: listed under "ELEVATED-RISK CONTENT IN MESSAGE LOG" with weaker guidance.
+- `score < 0.4`: no system-context entry.
+
+Mediated interception, not hard redaction: `before_prompt_build`'s mutation rights are limited to system context (the messages array is read-only at this hook). The model sees both the framed content and the system warning; modern LLMs follow system-level security directives reliably. OpenClaw's `mergeBeforePromptBuild` (`src/plugins/hooks.ts:172-189`) concatenates `prependSystemContext` from multiple plugin handlers, so our warning composes additively with anything else.
+
+Module-level cache keyed by `toolCallId` (or content hash when none) stores classification results across the session. Each unique framed block is classified once. Cache is cleared on `session_end`.
+
+Fail-open: classifier timeout, error, parse failure, or no active provider all mean no system-context warning is added; source-tagger framing remains as the soft mitigation. Audit log records every classifier call under `skill: "classifier"` with cost attribution separately tracked in `tokens.ndjson` so the dashboard can show classifier spend distinct from agent spend.
+
+Always-on by default. Disable via `ARMORCLAW_CLASSIFIER_DISABLED=true` env var (intended dashboard Advanced view toggle in Phase 2a follow-up). Disabling weakens indirect-injection mitigation and is not recommended for production.
+
+Cost: ~$1/month at the $20 default budget on Anthropic (Haiku ~$0.0006/call; cached results so each unique tool result costs once per session).
 
 ---
 

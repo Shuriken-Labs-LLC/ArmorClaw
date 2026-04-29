@@ -10,7 +10,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { complete, completeTagged } from "../../../lib/model-adapter.ts";
 import { tag, userDirect } from "../../../lib/source-tag.ts";
 
-const ENV_KEYS = ["ARMORCLAW_MODEL_PROVIDER", "ANTHROPIC_API_KEY"] as const;
+const ENV_KEYS = [
+  "ARMORCLAW_MODEL_PROVIDER",
+  "ANTHROPIC_API_KEY",
+  "OPENAI_API_KEY",
+  "OLLAMA_BASE_URL",
+] as const;
 const SAVED_ENV: Record<string, string | undefined> = {};
 
 beforeEach(() => {
@@ -103,6 +108,138 @@ describe("completeTagged", () => {
     await expect(completeTagged([userDirect("hi")])).rejects.toThrow(
       /No model provider configured/,
     );
+  });
+});
+
+// ── completeTagged options (modelOverride / timeoutMs) ───────────────────────
+
+function sentBody(fetchMock: ReturnType<typeof vi.fn>): Record<string, unknown> {
+  const call = fetchMock.mock.calls[0];
+  const init = call?.[1] as { body: string } | undefined;
+  return JSON.parse(init?.body ?? "{}") as Record<string, unknown>;
+}
+
+describe("completeTagged options — modelOverride", () => {
+  it("uses default anthropic model when no override is provided", async () => {
+    const fetchMock = mockOk();
+    await completeTagged([userDirect("hi")]);
+    expect(sentBody(fetchMock).model).toBe("claude-sonnet-4-6");
+  });
+
+  it("honors modelOverride on anthropic", async () => {
+    const fetchMock = mockOk();
+    await completeTagged([userDirect("hi")], { modelOverride: "claude-haiku-4-5-20251001" });
+    expect(sentBody(fetchMock).model).toBe("claude-haiku-4-5-20251001");
+  });
+
+  it("honors modelOverride on openai", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "openai";
+    process.env["OPENAI_API_KEY"] = "sk-openai-test";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { content: "ok" } }],
+        model: "gpt-4o-mini",
+        usage: { prompt_tokens: 1, completion_tokens: 1 },
+      }),
+      text: async () => "",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await completeTagged([userDirect("hi")], { modelOverride: "gpt-4o-mini" });
+    expect(sentBody(fetchMock).model).toBe("gpt-4o-mini");
+  });
+
+  it("uses default openai model when no override is provided", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "openai";
+    process.env["OPENAI_API_KEY"] = "sk-openai-test";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { content: "ok" } }],
+        model: "gpt-4o",
+        usage: { prompt_tokens: 1, completion_tokens: 1 },
+      }),
+      text: async () => "",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await completeTagged([userDirect("hi")]);
+    expect(sentBody(fetchMock).model).toBe("gpt-4o");
+  });
+
+  it("honors modelOverride on ollama", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "ollama";
+    delete process.env["OLLAMA_BASE_URL"]; // exercise the default URL branch
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        response: "ok",
+        model: "llama3.2:1b",
+        prompt_eval_count: 1,
+        eval_count: 1,
+      }),
+      text: async () => "",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await completeTagged([userDirect("hi")], { modelOverride: "llama3.2:1b" });
+    expect(sentBody(fetchMock).model).toBe("llama3.2:1b");
+  });
+
+  it("falls back to llama3.2:latest on ollama when no override and no probed models", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "ollama";
+    process.env["OLLAMA_BASE_URL"] = "http://localhost:11434/";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        response: "ok",
+        model: "llama3.2:latest",
+        prompt_eval_count: 0,
+        eval_count: 0,
+      }),
+      text: async () => "",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await completeTagged([userDirect("hi")]);
+    expect(sentBody(fetchMock).model).toBe("llama3.2:latest");
+  });
+});
+
+describe("completeTagged options — timeoutMs", () => {
+  it("forwards a custom timeout to AbortSignal.timeout", async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    const fetchMock = mockOk();
+    await completeTagged([userDirect("hi")], { timeoutMs: 1234 });
+    expect(timeoutSpy).toHaveBeenCalledWith(1234);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses 60s default on cloud providers when timeoutMs is omitted", async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    mockOk();
+    await completeTagged([userDirect("hi")]);
+    expect(timeoutSpy).toHaveBeenCalledWith(60_000);
+  });
+
+  it("uses 120s default on ollama when timeoutMs is omitted", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "ollama";
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        response: "ok",
+        model: "llama3.2:latest",
+        prompt_eval_count: 0,
+        eval_count: 0,
+      }),
+      text: async () => "",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await completeTagged([userDirect("hi")]);
+    expect(timeoutSpy).toHaveBeenCalledWith(120_000);
   });
 });
 
