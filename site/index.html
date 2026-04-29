@@ -313,6 +313,15 @@
       transition: opacity 0.15s;
     }
     .pricing-card .subscribe-btn:hover { opacity: 0.88; }
+    .pricing-card .subscribe-disabled {
+      background: var(--ac-surface2);
+      color: var(--ac-muted);
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+    .pricing-card .subscribe-disabled:hover {
+      opacity: 0.7;
+    }
     .pricing-card .renewal-notice {
       margin-top: 16px;
       font-size: 12px;
@@ -348,6 +357,27 @@
     .footer-links a:hover { color: var(--ac-text); }
 
     /* ── Responsive ── */
+    /* ── Security update banner ── */
+    .security-banner {
+      background: var(--ac-amber-light);
+      border-left: 4px solid var(--ac-amber);
+      padding: 16px 0;
+    }
+    .security-banner .banner-inner p {
+      font-size: 14px;
+      color: var(--ac-text);
+      line-height: 1.6;
+      margin: 0;
+    }
+    .security-banner .banner-inner strong {
+      color: var(--ac-amber);
+      font-weight: 500;
+    }
+    .security-banner a {
+      color: var(--ac-amber);
+      text-decoration: underline;
+    }
+
     @media (max-width: 768px) {
       .hero { padding: 64px 0 56px; }
       .hero h1 { font-size: 32px; }
@@ -381,15 +411,30 @@
     </div>
   </nav>
 
+  <!-- Security update banner — Phase 0, 2026-04-29 -->
+  <section class="security-banner" role="status" aria-live="polite">
+    <div class="container">
+      <div class="banner-inner">
+        <p>
+          <strong>Security update in progress.</strong>
+          We're rebuilding our security disclosures and adding new protections before reopening signups.
+          Existing subscribers are unaffected.
+          <a href="#what-changes">What's changing</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+
   <!-- Hero -->
   <section class="hero">
     <div class="container">
       <h1>An AI agent that<br><span class="highlight">works while you're working</span></h1>
       <p class="subtitle">
         ArmorClaw handles your inbox, drafts replies, manages files, and
-        automates tasks — on a schedule, while your Mac is running.
-        Message it from Telegram and it reports back. Your data stays on
-        your computer, and the agent can only touch one folder you choose.
+        automates tasks while your Mac is running. Message it from Telegram
+        and it reports back. Files the agent reads or writes are scoped to
+        one folder you choose. Browser actions and email access have their
+        own boundaries.
       </p>
       <div class="cta-row">
         <a href="#" class="btn-download">Download for macOS</a>
@@ -411,12 +456,14 @@
           handles the repetitive stuff without you having to remember to ask.
         </p>
         <p>
-          ArmorClaw runs on your own machine, so your client conversations and
-          business data don't live on someone else's server. The agent is
-          confined to a single folder you pick during setup — it can't reach
-          your Desktop, your other apps, or anything outside that boundary.
-          That's not a limitation; it's the point. You get the automation
-          without handing over the keys to your whole computer.
+          ArmorClaw runs on your own machine, so your client conversations
+          and business data don't live on someone else's server. The file
+          skill is confined to a single folder you pick during setup. It
+          can't reach your Desktop, your other apps, or anything outside
+          that boundary. Other parts of the agent (browser automation,
+          email access) have separate boundaries we describe on the
+          security page. You get the automation without handing over
+          full keys to your computer.
         </p>
         <p>
           We built it for the professional who doesn't have an engineering
@@ -485,12 +532,15 @@
       </p>
       <div class="feature-grid">
         <div class="feature-card">
-          <div class="accent-bar" style="background:var(--ac-teal);"></div>
-          <h3>Prompt injection filter</h3>
+          <div class="accent-bar" style="background:var(--ac-amber);"></div>
+          <h3>Honest about prompt injection</h3>
           <p>
-            Every input is screened for instruction-override patterns before
-            it reaches the model. Malicious content hidden in emails or web
-            pages is caught, logged, and rejected. OpenClaw doesn't have this.
+            Our current input filter screens what you type into the agent.
+            Indirect injection (instructions hidden in emails or web pages
+            the agent reads) is a real attack vector we are actively
+            rebuilding protection for. Until that lands, we recommend not
+            pointing the agent at untrusted content. Full status on the
+            <a href="#what-changes" style="color:var(--ac-amber);text-decoration:underline;">security update page</a>.
           </p>
         </div>
         <div class="feature-card">
@@ -506,9 +556,10 @@
           <div class="accent-bar" style="background:var(--ac-blue);"></div>
           <h3>The agent stays in one folder</h3>
           <p>
-            You choose a folder during setup. The agent can only read or write
-            inside it — not your Desktop, not your Downloads, not ArmorClaw
-            itself. Path traversal attempts are rejected and logged.
+            The file skill is scoped to one folder you choose during setup.
+            It cannot read or write outside that folder. Path traversal
+            attempts are rejected and logged. Browser, email, and network
+            access have separate boundaries documented on the security page.
           </p>
         </div>
         <div class="feature-card">
@@ -635,6 +686,22 @@
     </div>
   </section>
 
+  <!-- What's changing -->
+  <section class="features" id="what-changes">
+    <div class="container">
+      <h2>What we're rebuilding right now</h2>
+      <p style="color:var(--ac-muted);margin-bottom:24px;max-width:640px;font-size:16px;line-height:1.7;">
+        Our internal review surfaced nine gaps between what ArmorClaw currently does and what our marketing implied. Some of those gaps were claims that overstated our protection. We've taken those claims down, paused signups, and are working through a four-phase update before reopening. We'd rather lose sales than misrepresent what the product does.
+      </p>
+      <p style="color:var(--ac-muted);margin-bottom:24px;max-width:640px;font-size:16px;line-height:1.7;">
+        The 0.3.0 release will include source-tagging on every input the agent reads, a content classifier for indirect prompt injection, signed and tamper-evident audit logging, approval prompts that show the literal action being approved (rather than the agent's description of it), a domain allowlist for browser automation, and a "what we protect against" table with both what's covered and what isn't, including risks we explicitly do not address.
+      </p>
+      <p style="color:var(--ac-muted);max-width:640px;font-size:16px;line-height:1.7;">
+        We have not had a third-party security audit and don't currently have the budget for one. The 0.3.0 release will publish our internal red-team log alongside the disclosures, so you can read what we tested and what we found.
+      </p>
+    </div>
+  </section>
+
   <!-- Pricing -->
   <section class="pricing" id="pricing">
     <div class="container">
@@ -642,7 +709,7 @@
       <p class="intro">One plan. Everything included. Cancel anytime.</p>
       <div class="pricing-card">
         <div class="price">$19.99 <span>/ month</span></div>
-        <div class="trial">Free for your first 30 days</div>
+        <div class="trial">Reopening with our 0.3.0 release</div>
         <div class="includes">
           <strong>Includes:</strong> email triage and drafting, file
           management, browser automation, daily briefings, scheduled recipes,
@@ -650,7 +717,7 @@
           Telegram integration, and every update we ship. You bring your own
           API key or run a free local model.
         </div>
-        <a href="https://buy.stripe.com/14A00l5Up1HM6eG9qjfjG01" class="subscribe-btn">Start free trial</a>
+        <span class="subscribe-btn subscribe-disabled" aria-disabled="true" title="Signups paused during security update">Signups paused</span>
         <!-- FTC/ROSCA-required auto-renewal disclosure — keep this text near the subscribe button -->
         <p class="renewal-notice">
           FREE TRIAL + AUTO-RENEWAL NOTICE: Your free trial ends 30 days after signup.
