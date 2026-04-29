@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import { describe, expect, it } from "vitest";
 import {
   validateStep1,
@@ -200,6 +201,40 @@ describe("validateStep2", () => {
   it("strips trailing slashes before checking forbidden paths", () => {
     const result = validateStep2({ sandboxDir: "/usr/" });
     expect(result.ok).toBe(false);
+  });
+
+  describe("rejects paths that ARE or CONTAIN ~/.armorclaw/", () => {
+    const armorclawDir = `${homedir()}/.armorclaw`;
+    const home = homedir();
+
+    it("rejects exactly ~/.armorclaw", () => {
+      const result = validateStep2({ sandboxDir: armorclawDir });
+      expect(result.ok).toBe(false);
+      expect(result.field).toBe("sandboxDir");
+      expect(result.message).toMatch(/\.armorclaw/);
+    });
+
+    it("rejects ~/.armorclaw/ with trailing slash", () => {
+      const result = validateStep2({ sandboxDir: armorclawDir + "/" });
+      expect(result.ok).toBe(false);
+      expect(result.message).toMatch(/\.armorclaw/);
+    });
+
+    it("rejects the user's home directory (which contains .armorclaw)", () => {
+      const result = validateStep2({ sandboxDir: home });
+      expect(result.ok).toBe(false);
+      expect(result.message).toMatch(/\.armorclaw/);
+    });
+
+    it("accepts a sibling directory under home (~/Documents/ArmorClaw)", () => {
+      const result = validateStep2({ sandboxDir: `${home}/Documents/ArmorClaw` });
+      expect(result.ok).toBe(true);
+    });
+
+    it("accepts a different directory inside home that is not an ancestor of .armorclaw", () => {
+      const result = validateStep2({ sandboxDir: `${home}/SandboxArea` });
+      expect(result.ok).toBe(true);
+    });
   });
 });
 
