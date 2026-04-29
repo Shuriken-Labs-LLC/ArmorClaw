@@ -13,6 +13,8 @@
  * SDK directly or hard-code a provider.
  */
 
+import { renderForModel, userDirect, type TaggedInput } from "./source-tag.ts";
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export type ProviderName = "anthropic" | "openai" | "ollama";
@@ -236,20 +238,36 @@ function completeWith(provider: ProviderName, prompt: string): Promise<Completio
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Run a completion using the configured provider.
- * No automatic fallback — the user chose their provider deliberately.
- * If the provider fails, the error surfaces directly.
+ * Run a completion using the configured provider, accepting tagged inputs.
+ * Untrusted-source content is wrapped in framing before being sent to the
+ * model. Order is preserved.
+ *
+ * Skills should prefer this entry point over `complete(prompt)` once their
+ * input pipelines have been refactored (Phases 1c, 1d).
  */
-export async function complete(prompt: string): Promise<CompletionResult> {
+export async function completeTagged(
+  inputs: ReadonlyArray<TaggedInput>,
+): Promise<CompletionResult> {
   const primary = getPrimaryProvider();
 
   if (!primary) {
     throw new Error("No model provider configured. Set ARMORCLAW_MODEL_PROVIDER in your .env.");
   }
 
-  const result = await completeWith(primary, prompt);
+  const rendered = renderForModel(inputs);
+  const result = await completeWith(primary, rendered);
   _activeProvider = primary;
   return result;
+}
+
+/**
+ * Backward-compat shim: auto-tags the prompt as `user-direct` and delegates
+ * to `completeTagged`. Existing callers continue to work unchanged. New
+ * callers that consume external content should migrate to `completeTagged`
+ * and tag explicitly (Phases 1c, 1d).
+ */
+export async function complete(prompt: string): Promise<CompletionResult> {
+  return completeTagged([userDirect(prompt)]);
 }
 
 /**

@@ -29,24 +29,26 @@ ArmorClaw is a hardened Electron wrapper around the OpenClaw open-source agent r
 
 **Repo structure:**
 
+The OpenClaw upstream fork lives at the repo root. ArmorClaw code lives entirely in `wrapper/` (plus `site/` for the landing page and `ArmorClaw Vault/` for session continuity).
+
 ```
 armorclaw/
-├── CLAUDE.md
-├── core/          ← OpenClaw fork (treat as upstream; minimise changes)
-├── wrapper/
-│   ├── security/  ← injection-filter.ts, permissions.ts, audit-logger.ts
-│   ├── skills/    ← email-calendar, secure-files, browser
-│   ├── onboarding/
-│   ├── dashboard/
-│   ├── token-tracker/
-│   ├── digest/
-│   ├── recipes/
-│   ├── undo/
-│   ├── config/    ← gateway.ts, system-prompt.ts, models.ts
-│   └── lib/       ← skill-registry.ts, model-adapter.ts, logger.ts, platform-paths.ts
-├── tests/
-└── docs/
+├── docs/, src/, ui/, skills/, packages/, .github/   ← OpenClaw upstream (treat as read-only)
+├── README.md, CHANGELOG.md, VISION.md, ...          ← OpenClaw upstream root *.md files
+├── AGENTS.md                                        ← ArmorClaw spec (CLAUDE.md is a symlink)
+├── ArmorClaw Vault/                                 ← ArmorClaw session continuity (Cowork-managed)
+├── site/                                            ← ArmorClaw landing page (armorclaw.app)
+└── wrapper/                                         ← ArmorClaw code — all behaviour lives here
+    ├── security/    ← injection-filter.ts, permissions.ts, audit-logger.ts
+    ├── skills/      ← email-calendar, secure-files, browser (bundled only)
+    ├── onboarding/, dashboard/, token-tracker/
+    ├── digest/, recipes/, undo/
+    ├── config/      ← gateway.ts, system-prompt.ts, models.ts
+    ├── lib/         ← skill-registry.ts, model-adapter.ts, source-tag.ts, platform-paths.ts, ...
+    └── tests/       ← ArmorClaw test suites
 ```
+
+Note: `skills/` at the repo root is OpenClaw's; ArmorClaw's bundled skills are in `wrapper/skills/`. Don't conflate them.
 
 **Runtime:** Node.js 22+, TypeScript throughout. No `.js` files in `wrapper/` or `tests/`.
 
@@ -56,7 +58,7 @@ armorclaw/
 
 1. **Security first.** Evaluate security surface before writing any code. Flag permission-broadening changes before proceeding.
 2. **Minimal footprint.** Request the smallest permission set that makes a skill functional.
-3. **Upstream separation.** Don't modify `core/` without a documented security reason. All ArmorClaw behaviour lives in `wrapper/`.
+3. **Upstream separation.** Don't modify upstream OpenClaw paths at the repo root (`/docs`, `/src`, `/ui`, `/skills`, `/.github`, and root-level `*.md` files except `AGENTS.md`/`CLAUDE.md`) without a documented security reason. All ArmorClaw behaviour lives in `wrapper/`.
 4. **Explicit over implicit.** No runtime auto-discovery of permissions or implicit elevation.
 5. **Test security twice.** Injection filter, permission engine, audit logger each need unit + integration tests.
 
@@ -107,6 +109,33 @@ Every skill declares a static `PERMISSION_MANIFEST`. Validated at skill-load tim
 Every skill invocation logs: ISO 8601 timestamp, skill name+version, permission levels used, input summary (first 80 chars, no secrets), outcome (`success`/`rejected`/`error`/`undone`), duration ms.
 
 Logs → `~/.armorclaw/audit.log` (NDJSON). Logger must never throw — fail silently to in-memory buffer. `npm run export:audit` produces CSV.
+
+---
+
+## Source tagging — `wrapper/lib/source-tag.ts`
+
+Every piece of content the model sees carries a permanent provenance tag. Skills wrap external content in `TaggedInput<T>` at ingestion. The model adapter renders inputs to the model with explicit "data not instruction" framing for untrusted-source content.
+
+Tag values:
+
+| Tag                   | Trust     | Origin                                                       |
+| --------------------- | --------- | ------------------------------------------------------------ |
+| `user-direct`         | trusted   | typed in chat window, Telegram, dashboard                    |
+| `user-file`           | trusted   | file the user explicitly opened or referenced this session   |
+| `system`              | trusted   | wrapper-internal text, system prompt                         |
+| `retrieved-memory`    | trusted   | pulled from `memory.md` (writes are gated separately)        |
+| `external-email`      | untrusted | read from inbox via email-calendar skill                     |
+| `external-web`        | untrusted | fetched by browser skill                                     |
+| `external-attachment` | untrusted | file attached to an external email                           |
+| `retrieved-vector`    | untrusted | OpenClaw vector index (may include indexed external content) |
+
+**Rules:**
+
+- Skills construct `TaggedInput` at the boundary where external content first enters the wrapper. Don't tag downstream of that point.
+- Tags are immutable once constructed. Reuse a `TaggedInput` rather than retag.
+- Untrusted content is wrapped in `<external-content>` framing by `renderForModel()` before reaching the model. Trusted content is passed through unframed.
+- Phase 2 introduces an injection classifier that operates on untrusted-tagged content only; trusted content bypasses the classifier.
+- `complete(prompt: string)` is a backward-compat shim. It auto-tags as `user-direct`. Skills that consume external content must migrate to `completeTagged()` and tag explicitly.
 
 ---
 
@@ -435,7 +464,7 @@ cp -r ~/armorclaw/wrapper/launcher/dist/mac-arm64/ArmorClaw.app /Applications/
 
 ## Hard stops — never do these
 
-- Modify `core/` without explicit instruction and a documented security reason.
+- Modify upstream OpenClaw paths at the repo root (`/docs`, `/src`, `/ui`, `/skills`, `/.github`, and root-level `*.md` files except `AGENTS.md`/`CLAUDE.md`) without explicit instruction and a documented security reason. All ArmorClaw behaviour lives in `wrapper/`.
 - Add a permission level not in the permissions table.
 - Expose the gateway on a non-localhost address.
 - Store API keys, OAuth tokens, or auth tokens outside `.env` or the system keychain.
