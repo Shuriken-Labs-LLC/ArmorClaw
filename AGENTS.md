@@ -151,6 +151,22 @@ Always-on by default. Disable via `ARMORCLAW_CLASSIFIER_DISABLED=true` env var (
 
 Cost: ~$1/month at the $20 default budget on Anthropic (Haiku ~$0.0006/call; cached results so each unique tool result costs once per session).
 
+### Vendored OpenClaw upstream pin — `wrapper/security/openclaw-pin/`
+
+ArmorClaw is a vendored fork of `github.com/openclaw/openclaw`. To prevent drift from importing unintended (or malicious) upstream changes during sync, the repo records:
+
+- `PINNED_SHA.txt` — the upstream commit SHA we last reviewed and synced to.
+- `PATHS.json` — classifies every tracked top-level path as `armorclawPaths` (not enforced), `openclawPaths` (must match upstream byte-for-byte), or `localModsPaths` (OpenClaw-owned with intentional ArmorClaw modifications, enforced manually at sync time). `ambiguousPathsToInvestigate` must be empty for the check to run — any new top-level path landing in the repo must be classified before the next release.
+- `SYNC_LOG.md` — append-only log of pin bumps with diff summaries and reviewer sign-off.
+- `check-pin.sh` — drift check. Compares the working tree against `upstream@PIN` for every `openclawPaths` entry, with `localModsPaths` excluded. Refuses release if drift exists outside the localMods set. Exit codes: `0` no drift / drift only in localMods / override active; `1` enforced drift; `2` environmental failure (missing pin, malformed config, unreachable SHA).
+- `bump-pin.sh <new-sha>` — sync workflow. Validates the new SHA exists upstream, prints a diff report scoped to `openclawPaths`, prompts for confirmation, updates the pin, appends a templated `SYNC_LOG.md` entry. Does not commit.
+
+The check runs as `prebuild:mac` / `prebuild:win` / `prebuild:all` in `wrapper/launcher/package.json`, so `npm run build:mac` automatically aborts on undocumented drift. Set `ALLOW_OPENCLAW_DRIFT=1` to bypass for dev work. Never bypass on a release build.
+
+Sync workflow: human reviews upstream diff, runs `bump-pin.sh <new-sha>`, inspects the generated `SYNC_LOG.md` entry, commits with message `security: bump openclaw pin to <short-sha>`.
+
+Threat model: protects against importing a malicious upstream change during a sync. Does not protect against local tampering of files we control via git (covered by code review and signed commits) and does not yet verify GPG/SSH signatures on upstream tags or commits — upstream signs tags with SSH keys but verification requires `gpg.ssh.allowedSignersFile` configuration; filed for post-launch.
+
 ---
 
 ## Source tagging — `wrapper/lib/source-tag.ts`
