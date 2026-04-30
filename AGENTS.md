@@ -39,7 +39,7 @@ armorclaw/
 ├── ArmorClaw Vault/                                 ← ArmorClaw session continuity (Cowork-managed)
 ├── site/                                            ← ArmorClaw landing page (armorclaw.app)
 └── wrapper/                                         ← ArmorClaw code — all behaviour lives here
-    ├── security/    ← injection-filter.ts, permissions.ts, audit-logger.ts
+    ├── security/    ← outbound-tool-arg-filter.ts, permissions.ts, audit-logger.ts
     ├── skills/      ← email-calendar, secure-files, browser (bundled only)
     ├── onboarding/, dashboard/, token-tracker/
     ├── digest/, recipes/, undo/
@@ -66,19 +66,23 @@ Note: `skills/` at the repo root is OpenClaw's; ArmorClaw's bundled skills are i
 
 ## Security architecture
 
-### Injection filter — `wrapper/security/injection-filter.ts`
+### Outbound tool-arg filter — `wrapper/security/outbound-tool-arg-filter.ts`
 
-Pre-skill hook. Runs on every invocation, before any skill, without exception. Cannot be bypassed by calling a skill directly.
+Subscribed to OpenClaw's `before_tool_call` hook. Screens the arguments the agent is about to pass TO a tool — the _outbound_ side of the security pipeline. Runs first in the `before_tool_call` chain, before the permission engine and the browser allowlist filter. Synchronous, cannot be bypassed.
 
-Reject inputs that:
+Reject outbound tool args that:
 
 - Contain instruction-override patterns ("ignore previous instructions", "you are now", "disregard your", "new system prompt", "pretend you are", semantic equivalents)
 - Attempt to reference or rewrite the system prompt
 - Contain base64 or other encoded payloads that decode to instruction patterns
 
-On rejection: log to audit log (timestamp, skill target, reason, first 120 chars of input), return a structured error. Never silently swallow or partially execute. Filter must be synchronous.
+The filter also enforces the agent-paused gate: while the dashboard pause toggle is on, every `before_tool_call` is blocked regardless of arg content. User must resume from the dashboard to continue.
 
-Run `npm run test:security` before marking any injection filter change done.
+On rejection: log to audit log (timestamp, tool target, reason, first 120 chars of input), return a `block: true` decision. Never silently swallow or partially execute.
+
+This is the _outbound_ half of a two-filter architecture. The _inbound_ counterpart is the inbound content classifier (`wrapper/security/inbound-content-classifier.ts`, see below) on the `before_prompt_build` hook — it screens content the agent has READ from prior tool results before the next prompt turn. Do not subscribe this outbound filter to `before_prompt_build`; that hook is the inbound classifier's domain.
+
+Run `npm run test:security` before marking any outbound tool-arg filter change done.
 
 ### Permission engine — `wrapper/security/permissions.ts`
 

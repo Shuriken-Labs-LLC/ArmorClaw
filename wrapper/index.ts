@@ -4,7 +4,7 @@ import { initRecipeScheduler } from "./recipes/index.ts";
 import { registerAuditLogger } from "./security/audit-logger.ts";
 import { registerBrowserAllowlistFilter } from "./security/browser-allowlist-filter.ts";
 import { registerInboundContentClassifier } from "./security/inbound-content-classifier.ts";
-import { registerInjectionFilter } from "./security/injection-filter.ts";
+import { registerOutboundToolArgFilter } from "./security/outbound-tool-arg-filter.ts";
 import { registerPermissionFilter } from "./security/permissions.ts";
 import { registerSourceTagger } from "./security/source-tagger.ts";
 
@@ -26,10 +26,14 @@ const armorClawPlugin = {
     // Token management is NOT done here — the gateway owns its token entirely.
     // ArmorClaw reads it back from openclaw.json after the gateway is reachable.
     validateGatewayHost();
-    // Order matters: injection check runs first, then permission check, then
-    // browser allowlist gates browser navigation specifically, then the audit
-    // logger observes the final outcome after execution.
-    registerInjectionFilter(api);
+    // Security filter stack — order is load-bearing:
+    //   1. Outbound tool-arg filter: blocks malicious args + enforces pause.
+    //   2. Permission engine: validates declared permissions.
+    //   3. Browser allowlist filter: gates browser navigation (Phase 2f).
+    //   4. Audit logger: observes outcomes of all the above.
+    //   Inbound classifier (before_prompt_build) runs independently on a
+    //   different hook — not part of this before_tool_call chain.
+    registerOutboundToolArgFilter(api);
     registerPermissionFilter(api);
     registerBrowserAllowlistFilter(api);
     registerAuditLogger(api);

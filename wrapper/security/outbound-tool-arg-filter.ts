@@ -1,3 +1,30 @@
+/**
+ * Outbound tool-arg filter — `before_tool_call` hook.
+ *
+ * Screens arguments the agent is about to pass TO a tool. Catches:
+ *   - Instruction-override patterns in tool args (prompt hijacking via
+ *     malicious outbound payload)
+ *   - Agent-paused enforcement (blocks all tool calls while paused)
+ *
+ * This is one of two filters in the ArmorClaw security pipeline:
+ *
+ *   1. Outbound (this file): `before_tool_call` — inspects what the
+ *      model wants to SEND to a tool. Runs first, before the permission
+ *      check and the browser allowlist filter.
+ *
+ *   2. Inbound (`wrapper/security/inbound-content-classifier.ts`):
+ *      `before_prompt_build` — classifies content the model has READ
+ *      from prior tool results before it's assembled into the next
+ *      prompt turn.
+ *
+ * Do NOT subscribe this file to `before_prompt_build`. That hook is the
+ * inbound classifier's domain.
+ *
+ * Non-negotiable gate (CLAUDE.md): run `npm run test:security` before
+ * committing any changes to this file. Cannot be bypassed, disabled,
+ * or given exceptions. Hard stop.
+ */
+
 import { appendFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -259,7 +286,7 @@ export function writePauseAuditEntry(toolName: string): void {
 // ── Hook registration ────────────────────────────────────────────────────────
 
 /**
- * Register the injection filter on the before_tool_call hook.
+ * Register the outbound tool-arg filter on the before_tool_call hook.
  *
  * Gate order (checked in sequence, first match wins):
  *   1. Agent paused — blocks all tool calls instantly, user must resume from dashboard
@@ -267,7 +294,7 @@ export function writePauseAuditEntry(toolName: string): void {
  *
  * The handler returns synchronously — resolution happens before the tool fires.
  */
-export function registerInjectionFilter(api: OpenClawPluginApi): void {
+export function registerOutboundToolArgFilter(api: OpenClawPluginApi): void {
   api.on("before_tool_call", (event, _ctx) => {
     // ── Gate 1: agent paused ─────────────────────────────────────────────────
     if (getAgentStatus() === "paused") {
@@ -295,10 +322,10 @@ export function registerInjectionFilter(api: OpenClawPluginApi): void {
 // ── Plugin definition ────────────────────────────────────────────────────────
 
 export default {
-  id: "armorclaw-injection-filter",
-  name: "ArmorClaw Injection Filter",
+  id: "armorclaw-outbound-tool-arg-filter",
+  name: "ArmorClaw Outbound Tool-Arg Filter",
   description: "Blocks prompt injection and jailbreak attempts before tool execution",
   register(api: OpenClawPluginApi): void {
-    registerInjectionFilter(api);
+    registerOutboundToolArgFilter(api);
   },
 };

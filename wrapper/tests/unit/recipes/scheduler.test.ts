@@ -21,7 +21,7 @@ vi.mock("../../../security/audit-logger.ts", () => ({
   writeAuditEntry: vi.fn(),
 }));
 
-vi.mock("../../../security/injection-filter.ts", () => ({
+vi.mock("../../../security/outbound-tool-arg-filter.ts", () => ({
   checkForInjection: vi.fn().mockReturnValue(null),
 }));
 
@@ -44,7 +44,7 @@ import {
 } from "../../../recipes/store.ts";
 import type { RecipeWithState } from "../../../recipes/types.ts";
 import { writeAuditEntry } from "../../../security/audit-logger.ts";
-import { checkForInjection } from "../../../security/injection-filter.ts";
+import { checkForInjection } from "../../../security/outbound-tool-arg-filter.ts";
 
 // ── Test state setup ──────────────────────────────────────────────────────────
 

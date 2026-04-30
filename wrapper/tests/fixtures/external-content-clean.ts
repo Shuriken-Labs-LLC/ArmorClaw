@@ -186,7 +186,7 @@ export const CLEAN_FIXTURES: ReadonlyArray<FixtureSample> = Object.freeze([
   {
     name: "bash-tree-output",
     content:
-      "wrapper/\n├── config/\n│   ├── gateway.ts\n│   └── system-prompt.ts\n├── lib/\n│   └── source-tag.ts\n└── security/\n    ├── audit-logger.ts\n    └── injection-filter.ts",
+      "wrapper/\n├── config/\n│   ├── gateway.ts\n│   └── system-prompt.ts\n├── lib/\n│   └── source-tag.ts\n└── security/\n    ├── audit-logger.ts\n    └── outbound-tool-arg-filter.ts",
     expectedScore: 0.0,
   },
   {

@@ -22,7 +22,7 @@
 import { Cron } from "croner";
 import { isRecipeEligible } from "../lib/skill-registry.ts";
 import { writeAuditEntry } from "../security/audit-logger.ts";
-import { checkForInjection } from "../security/injection-filter.ts";
+import { checkForInjection } from "../security/outbound-tool-arg-filter.ts";
 import * as store from "./store.ts";
 import type { RecipeWithState } from "./types.ts";
 
