@@ -16,6 +16,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 PIN_DIR="$REPO_ROOT/wrapper/security/openclaw-pin"
 PIN_FILE="$PIN_DIR/PINNED_SHA.txt"
 PATHS_FILE="$PIN_DIR/PATHS.json"
+KEYS_FILE="$PIN_DIR/UPSTREAM_KEYS.txt"
 SYNC_LOG="$PIN_DIR/SYNC_LOG.md"
 UPSTREAM_URL="${OPENCLAW_UPSTREAM_URL:-https://github.com/openclaw/openclaw.git}"
 UPSTREAM_REMOTE="openclaw-upstream"
@@ -63,6 +64,64 @@ FROM_SHA="$(tr -d '[:space:]' < "$PIN_FILE")"
 if [ "$FROM_SHA" = "$NEW_SHA" ]; then
   echo "Pin already at $NEW_SHA — nothing to do."
   exit 0
+fi
+
+# --- tag signature verification ---
+# Refuse to record a pin at an unsigned/untagged commit unless the human
+# acknowledges the gap with ALLOW_UNSIGNED_PIN=1 + a Notes reason captured
+# in the SYNC_LOG entry.
+if [ ! -f "$KEYS_FILE" ]; then
+  echo "ERROR: UPSTREAM_KEYS.txt missing at $KEYS_FILE — required for signature verification." >&2
+  exit 2
+fi
+
+NEW_TAG="$(git tag --points-at "$NEW_SHA" --sort=-creatordate 2>/dev/null | head -n 1 || true)"
+SIGNATURE_STATE="unverified"
+SIGNATURE_REASON=""
+UNSIGNED_NOTE_REQUIRED=0
+
+if [ -z "$NEW_TAG" ]; then
+  SIGNATURE_REASON="untagged commit"
+  if [ "${ALLOW_UNSIGNED_PIN:-}" = "1" ]; then
+    echo "WARNING: new SHA $NEW_SHA is not at a tagged commit. ALLOW_UNSIGNED_PIN=1 set, continuing." >&2
+    UNSIGNED_NOTE_REQUIRED=1
+  else
+    echo "ERROR: new SHA $NEW_SHA is not at a tagged commit." >&2
+    echo "Bump to a tagged release, or set ALLOW_UNSIGNED_PIN=1 (you'll be required to provide a Notes reason)." >&2
+    exit 1
+  fi
+else
+  VERIFY_OUTPUT="$(git -c gpg.ssh.allowedSignersFile="$KEYS_FILE" tag --verify "$NEW_TAG" 2>&1)" \
+    && VERIFY_EXIT=0 || VERIFY_EXIT=$?
+  if [ "$VERIFY_EXIT" -ne 0 ]; then
+    SIGNATURE_REASON="signature failed verification"
+    if [ "${ALLOW_UNSIGNED_PIN:-}" = "1" ]; then
+      echo "WARNING: tag $NEW_TAG signature verification failed. ALLOW_UNSIGNED_PIN=1 set, continuing." >&2
+      printf '%s\n' "$VERIFY_OUTPUT" >&2
+      UNSIGNED_NOTE_REQUIRED=1
+    else
+      echo "ERROR: tag $NEW_TAG signature verification failed:" >&2
+      printf '%s\n' "$VERIFY_OUTPUT" >&2
+      exit 1
+    fi
+  else
+    SIGNATURE_STATE="verified"
+  fi
+fi
+
+# If override is in play, require a Notes reason now (before preview, so the
+# reason is on the user's mind when they review the diff).
+UNSIGNED_NOTE=""
+if [ "$UNSIGNED_NOTE_REQUIRED" = "1" ]; then
+  echo
+  echo "ALLOW_UNSIGNED_PIN=1 is overriding signature verification."
+  echo "Provide a Notes reason explaining why an unverified pin is acceptable here."
+  echo "It will be recorded in SYNC_LOG.md as a permanent audit-trail entry."
+  read -r -p "Notes: " UNSIGNED_NOTE
+  if [ -z "$UNSIGNED_NOTE" ]; then
+    echo "ERROR: Notes reason is required when ALLOW_UNSIGNED_PIN=1. Aborting." >&2
+    exit 1
+  fi
 fi
 
 # Parse openclawPaths for diff report scoping.
@@ -125,6 +184,11 @@ REVIEWER="$(git config user.name 2>/dev/null || echo unknown)"
   printf -- '- **From:** `%s`\n' "$FROM_SHA"
   printf -- '- **To:** `%s`\n' "$NEW_SHA"
   printf -- '- **Reviewer:** %s\n' "$REVIEWER"
+  if [ "$SIGNATURE_STATE" = "verified" ]; then
+    printf -- '- **Signature:** Verified via tag `%s` against `UPSTREAM_KEYS.txt`.\n' "$NEW_TAG"
+  else
+    printf -- '- **Signature:** UNVERIFIED. Reason: %s. Override: `ALLOW_UNSIGNED_PIN=1`.\n' "$SIGNATURE_REASON"
+  fi
   printf -- '- **Diff summary:**\n\n  ```\n'
   if [ -n "$DIFF_STAT" ]; then
     printf '%s\n' "$DIFF_STAT" | sed 's/^/  /'
@@ -132,7 +196,11 @@ REVIEWER="$(git config user.name 2>/dev/null || echo unknown)"
     printf '  (no changes in enforced paths)\n'
   fi
   printf '  ```\n'
-  printf -- '- **Notes:** (added by hand if needed)\n'
+  if [ -n "$UNSIGNED_NOTE" ]; then
+    printf -- '- **Notes:** %s\n' "$UNSIGNED_NOTE"
+  else
+    printf -- '- **Notes:** (added by hand if needed)\n'
+  fi
 } >> "$SYNC_LOG"
 
 echo

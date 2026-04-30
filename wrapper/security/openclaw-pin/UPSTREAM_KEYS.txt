@@ -1,0 +1,29 @@
+# Allowed signers for OpenClaw upstream tags.
+#
+# Each line authorises one SSH public key to sign upstream release tags. The
+# format is the one git expects via `gpg.ssh.allowedSignersFile`:
+#
+#     <principal> namespaces="git" <key-type> <key-base64> [comment]
+#
+# `bump-pin.sh` and `check-pin.sh` pass this file to `git verify-tag` via
+# `-c gpg.ssh.allowedSignersFile=<this-file>`. Any tag at the pinned SHA
+# must be signed by one of the keys below or the build refuses (override:
+# ALLOW_UNSIGNED_PIN=1, accompanied by a SYNC_LOG note explaining why).
+#
+# Rotation procedure:
+#   - Add a new key: append a new line, commit as
+#     `security: rotate openclaw upstream signer key (<who>)`.
+#   - Remove a compromised key: delete the line, commit with the same
+#     message prefix. Do NOT rewrite history — past pins were verified
+#     against the historical key set, and forensic re-verification of
+#     old SYNC_LOG entries needs the key history to remain in git.
+#   - Squash-merging this file is forbidden. PR review of every key
+#     change is the entire defence; collapsing history hides a malicious
+#     addition.
+#
+# Captured 2026-04-29 from upstream tags v2026.4.23..v2026.4.27, all signed
+# by Peter Steinberger with the same ed25519 key. Cross-checked against
+# https://github.com/steipete.keys (first entry, key fingerprint
+# SHA256:WmI9lVtd7F2c5XyRHbZVO3yYYJzwsSNzcZQMPT147HI).
+
+steipete@gmail.com namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII9XsaCcr8TInPnHcuTVfvXXcsoUFrOE7menfbEIHFW9 Peter Steinberger (primary maintainer)

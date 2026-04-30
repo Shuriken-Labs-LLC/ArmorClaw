@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-# OpenClaw upstream pin drift check.
+# OpenClaw upstream pin drift + signature check.
 #
-# Verifies that local OpenClaw-owned files match the pinned upstream commit's
-# tree, modulo paths in PATHS.json#localModsPaths. Refuses on undocumented
-# drift unless ALLOW_OPENCLAW_DRIFT=1 is set in the environment.
+# Two layers run on every release build:
+#   1. Tree-drift: local OpenClaw-owned files must match upstream@PIN
+#      (modulo PATHS.json#localModsPaths). Override: ALLOW_OPENCLAW_DRIFT=1.
+#   2. Tag signature: PINNED_SHA must be at a tag signed by a key listed
+#      in UPSTREAM_KEYS.txt. Override: ALLOW_UNSIGNED_PIN=1.
 #
 # Exit codes:
-#   0 - no drift, or drift only in localModsPaths, or override active
-#   1 - drift detected in OpenClaw-owned paths outside localModsPaths
-#   2 - environmental failure (missing pin, malformed config, fetch failure)
+#   0 - both checks passed (or applicable overrides set)
+#   1 - drift detected outside localModsPaths, OR signature verification
+#       failed, OR pinned SHA is not at a tagged commit
+#   2 - environmental failure (missing pin / keys / config, fetch failure)
 #
 # Run from any directory; resolves paths relative to the repo root.
 
@@ -18,6 +21,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 PIN_DIR="$REPO_ROOT/wrapper/security/openclaw-pin"
 PIN_FILE="$PIN_DIR/PINNED_SHA.txt"
 PATHS_FILE="$PIN_DIR/PATHS.json"
+KEYS_FILE="$PIN_DIR/UPSTREAM_KEYS.txt"
 UPSTREAM_URL="${OPENCLAW_UPSTREAM_URL:-https://github.com/openclaw/openclaw.git}"
 UPSTREAM_REMOTE="openclaw-upstream"
 
@@ -130,22 +134,66 @@ for p in "${OPENCLAW_PATHS[@]}"; do
   fi
 done
 
-# --- report ---
+# --- drift report ---
+if [ "${#DRIFTED[@]}" -gt 0 ]; then
+  echo "OpenClaw pin DRIFT detected. Drifted paths:" >&2
+  printf '  - %s\n' "${DRIFTED[@]}" >&2
+  echo >&2
+  echo "Run 'wrapper/security/openclaw-pin/bump-pin.sh <new-sha>' after reviewing upstream changes," >&2
+  echo "or set ALLOW_OPENCLAW_DRIFT=1 to bypass for dev builds." >&2
+
+  if [ "${ALLOW_OPENCLAW_DRIFT:-}" = "1" ]; then
+    echo
+    echo "ALLOW_OPENCLAW_DRIFT=1 set, continuing with drift (signature still enforced)."
+  else
+    exit 1
+  fi
+fi
+
+# --- tag signature verification ---
+# Verifies the pinned SHA is at a tag signed by a key in UPSTREAM_KEYS.txt.
+# A clean working tree alone is not sufficient: an attacker who can rewrite
+# upstream history (or who controls a malicious mirror) could publish a
+# matching SHA without a corresponding signed tag. Signature verification
+# closes that gap.
+if [ ! -f "$KEYS_FILE" ]; then
+  echo "ERROR: UPSTREAM_KEYS.txt missing at $KEYS_FILE — required for signature verification." >&2
+  echo "Restore the file from git history; do not bypass this check." >&2
+  exit 2
+fi
+
+TAG_AT_PIN="$(git tag --points-at "$PINNED_SHA" --sort=-creatordate 2>/dev/null | head -n 1 || true)"
+
+if [ -z "$TAG_AT_PIN" ]; then
+  if [ "${ALLOW_UNSIGNED_PIN:-}" = "1" ]; then
+    echo "WARNING: pinned SHA $PINNED_SHA is not at a tagged commit." >&2
+    echo "ALLOW_UNSIGNED_PIN=1 set, continuing. Add a Notes entry to SYNC_LOG.md explaining why." >&2
+  else
+    echo "ERROR: pinned SHA $PINNED_SHA is not at a tagged commit. Refusing." >&2
+    echo "Either bump the pin to a tagged release, or set ALLOW_UNSIGNED_PIN=1 with a SYNC_LOG note." >&2
+    exit 1
+  fi
+else
+  VERIFY_OUTPUT="$(git -c gpg.ssh.allowedSignersFile="$KEYS_FILE" tag --verify "$TAG_AT_PIN" 2>&1)" \
+    && VERIFY_EXIT=0 || VERIFY_EXIT=$?
+  if [ "$VERIFY_EXIT" -ne 0 ]; then
+    if [ "${ALLOW_UNSIGNED_PIN:-}" = "1" ]; then
+      echo "WARNING: tag $TAG_AT_PIN signature verification failed." >&2
+      printf '%s\n' "$VERIFY_OUTPUT" >&2
+      echo "ALLOW_UNSIGNED_PIN=1 set, continuing. Add a Notes entry to SYNC_LOG.md explaining why." >&2
+    else
+      echo "ERROR: tag $TAG_AT_PIN signature verification failed:" >&2
+      printf '%s\n' "$VERIFY_OUTPUT" >&2
+      exit 1
+    fi
+  fi
+fi
+
+# --- success ---
 if [ "${#DRIFTED[@]}" -eq 0 ]; then
   echo "OpenClaw pin OK: HEAD matches upstream@$PINNED_SHA across all enforced paths."
-  exit 0
 fi
-
-echo "OpenClaw pin DRIFT detected. Drifted paths:" >&2
-printf '  - %s\n' "${DRIFTED[@]}" >&2
-echo >&2
-echo "Run 'wrapper/security/openclaw-pin/bump-pin.sh <new-sha>' after reviewing upstream changes," >&2
-echo "or set ALLOW_OPENCLAW_DRIFT=1 to bypass for dev builds." >&2
-
-if [ "${ALLOW_OPENCLAW_DRIFT:-}" = "1" ]; then
-  echo
-  echo "ALLOW_OPENCLAW_DRIFT=1 set, continuing with drift."
-  exit 0
+if [ -n "$TAG_AT_PIN" ] && [ "${VERIFY_EXIT:-0}" -eq 0 ]; then
+  echo "OpenClaw signature OK: tag $TAG_AT_PIN verified against UPSTREAM_KEYS.txt."
 fi
-
-exit 1
+exit 0

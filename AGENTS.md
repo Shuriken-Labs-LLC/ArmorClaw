@@ -171,15 +171,21 @@ ArmorClaw is a vendored fork of `github.com/openclaw/openclaw`. To prevent drift
 
 - `PINNED_SHA.txt` — the upstream commit SHA we last reviewed and synced to.
 - `PATHS.json` — classifies every tracked top-level path as `armorclawPaths` (not enforced), `openclawPaths` (must match upstream byte-for-byte), or `localModsPaths` (OpenClaw-owned with intentional ArmorClaw modifications, enforced manually at sync time). `ambiguousPathsToInvestigate` must be empty for the check to run — any new top-level path landing in the repo must be classified before the next release.
-- `SYNC_LOG.md` — append-only log of pin bumps with diff summaries and reviewer sign-off.
-- `check-pin.sh` — drift check. Compares the working tree against `upstream@PIN` for every `openclawPaths` entry, with `localModsPaths` excluded. Refuses release if drift exists outside the localMods set. Exit codes: `0` no drift / drift only in localMods / override active; `1` enforced drift; `2` environmental failure (missing pin, malformed config, unreachable SHA).
-- `bump-pin.sh <new-sha>` — sync workflow. Validates the new SHA exists upstream, prints a diff report scoped to `openclawPaths`, prompts for confirmation, updates the pin, appends a templated `SYNC_LOG.md` entry. Does not commit.
+- `UPSTREAM_KEYS.txt` — the SSH public keys allowed to sign upstream release tags, in the `gpg.ssh.allowedSignersFile` format. Repo-committed (NOT `~/.ssh/allowed_signers`, which an attacker with shell access could rewrite silently). Every key change goes through PR review.
+- `SYNC_LOG.md` — append-only log of pin bumps with diff summaries, reviewer sign-off, and signature status (verified / UNVERIFIED with reason).
+- `check-pin.sh` — drift + signature check. Verifies (a) local OpenClaw-owned files match `upstream@PIN` modulo `localModsPaths`, and (b) `PINNED_SHA` is at a tag signed by a key in `UPSTREAM_KEYS.txt`. Exit codes: `0` both checks pass (or applicable overrides); `1` drift outside localMods OR signature failed OR untagged commit; `2` environmental failure (missing pin / keys / config, unreachable SHA).
+- `bump-pin.sh <new-sha>` — sync workflow. Validates the new SHA exists upstream, runs the same signature gate, prints a diff report scoped to `openclawPaths`, prompts for confirmation, updates the pin, appends a templated `SYNC_LOG.md` entry that records signature status. Does not commit.
 
-The check runs as `prebuild:mac` / `prebuild:win` / `prebuild:all` in `wrapper/launcher/package.json`, so `npm run build:mac` automatically aborts on undocumented drift. Set `ALLOW_OPENCLAW_DRIFT=1` to bypass for dev work. Never bypass on a release build.
+The check runs as `prebuild:mac` / `prebuild:win` / `prebuild:all` in `wrapper/launcher/package.json`, so `npm run build:mac` automatically aborts on undocumented drift OR on an unsigned/untagged pin. Two overrides:
+
+- `ALLOW_OPENCLAW_DRIFT=1` — bypasses the tree-drift check (signature still enforced).
+- `ALLOW_UNSIGNED_PIN=1` — bypasses the signature check; on `bump-pin.sh` this also requires a Notes reason captured in the SYNC_LOG entry. Never bypass on a release build without explicit sign-off.
 
 Sync workflow: human reviews upstream diff, runs `bump-pin.sh <new-sha>`, inspects the generated `SYNC_LOG.md` entry, commits with message `security: bump openclaw pin to <short-sha>`.
 
-Threat model: protects against importing a malicious upstream change during a sync. Does not protect against local tampering of files we control via git (covered by code review and signed commits) and does not yet verify GPG/SSH signatures on upstream tags or commits — upstream signs tags with SSH keys but verification requires `gpg.ssh.allowedSignersFile` configuration; filed for post-launch.
+Key rotation: append a new line to `UPSTREAM_KEYS.txt` and commit as `security: rotate openclaw upstream signer key (<who>)`. Removed keys are deleted from the file but their lines remain in git history (needed for retroactive verification of historical pinned tags). PR review on every key change is the entire defence — squash-merging this file is forbidden.
+
+Threat model: the SHA pin protects against importing the wrong upstream commit during sync; the signature pin converts "the SHA matches" into "the SHA is at a tag signed by a key we vendor". Together they close the gap where an attacker who could rewrite upstream history (or run a malicious mirror) could otherwise publish a matching SHA without a corresponding signed tag. Does not protect against local tampering of files we control via git (covered by code review) and does not verify commit-by-commit signatures (only release tags).
 
 ---
 
