@@ -162,23 +162,24 @@ describe("verifyAuditLog — tampered content (HMAC mismatch)", () => {
   });
 });
 
-describe("verifyAuditLog — partial (some unsigned entries)", () => {
-  it("returns 'partial' when some entries have hmac:null", async () => {
+describe("verifyAuditLog — partial (legitimate unsigned entries)", () => {
+  it("returns 'partial' when leading entries are unsigned (cold-start warm-up)", async () => {
     const key = Buffer.alloc(32, 0xee);
     setMockedKey(key);
-    const { content } = buildChain(3, key, { unsignedSeqs: [2] });
+    // 3 leading null-HMAC entries, then 2 signed — keychain warm-up window.
+    const { content } = buildChain(5, key, { unsignedSeqs: [1, 2, 3] });
     vi.mocked(readFileSync).mockReturnValue(content);
 
     const result = await verifyAuditLog();
 
     expect(result.status).toBe("partial");
     expect(result.validEntries).toBe(2);
-    expect(result.unverifiedEntries).toBe(1);
+    expect(result.unverifiedEntries).toBe(3);
     expect(result.firstBrokenSeq).toBeNull();
   });
 
-  it("returns 'partial' when ALL entries are unsigned", async () => {
-    const { content } = buildChain(3, null);
+  it("returns 'partial' when ALL entries are unsigned (daemon never warmed)", async () => {
+    const { content } = buildChain(5, null);
     setMockedKey(Buffer.alloc(32, 0xff)); // key now available, but old entries lack hmac
     vi.mocked(readFileSync).mockReturnValue(content);
 
@@ -186,7 +187,79 @@ describe("verifyAuditLog — partial (some unsigned entries)", () => {
 
     expect(result.status).toBe("partial");
     expect(result.validEntries).toBe(0);
-    expect(result.unverifiedEntries).toBe(3);
+    expect(result.unverifiedEntries).toBe(5);
+    expect(result.firstBrokenSeq).toBeNull();
+  });
+});
+
+describe("verifyAuditLog — null-after-signed rule", () => {
+  it("returns 'broken' when a null entry appears after a signed entry", async () => {
+    const key = Buffer.alloc(32, 0x10);
+    setMockedKey(key);
+    // signed, signed, null — second signed proves chain was warm; the trailing
+    // null is therefore not a legitimate warm-up entry.
+    const { content } = buildChain(3, key, { unsignedSeqs: [3] });
+    vi.mocked(readFileSync).mockReturnValue(content);
+
+    const result = await verifyAuditLog();
+
+    expect(result.status).toBe("broken");
+    expect(result.firstBrokenSeq).toBe(3);
+    expect(result.validEntries).toBe(2);
+    expect(result.message).toMatch(/unsigned entry after the chain became signed/);
+  });
+
+  it("returns 'broken' when null appears mid-chain even with later signed entries", async () => {
+    const key = Buffer.alloc(32, 0x11);
+    setMockedKey(key);
+    // signed, signed, null, signed, signed — verifier must stop at seq 3,
+    // not continue and recover.
+    const { content } = buildChain(5, key, { unsignedSeqs: [3] });
+    vi.mocked(readFileSync).mockReturnValue(content);
+
+    const result = await verifyAuditLog();
+
+    expect(result.status).toBe("broken");
+    expect(result.firstBrokenSeq).toBe(3);
+    expect(result.validEntries).toBe(2);
+  });
+
+  it("returns 'broken' on the alternating signed/null/signed/null pattern", async () => {
+    const key = Buffer.alloc(32, 0x12);
+    setMockedKey(key);
+    // null, signed, null, signed — first null is legitimate warm-up; second
+    // null (after seq=2 signed) is the break.
+    const { content } = buildChain(4, key, { unsignedSeqs: [1, 3] });
+    vi.mocked(readFileSync).mockReturnValue(content);
+
+    const result = await verifyAuditLog();
+
+    expect(result.status).toBe("broken");
+    expect(result.firstBrokenSeq).toBe(3);
+    expect(result.validEntries).toBe(1);
+    expect(result.unverifiedEntries).toBe(1);
+  });
+
+  it("falls back to totalEntries when the null-after-signed entry lacks seq", async () => {
+    const key = Buffer.alloc(32, 0x13);
+    setMockedKey(key);
+    const { lines } = buildChain(1, key);
+    const firstHash = createHash("sha256").update(lines[0]).digest("hex");
+    // Second entry is null-hmac and lacks a seq field — verifier should
+    // record firstBrokenSeq as totalEntries (2) rather than crash.
+    const malformedSecond = JSON.stringify({
+      timestamp: "x",
+      skill: "no-seq-null",
+      prevHash: firstHash,
+      hmac: null,
+    });
+    const content = lines[0] + "\n" + malformedSecond + "\n";
+    vi.mocked(readFileSync).mockReturnValue(content);
+
+    const result = await verifyAuditLog();
+
+    expect(result.status).toBe("broken");
+    expect(result.firstBrokenSeq).toBe(2);
   });
 });
 

@@ -110,6 +110,10 @@ Every skill invocation logs: ISO 8601 timestamp, skill name+version, permission 
 
 Logs → `~/.armorclaw/audit.log` (NDJSON). Logger must never throw — fail silently to in-memory buffer. `npm run export:audit` produces CSV.
 
+Each entry is signed with HMAC-SHA256 (key in keychain via keytar) and chained via `prevHash` (SHA-256 of the previous serialized line, `GENESIS` for the first). `wrapper/security/audit-verify.ts` walks the chain and returns `ok` / `partial` / `broken` / `missing`.
+
+The chain validator enforces an additional rule: once a chain entry has a non-null HMAC, all subsequent entries must also have a non-null HMAC. The keychain warm-up window at daemon start may produce a small number of leading `hmac: null` entries (acceptable, treated as `partial`); a `hmac: null` entry appearing after the chain has demonstrably been signing is treated as `broken` with reason `null-after-signed`. This converts an attacker who exploits a transient keychain outage from "indistinguishable from cold-start partial" into an observable tamper signal.
+
 ### Source-tagger — `wrapper/security/source-tagger.ts`
 
 Subscribed to OpenClaw's `tool_result_persist` lifecycle hook (mutation rights). Wraps external tool-result content in `<external-content>` framing via `renderForModel()` before it reaches the model's next-turn context. Allowlist-style: only tools listed in `TOOL_TO_SOURCE_TAG` get tagged. Unmapped tools pass through unchanged.
