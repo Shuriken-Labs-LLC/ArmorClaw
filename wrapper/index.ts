@@ -2,6 +2,7 @@ import { emptyPluginConfigSchema, type OpenClawPluginApi } from "openclaw/plugin
 import { validateGatewayHost } from "./config/gateway.ts";
 import { initRecipeScheduler } from "./recipes/index.ts";
 import { registerAuditLogger } from "./security/audit-logger.ts";
+import { registerBrowserAllowlistFilter } from "./security/browser-allowlist-filter.ts";
 import { registerInboundContentClassifier } from "./security/inbound-content-classifier.ts";
 import { registerInjectionFilter } from "./security/injection-filter.ts";
 import { registerPermissionFilter } from "./security/permissions.ts";
@@ -26,9 +27,11 @@ const armorClawPlugin = {
     // ArmorClaw reads it back from openclaw.json after the gateway is reachable.
     validateGatewayHost();
     // Order matters: injection check runs first, then permission check, then
-    // the audit logger observes the final outcome after execution.
+    // browser allowlist gates browser navigation specifically, then the audit
+    // logger observes the final outcome after execution.
     registerInjectionFilter(api);
     registerPermissionFilter(api);
+    registerBrowserAllowlistFilter(api);
     registerAuditLogger(api);
     // Source-tagger fires on tool_result_persist (different hook from the
     // before/after_tool_call trio above) — registration order has no effect

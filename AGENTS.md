@@ -155,6 +155,16 @@ Always-on by default. Disable via `ARMORCLAW_CLASSIFIER_DISABLED=true` env var (
 
 Cost: ~$1/month at the $20 default budget on Anthropic (Haiku ~$0.0006/call; cached results so each unique tool result costs once per session).
 
+### Browser domain allowlist — `wrapper/security/browser-allowlist.ts`
+
+The agent's browser tool can only navigate to domains in the user-managed allowlist at `~/.armorclaw/browser-allowlist.json`. Apex domain matches its subdomains — listing `github.com` allows `github.com`, `api.github.com`, `gist.github.com`, but not `githubusercontent.com` or `github.com.attacker.com`. Punycode/IDN normalized before comparison. Localhost / RFC 1918 / IPv6 loopback / link-local / IPv4-mapped IPv6 are ALWAYS blocked, even if explicitly added to the allowlist — DNS rebinding defense.
+
+Enforcement runs at `before_tool_call` after the permission filter, before the audit logger (see `wrapper/security/browser-allowlist-filter.ts`). The filter inspects only browser-tool calls (`toolName === "browser"`) whose action is `open` or `navigate`. URL params inspected: `targetUrl` (preferred) and `url` (legacy fallback) per `src/agents/tools/browser-tool.ts`. Tool calls that don't navigate (`status`, `tabs`, `snapshot`, `screenshot`, `console`, `pdf`, `upload`, `dialog`, `act`, …) are unaffected.
+
+Rejection is a hard block: `{ block: true, blockReason }` with a clear message pointing the user at Settings → Browser allowlist. Every blocked navigation is logged as `outcome: "rejected"` under `skill: "browser-allowlist"`. No silent allow-and-queue, no first-navigation prompt (that requires async approval, deferred to Phase 2e).
+
+Default allowlist is empty. Users seed it through dashboard Settings → Browser allowlist (add/remove domains) or onboarding Step 6 review screen (three opt-in defaults: `google.com`, `wikipedia.org`, `github.com`).
+
 ### Vendored OpenClaw upstream pin — `wrapper/security/openclaw-pin/`
 
 ArmorClaw is a vendored fork of `github.com/openclaw/openclaw`. To prevent drift from importing unintended (or malicious) upstream changes during sync, the repo records:

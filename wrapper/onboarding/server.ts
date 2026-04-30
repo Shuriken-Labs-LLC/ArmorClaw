@@ -11,6 +11,7 @@ import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import express from "express";
+import { getAllowedDomains, setAllowedDomains } from "../security/browser-allowlist.ts";
 import { setEnvVar } from "./env-writer.ts";
 import {
   advanceStep,
@@ -988,6 +989,35 @@ export function createApp(): express.Application {
       }
     });
     req.on("close", unsub);
+  });
+
+  // Browser allowlist — seeded from Step 6 review screen. Optional; skipping
+  // it leaves the allowlist empty (user can add domains later in dashboard
+  // Settings → Browser allowlist).
+  app.get("/api/step/6/browser-allowlist", (_req, res) => {
+    res.json({ domains: getAllowedDomains() });
+  });
+
+  app.post("/api/step/6/browser-allowlist", (req, res) => {
+    const { domain, enabled } = req.body as { domain?: string; enabled?: boolean };
+    if (typeof domain !== "string" || domain.trim() === "") {
+      res.status(422).json({ ok: false, message: "domain must be a non-empty string" });
+      return;
+    }
+    if (typeof enabled !== "boolean") {
+      res.status(422).json({ ok: false, message: "enabled must be a boolean" });
+      return;
+    }
+    const current = getAllowedDomains();
+    const target = domain.trim().toLowerCase();
+    let next: string[];
+    if (enabled) {
+      next = [...current, domain];
+    } else {
+      next = current.filter((d) => d.toLowerCase() !== target);
+    }
+    const updated = setAllowedDomains(next);
+    res.json({ ok: true, domains: updated });
   });
 
   app.post("/api/step/6/launch", async (_req, res) => {

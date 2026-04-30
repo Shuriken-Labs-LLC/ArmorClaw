@@ -1794,6 +1794,31 @@
           </div>
         </div>
 
+        <!-- 2b. Browser allowlist -->
+        <div class="card settings-card">
+          <div class="card-hdr"><span class="card-title">Browser allowlist</span></div>
+          <div style="padding:14px 16px">
+            <p class="settings-field-hint" style="margin:0 0 12px">
+              Domains in this list can be visited by the agent's browser tool.
+              Subdomains are included automatically — adding <span class="mono">github.com</span>
+              also allows <span class="mono">api.github.com</span> and <span class="mono">gist.github.com</span>.
+              Localhost and private IPs are always blocked.
+            </p>
+            <div id="ba-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+            <div id="ba-empty" style="font-size:13px;color:var(--ac-hint);margin-bottom:12px;display:none">
+              No domains allowed. The browser tool will be blocked until you add at least one domain.
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <input class="settings-field" id="ba-domain-input" type="text"
+                     placeholder="github.com" style="flex:1;min-width:160px;max-width:280px"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();baAddDomain();}">
+              <button class="btn-settings primary" onclick="baAddDomain()" type="button">Add domain</button>
+              <span class="settings-save-msg" id="ba-save-msg" style="display:none">Saved ✓</span>
+            </div>
+            <p class="settings-field-hint" id="ba-error" style="display:none;color:var(--ac-red);margin-top:8px"></p>
+          </div>
+        </div>
+
         <!-- 3. Email and calendar -->
         <div class="card settings-card">
           <div class="card-hdr"><span class="card-title">Email &amp; Calendar</span></div>
@@ -2900,6 +2925,89 @@ async function saveSandbox() {
     toggleSettingsForm('sandbox-form');
   }
 }
+
+// ── Browser allowlist ─────────────────────────────────────────────────────────
+
+async function baLoadAndRender() {
+  const list = document.getElementById('ba-list');
+  const empty = document.getElementById('ba-empty');
+  if (!list || !empty) return;
+  try {
+    const r = await fetch('/api/security/browser-allowlist');
+    const d = await r.json().catch(() => ({ domains: [] }));
+    const domains = Array.isArray(d.domains) ? d.domains : [];
+    list.innerHTML = '';
+    if (domains.length === 0) {
+      empty.style.display = '';
+      return;
+    }
+    empty.style.display = 'none';
+    for (const domain of domains) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--ac-surface2);border:0.5px solid var(--ac-border);border-radius:6px';
+      const span = document.createElement('span');
+      span.className = 'mono';
+      span.style.cssText = 'flex:1;font-size:13px;color:var(--ac-text);word-break:break-all';
+      span.textContent = domain;
+      const btn = document.createElement('button');
+      btn.className = 'btn-settings';
+      btn.type = 'button';
+      btn.textContent = 'Remove';
+      btn.onclick = () => baRemoveDomain(domain);
+      row.appendChild(span);
+      row.appendChild(btn);
+      list.appendChild(row);
+    }
+  } catch { /* ignore */ }
+}
+
+async function baAddDomain() {
+  const input = document.getElementById('ba-domain-input');
+  const errEl = document.getElementById('ba-error');
+  if (!input) return;
+  const value = (input.value || '').trim();
+  if (errEl) errEl.style.display = 'none';
+  if (value === '') {
+    if (errEl) {
+      errEl.textContent = 'Enter a domain (e.g. github.com).';
+      errEl.style.display = '';
+    }
+    return;
+  }
+  try {
+    const r = await fetch('/api/security/browser-allowlist/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain: value }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!d.ok) {
+      if (errEl) {
+        errEl.textContent = d.message || 'Could not save domain.';
+        errEl.style.display = '';
+      }
+      return;
+    }
+    input.value = '';
+    showSaveMsg('ba-save-msg');
+    await baLoadAndRender();
+  } catch {
+    if (errEl) {
+      errEl.textContent = 'Network error — please try again.';
+      errEl.style.display = '';
+    }
+  }
+}
+
+async function baRemoveDomain(domain) {
+  try {
+    await fetch('/api/security/browser-allowlist/' + encodeURIComponent(domain), { method: 'DELETE' });
+    await baLoadAndRender();
+  } catch { /* ignore */ }
+}
+
+// Load on first settings render
+baLoadAndRender();
 
 async function saveSettingsBudget() {
   const input = document.getElementById('s-budget-input');

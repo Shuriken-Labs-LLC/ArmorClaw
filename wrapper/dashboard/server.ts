@@ -34,6 +34,7 @@ import {
 } from "../recipes/store.ts";
 import type { RecipeWithState } from "../recipes/types.ts";
 import type { AuditEntry } from "../security/audit-logger.ts";
+import { getAllowedDomains, setAllowedDomains } from "../security/browser-allowlist.ts";
 import {
   getPendingApprovals as getPermissionPendingApprovals,
   resolveApproval,
@@ -1053,6 +1054,35 @@ export function createApp(): express.Application {
     // The Electron app reads this on next launch via configureLoginItem()
     notifyListeners();
     res.json({ ok: true, enabled });
+  });
+
+  // ── Settings: browser allowlist ──
+  app.get("/api/security/browser-allowlist", (_req, res) => {
+    res.json({ domains: getAllowedDomains() });
+  });
+
+  app.post("/api/security/browser-allowlist/add", (req, res) => {
+    const { domain } = req.body as { domain?: string };
+    if (typeof domain !== "string" || domain.trim() === "") {
+      res.status(422).json({ ok: false, message: "domain must be a non-empty string" });
+      return;
+    }
+    const current = getAllowedDomains();
+    const updated = setAllowedDomains([...current, domain]);
+    notifyListeners();
+    res.json({ ok: true, domains: updated });
+  });
+
+  app.delete("/api/security/browser-allowlist/:domain", (req, res) => {
+    const target = decodeURIComponent(req.params["domain"] ?? "").toLowerCase();
+    if (target === "") {
+      res.status(422).json({ ok: false, message: "domain is required" });
+      return;
+    }
+    const current = getAllowedDomains();
+    const updated = setAllowedDomains(current.filter((d) => d.toLowerCase() !== target));
+    notifyListeners();
+    res.json({ ok: true, domains: updated });
   });
 
   // ── Memory ──
