@@ -274,3 +274,394 @@ describe("complete (backward-compat shim)", () => {
     await expect(complete("hi")).rejects.toThrow(/No model provider configured/);
   });
 });
+
+// ── Provider error paths ─────────────────────────────────────────────────────
+
+describe("provider error paths — anthropic", () => {
+  it("throws when ANTHROPIC_API_KEY is missing", async () => {
+    delete process.env["ANTHROPIC_API_KEY"];
+    await expect(complete("hi")).rejects.toThrow(/ANTHROPIC_API_KEY not configured/);
+  });
+
+  it("surfaces non-OK response with status and body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: async () => "unauthorized",
+      }),
+    );
+    await expect(complete("hi")).rejects.toThrow(/Anthropic API error \(401\): unauthorized/);
+  });
+
+  it("tolerates a failing res.text() on non-OK response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => {
+          throw new Error("read body failed");
+        },
+      }),
+    );
+    await expect(complete("hi")).rejects.toThrow(/Anthropic API error \(500\):/);
+  });
+});
+
+describe("provider error paths — openai", () => {
+  beforeEach(() => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "openai";
+    process.env["OPENAI_API_KEY"] = "sk-openai-test";
+  });
+
+  it("throws when OPENAI_API_KEY is missing", async () => {
+    delete process.env["OPENAI_API_KEY"];
+    await expect(complete("hi")).rejects.toThrow(/OPENAI_API_KEY not configured/);
+  });
+
+  it("surfaces non-OK response with status and body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () => "rate limited",
+      }),
+    );
+    await expect(complete("hi")).rejects.toThrow(/OpenAI API error \(429\): rate limited/);
+  });
+
+  it("tolerates a failing res.text() on non-OK response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => {
+          throw new Error("read body failed");
+        },
+      }),
+    );
+    await expect(complete("hi")).rejects.toThrow(/OpenAI API error \(500\):/);
+  });
+});
+
+describe("provider response fallbacks — branch coverage", () => {
+  it("openai falls back to empty string when choices[0].message.content is missing", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "openai";
+    process.env["OPENAI_API_KEY"] = "sk-openai-test";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [],
+          model: "gpt-4o",
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+        }),
+        text: async () => "",
+      }),
+    );
+    const result = await complete("hi");
+    expect(result.text).toBe("");
+  });
+
+  it("ollama falls back to 0 when prompt_eval_count and eval_count are missing", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "ollama";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          response: "ok",
+          model: "llama3.2:latest",
+          // prompt_eval_count and eval_count intentionally absent
+        }),
+        text: async () => "",
+      }),
+    );
+    const result = await complete("hi");
+    expect(result.inputTokens).toBe(0);
+    expect(result.outputTokens).toBe(0);
+  });
+});
+
+describe("provider error paths — ollama", () => {
+  beforeEach(() => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "ollama";
+  });
+
+  it("surfaces non-OK response with status and body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        text: async () => "model not loaded",
+      }),
+    );
+    await expect(complete("hi")).rejects.toThrow(/Ollama error \(503\): model not loaded/);
+  });
+
+  it("tolerates a failing res.text() on non-OK response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => {
+          throw new Error("read body failed");
+        },
+      }),
+    );
+    await expect(complete("hi")).rejects.toThrow(/Ollama error \(500\):/);
+  });
+});
+
+// ── Module-state functions (fresh module per test) ───────────────────────────
+//
+// The functions below mutate module-level state (_activeProvider, _listeners,
+// _ollamaReachable, _ollamaModels). vi.resetModules() + dynamic import gives
+// each test a fresh copy of the module so state from one test cannot leak
+// into another. Static imports above this line continue to reference the
+// originally-loaded module instance and are unaffected.
+
+describe("setActiveProvider + onModelAdapterChange (fresh module)", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("setActiveProvider updates active and fires the listener", async () => {
+    const { setActiveProvider, getModelAdapterState, onModelAdapterChange } =
+      await import("../../../lib/model-adapter.ts");
+    const listener = vi.fn();
+    onModelAdapterChange(listener);
+    setActiveProvider("openai");
+    expect(getModelAdapterState().active).toBe("openai");
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("unsubscribe stops the listener from being called", async () => {
+    const { setActiveProvider, onModelAdapterChange } =
+      await import("../../../lib/model-adapter.ts");
+    const listener = vi.fn();
+    const unsubscribe = onModelAdapterChange(listener);
+    unsubscribe();
+    setActiveProvider("anthropic");
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("a throwing listener does not break notify or other listeners", async () => {
+    const { setActiveProvider, onModelAdapterChange } =
+      await import("../../../lib/model-adapter.ts");
+    const throwing = vi.fn(() => {
+      throw new Error("boom");
+    });
+    const good = vi.fn();
+    onModelAdapterChange(throwing);
+    onModelAdapterChange(good);
+    expect(() => setActiveProvider("openai")).not.toThrow();
+    expect(throwing).toHaveBeenCalledTimes(1);
+    expect(good).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("getModelAdapterState (fresh module)", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("primary reflects ARMORCLAW_MODEL_PROVIDER when set", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "anthropic";
+    const { getModelAdapterState } = await import("../../../lib/model-adapter.ts");
+    expect(getModelAdapterState().primary).toBe("anthropic");
+  });
+
+  it("primary is null when ARMORCLAW_MODEL_PROVIDER is unset", async () => {
+    delete process.env["ARMORCLAW_MODEL_PROVIDER"];
+    const { getModelAdapterState } = await import("../../../lib/model-adapter.ts");
+    expect(getModelAdapterState().primary).toBeNull();
+  });
+
+  it("primary is null for an unrecognized provider value", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "not-a-provider";
+    const { getModelAdapterState } = await import("../../../lib/model-adapter.ts");
+    expect(getModelAdapterState().primary).toBeNull();
+  });
+
+  it("isLocal is true when primary is ollama", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "ollama";
+    const { getModelAdapterState } = await import("../../../lib/model-adapter.ts");
+    expect(getModelAdapterState().isLocal).toBe(true);
+  });
+
+  it("isLocal is false when primary is anthropic", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "anthropic";
+    const { getModelAdapterState } = await import("../../../lib/model-adapter.ts");
+    expect(getModelAdapterState().isLocal).toBe(false);
+  });
+
+  it("isLocal is false when primary is openai", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "openai";
+    const { getModelAdapterState } = await import("../../../lib/model-adapter.ts");
+    expect(getModelAdapterState().isLocal).toBe(false);
+  });
+
+  it("ollamaModels starts as [] and ollamaReachable starts false on a fresh module", async () => {
+    const { getModelAdapterState } = await import("../../../lib/model-adapter.ts");
+    const state = getModelAdapterState();
+    expect(state.ollamaModels).toEqual([]);
+    expect(state.ollamaReachable).toBe(false);
+  });
+
+  it("active falls back to primary when setActiveProvider has not been called", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "openai";
+    const { getModelAdapterState } = await import("../../../lib/model-adapter.ts");
+    expect(getModelAdapterState().active).toBe("openai");
+  });
+
+  it("active reflects setActiveProvider call", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "anthropic";
+    const { setActiveProvider, getModelAdapterState } =
+      await import("../../../lib/model-adapter.ts");
+    setActiveProvider("openai");
+    expect(getModelAdapterState().active).toBe("openai");
+  });
+});
+
+describe("probeOllama (fresh module)", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("returns reachable + model list on a successful response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ models: [{ name: "llama3.2:latest" }] }),
+      }),
+    );
+    const { probeOllama, getModelAdapterState } = await import("../../../lib/model-adapter.ts");
+    expect(await probeOllama()).toEqual({ reachable: true, models: ["llama3.2:latest"] });
+    const state = getModelAdapterState();
+    expect(state.ollamaReachable).toBe(true);
+    expect(state.ollamaModels).toEqual(["llama3.2:latest"]);
+  });
+
+  it("returns reachable with empty model list when none installed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ models: [] }),
+      }),
+    );
+    const { probeOllama } = await import("../../../lib/model-adapter.ts");
+    expect(await probeOllama()).toEqual({ reachable: true, models: [] });
+  });
+
+  it("treats undefined models field as empty list", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({}),
+      }),
+    );
+    const { probeOllama } = await import("../../../lib/model-adapter.ts");
+    expect(await probeOllama()).toEqual({ reachable: true, models: [] });
+  });
+
+  it("returns unreachable on non-OK HTTP response", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+    const { probeOllama, getModelAdapterState } = await import("../../../lib/model-adapter.ts");
+    expect(await probeOllama()).toEqual({ reachable: false, models: [] });
+    expect(getModelAdapterState().ollamaReachable).toBe(false);
+  });
+
+  it("returns unreachable when fetch throws (network error)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
+    const { probeOllama } = await import("../../../lib/model-adapter.ts");
+    expect(await probeOllama()).toEqual({ reachable: false, models: [] });
+  });
+
+  it("uses custom OLLAMA_BASE_URL when set", async () => {
+    process.env["OLLAMA_BASE_URL"] = "http://my-server:11434";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ models: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { probeOllama } = await import("../../../lib/model-adapter.ts");
+    await probeOllama();
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url.startsWith("http://my-server:11434")).toBe(true);
+  });
+
+  it("strips trailing slash from custom OLLAMA_BASE_URL", async () => {
+    process.env["OLLAMA_BASE_URL"] = "http://x:1/";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ models: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { probeOllama } = await import("../../../lib/model-adapter.ts");
+    await probeOllama();
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://x:1/api/tags");
+  });
+});
+
+describe("initModelAdapter (fresh module)", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("sets active provider from env", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "anthropic";
+    const { initModelAdapter, getModelAdapterState } =
+      await import("../../../lib/model-adapter.ts");
+    await initModelAdapter();
+    expect(getModelAdapterState().active).toBe("anthropic");
+  });
+
+  it("calls probeOllama (fetch) when provider is ollama", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "ollama";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ models: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { initModelAdapter } = await import("../../../lib/model-adapter.ts");
+    await initModelAdapter();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call fetch when provider is anthropic", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "anthropic";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { initModelAdapter } = await import("../../../lib/model-adapter.ts");
+    await initModelAdapter();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not call fetch when provider is openai", async () => {
+    process.env["ARMORCLAW_MODEL_PROVIDER"] = "openai";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { initModelAdapter } = await import("../../../lib/model-adapter.ts");
+    await initModelAdapter();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("sets active to null when env unset", async () => {
+    delete process.env["ARMORCLAW_MODEL_PROVIDER"];
+    const { initModelAdapter, getModelAdapterState } =
+      await import("../../../lib/model-adapter.ts");
+    await initModelAdapter();
+    expect(getModelAdapterState().active).toBeNull();
+  });
+});
