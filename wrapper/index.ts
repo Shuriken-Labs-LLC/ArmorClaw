@@ -1,11 +1,12 @@
 import { emptyPluginConfigSchema, type OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { validateGatewayHost } from "./config/gateway.ts";
+import { sendTelegramApprovalNotification } from "./lib/telegram-notify.ts";
 import { initRecipeScheduler } from "./recipes/index.ts";
 import { registerAuditLogger } from "./security/audit-logger.ts";
 import { registerBrowserAllowlistFilter } from "./security/browser-allowlist-filter.ts";
 import { registerInboundContentClassifier } from "./security/inbound-content-classifier.ts";
 import { registerOutboundToolArgFilter } from "./security/outbound-tool-arg-filter.ts";
-import { registerPermissionFilter } from "./security/permissions.ts";
+import { registerPermissionFilter, setApprovalNotifier } from "./security/permissions.ts";
 import { registerSourceTagger } from "./security/source-tagger.ts";
 
 // ── ArmorClaw plugin entry point ──────────────────────────────────────────────
@@ -35,6 +36,11 @@ const armorClawPlugin = {
     //   different hook — not part of this before_tool_call chain.
     registerOutboundToolArgFilter(api);
     registerPermissionFilter(api);
+    // Fire-and-forget Telegram notification when the approval gate suspends a
+    // tool call — bridges the silence gap for users chatting via Telegram.
+    setApprovalNotifier((toolName, toolParams) => {
+      void sendTelegramApprovalNotification(toolName, toolParams);
+    });
     registerBrowserAllowlistFilter(api);
     registerAuditLogger(api);
     // Source-tagger fires on tool_result_persist (different hook from the

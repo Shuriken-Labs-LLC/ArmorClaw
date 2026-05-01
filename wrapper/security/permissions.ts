@@ -70,6 +70,18 @@ const _approvalListeners = new Set<() => void>();
 
 let _approvalCounter = 0;
 
+// Injected at startup by wrapper/index.ts — wired to the Telegram notify utility.
+// Null by default so this module stays I/O-free in isolation. The dependency
+// flows through this slot only; permissions.ts must not import the notifier.
+let _approvalNotifier: ((toolName: string, toolParams: Record<string, unknown>) => void) | null =
+  null;
+
+export function setApprovalNotifier(
+  fn: ((toolName: string, toolParams: Record<string, unknown>) => void) | null,
+): void {
+  _approvalNotifier = fn;
+}
+
 export function getPendingApprovals(): PendingToolApproval[] {
   return _pendingApprovals.filter((a) => !a.resolved);
 }
@@ -278,6 +290,15 @@ export function registerPermissionFilter(api: OpenClawPluginApi): void {
 
       _pendingApprovals.push(approval);
       notifyApprovalListeners();
+
+      // Fire-and-forget UX notification — must not affect gate logic
+      if (_approvalNotifier) {
+        try {
+          _approvalNotifier(evt.toolName, evt.params ?? {});
+        } catch {
+          /* never crash the gate */
+        }
+      }
     });
 
     const approved = await gatePromise;
@@ -303,6 +324,7 @@ export function clearManifestsForTesting(): void {
   registry.clear();
   _pendingApprovals.length = 0;
   _approvalCounter = 0;
+  _approvalNotifier = null;
 }
 
 // ── Plugin definition ────────────────────────────────────────────────────────

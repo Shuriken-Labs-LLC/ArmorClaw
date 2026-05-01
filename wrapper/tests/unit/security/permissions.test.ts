@@ -11,6 +11,7 @@ import permissionsPlugin, {
   loadPermissionManifest,
   registerPermissionFilter,
   resolveApproval,
+  setApprovalNotifier,
 } from "../../../security/permissions.ts";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -422,6 +423,100 @@ describe("registerPermissionFilter", () => {
       const resultB = (await gate2) as { block: boolean; blockReason: string };
       expect(resultA).toBeUndefined();
       expect(resultB.block).toBe(true);
+    });
+
+    // ── approval notifier slot (Phase 2e follow-up) ─────────────────────────
+    //
+    // The notifier is fire-and-forget UX glue (Telegram message); the gate
+    // must keep working whether or not it's wired and whether or not it
+    // throws. The wiring itself lives in wrapper/index.ts.
+
+    describe("approval notifier slot", () => {
+      it("calls the notifier with toolName and toolParams when a gate is queued", async () => {
+        loadPermissionManifest(validManifest({ allowedTools: ["safe_tool"] }));
+        const notifier = vi.fn();
+        setApprovalNotifier(notifier);
+
+        const mockApi = makeMockApi();
+        registerPermissionFilter(mockApi as unknown as OpenClawPluginApi);
+
+        const params = { url: "https://example.com" };
+        const gate = mockApi.capturedHandler({ toolName: "fetcher", params }, {});
+
+        expect(notifier).toHaveBeenCalledTimes(1);
+        expect(notifier).toHaveBeenCalledWith("fetcher", params);
+
+        resolveApproval(getPendingApprovals()[0].id, true);
+        await gate;
+      });
+
+      it("does not call the notifier for an allowed tool", async () => {
+        loadPermissionManifest(validManifest({ allowedTools: ["safe_tool"] }));
+        const notifier = vi.fn();
+        setApprovalNotifier(notifier);
+
+        const mockApi = makeMockApi();
+        registerPermissionFilter(mockApi as unknown as OpenClawPluginApi);
+
+        await mockApi.capturedHandler({ toolName: "safe_tool", params: {} }, {});
+        expect(notifier).not.toHaveBeenCalled();
+      });
+
+      it("does not throw when no notifier is wired (default null)", async () => {
+        loadPermissionManifest(validManifest({ allowedTools: ["safe_tool"] }));
+        const mockApi = makeMockApi();
+        registerPermissionFilter(mockApi as unknown as OpenClawPluginApi);
+
+        const gate = mockApi.capturedHandler({ toolName: "needs_approval", params: {} }, {});
+        expect(getPendingApprovals()).toHaveLength(1);
+        resolveApproval(getPendingApprovals()[0].id, true);
+        await expect(gate).resolves.toBeUndefined();
+      });
+
+      it("does not propagate when the notifier throws — gate still works", async () => {
+        loadPermissionManifest(validManifest({ allowedTools: ["safe_tool"] }));
+        setApprovalNotifier(() => {
+          throw new Error("notifier exploded");
+        });
+
+        const mockApi = makeMockApi();
+        registerPermissionFilter(mockApi as unknown as OpenClawPluginApi);
+
+        const gate = mockApi.capturedHandler({ toolName: "needs_approval", params: {} }, {});
+        expect(getPendingApprovals()).toHaveLength(1);
+        resolveApproval(getPendingApprovals()[0].id, true);
+        await expect(gate).resolves.toBeUndefined();
+      });
+
+      it("clearManifestsForTesting resets the notifier to null", async () => {
+        const notifier = vi.fn();
+        setApprovalNotifier(notifier);
+        clearManifestsForTesting();
+
+        loadPermissionManifest(validManifest({ allowedTools: ["safe_tool"] }));
+        const mockApi = makeMockApi();
+        registerPermissionFilter(mockApi as unknown as OpenClawPluginApi);
+
+        const gate = mockApi.capturedHandler({ toolName: "needs_approval", params: {} }, {});
+        expect(notifier).not.toHaveBeenCalled();
+        resolveApproval(getPendingApprovals()[0].id, true);
+        await gate;
+      });
+
+      it("setApprovalNotifier(null) explicitly clears a previously wired notifier", async () => {
+        loadPermissionManifest(validManifest({ allowedTools: ["safe_tool"] }));
+        const notifier = vi.fn();
+        setApprovalNotifier(notifier);
+        setApprovalNotifier(null);
+
+        const mockApi = makeMockApi();
+        registerPermissionFilter(mockApi as unknown as OpenClawPluginApi);
+
+        const gate = mockApi.capturedHandler({ toolName: "needs_approval", params: {} }, {});
+        expect(notifier).not.toHaveBeenCalled();
+        resolveApproval(getPendingApprovals()[0].id, true);
+        await gate;
+      });
     });
   });
 });
