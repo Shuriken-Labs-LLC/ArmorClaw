@@ -5,6 +5,7 @@ import { join } from "node:path";
 // @ts-ignore — openclaw/plugin-sdk has no type declarations
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { getAuditKey, getAuditKeySync } from "./audit-key.ts";
+import { getPermissionsForTool } from "./permissions.ts";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -285,7 +286,7 @@ export function registerAuditLogger(api: OpenClawPluginApi): void {
       timestamp: new Date().toISOString(),
       // Prefer agentId from context; fall back to tool name as the skill identifier
       skill: context.agentId ?? evt.toolName,
-      permissionsUsed: [],
+      permissionsUsed: getPermissionsForTool(evt.toolName),
       inputSummary: buildInputSummary(evt.params as Record<string, unknown>),
       outcome,
       durationMs: evt.durationMs ?? 0,

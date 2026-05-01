@@ -157,6 +157,24 @@ export function getRegisteredManifests(): ReadonlyMap<string, Readonly<Permissio
 }
 
 /**
+ * Returns the union of `allowedPermissions` from every registered manifest
+ * that lists `toolName` in its `allowedTools`.
+ * Returns an empty array if no manifest covers the tool (e.g. unknown/external tool).
+ * Deterministic output: sorted for stable audit log output.
+ */
+export function getPermissionsForTool(toolName: string): string[] {
+  const levels = new Set<string>();
+  for (const [, manifest] of registry) {
+    if ((manifest.allowedTools as string[]).includes(toolName)) {
+      for (const level of manifest.allowedPermissions) {
+        levels.add(level);
+      }
+    }
+  }
+  return [...levels].toSorted();
+}
+
+/**
  * Check whether a tool call is permitted by the registered manifests.
  *
  * Philosophy: ArmorClaw is not a capability ceiling. Instead of hard-blocking

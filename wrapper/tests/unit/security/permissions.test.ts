@@ -6,6 +6,7 @@ import permissionsPlugin, {
   checkToolPermission,
   clearManifestsForTesting,
   getPendingApprovals,
+  getPermissionsForTool,
   getRegisteredManifests,
   loadPermissionManifest,
   registerPermissionFilter,
@@ -304,6 +305,58 @@ describe("registerPermissionFilter", () => {
     const pending = getPendingApprovals();
     expect(pending.length).toBeGreaterThan(0);
     expect(pending[0].toolName).toBe("unknown_tool");
+  });
+});
+
+// ── getPermissionsForTool ─────────────────────────────────────────────────────
+
+describe("getPermissionsForTool", () => {
+  it("returns an empty array when no manifests are registered", () => {
+    expect(getPermissionsForTool("any_tool")).toEqual([]);
+  });
+
+  it("returns an empty array when the tool is not in any registered manifest", () => {
+    loadPermissionManifest(
+      validManifest({
+        skillId: "skill-a",
+        allowedTools: ["read_file"],
+        allowedPermissions: ["files:local"],
+      }),
+    );
+    expect(getPermissionsForTool("unknown_tool")).toEqual([]);
+  });
+
+  it("returns the allowedPermissions of the manifest that declares the tool", () => {
+    loadPermissionManifest(
+      validManifest({
+        skillId: "skill-a",
+        allowedTools: ["read_file"],
+        allowedPermissions: ["files:local", "network:read"],
+      }),
+    );
+    expect(getPermissionsForTool("read_file")).toEqual(["files:local", "network:read"]);
+  });
+
+  it("returns the deduplicated, sorted union of permissions from multiple manifests", () => {
+    loadPermissionManifest(
+      validManifest({
+        skillId: "skill-a",
+        allowedTools: ["shared_tool"],
+        allowedPermissions: ["network:outbound", "files:local"],
+      }),
+    );
+    loadPermissionManifest(
+      validManifest({
+        skillId: "skill-b",
+        allowedTools: ["shared_tool"],
+        allowedPermissions: ["files:local", "read:email"],
+      }),
+    );
+    expect(getPermissionsForTool("shared_tool")).toEqual([
+      "files:local",
+      "network:outbound",
+      "read:email",
+    ]);
   });
 });
 

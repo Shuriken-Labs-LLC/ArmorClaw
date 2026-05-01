@@ -40,6 +40,7 @@ import auditLoggerPlugin, {
   type AuditEntry,
   type SignedAuditEntry,
 } from "../../../security/audit-logger.ts";
+import { clearManifestsForTesting, loadPermissionManifest } from "../../../security/permissions.ts";
 
 const setMockedKey = (auditKeyModule as unknown as { _setMockedKey: (k: Buffer | null) => void })
   ._setMockedKey;
@@ -102,6 +103,7 @@ beforeEach(() => {
   clearMemoryBufferForTesting();
   resetChainStateForTesting();
   setMockedKey(null);
+  clearManifestsForTesting();
 });
 
 // ── buildInputSummary ─────────────────────────────────────────────────────────
@@ -695,6 +697,29 @@ describe("registerAuditLogger", () => {
     const parsed = JSON.parse(content.trimEnd()) as SignedAuditEntry;
     expect(parsed.inputSummary).toContain("[REDACTED]");
     expect(parsed.inputSummary).not.toContain("super-secret");
+  });
+
+  it("permissionsUsed is populated from the permission registry", () => {
+    loadPermissionManifest({
+      skillId: "test-skill",
+      allowedTools: ["some_tool"],
+      allowedPermissions: ["network:outbound"],
+    });
+    const mockApi = makeMockApi();
+    registerAuditLogger(mockApi as unknown as OpenClawPluginApi);
+    mockApi.capturedHandler({ toolName: "some_tool", params: {} }, {});
+    const [, content] = vi.mocked(appendFileSync).mock.calls[0] as [string, string, string];
+    const parsed = JSON.parse(content.trimEnd()) as SignedAuditEntry;
+    expect(parsed.permissionsUsed).toEqual(["network:outbound"]);
+  });
+
+  it("permissionsUsed is empty when tool has no registered manifest", () => {
+    const mockApi = makeMockApi();
+    registerAuditLogger(mockApi as unknown as OpenClawPluginApi);
+    mockApi.capturedHandler({ toolName: "unknown_tool", params: {} }, {});
+    const [, content] = vi.mocked(appendFileSync).mock.calls[0] as [string, string, string];
+    const parsed = JSON.parse(content.trimEnd()) as SignedAuditEntry;
+    expect(parsed.permissionsUsed).toEqual([]);
   });
 });
 
