@@ -55,6 +55,14 @@ export interface PendingToolApproval {
   timestamp: string;
   resolved: boolean;
   approved: boolean;
+  /** The literal params the tool was called with. Included in dashboard payload. */
+  toolParams: Record<string, unknown>;
+  /**
+   * Resolves the async gate in registerPermissionFilter.
+   * Set to null once called (approve, reject, or timeout).
+   * Never serialized — stays in-memory only.
+   */
+  resolveGate: ((approved: boolean) => void) | null;
 }
 
 const _pendingApprovals: PendingToolApproval[] = [];
@@ -92,6 +100,10 @@ export function resolveApproval(id: string, approved: boolean): boolean {
   }
   entry.resolved = true;
   entry.approved = approved;
+  if (entry.resolveGate) {
+    entry.resolveGate(approved);
+    entry.resolveGate = null;
+  }
   notifyApprovalListeners();
   return true;
 }
@@ -218,8 +230,8 @@ export function checkToolPermission(toolName: string): PermissionCheckResult {
  * hard block.
  */
 export function registerPermissionFilter(api: OpenClawPluginApi): void {
-  api.on("before_tool_call", (event: unknown, _ctx: unknown) => {
-    const evt = event as { toolName: string };
+  api.on("before_tool_call", async (event: unknown, _ctx: unknown) => {
+    const evt = event as { toolName: string; params?: Record<string, unknown> };
     const result = checkToolPermission(evt.toolName);
 
     if (result.decision === "allow") {
@@ -233,27 +245,51 @@ export function registerPermissionFilter(api: OpenClawPluginApi): void {
       };
     }
 
-    // approval_required — add to the pending approvals queue.
-    // The dashboard polls this and shows the approval card.
-    // For now, we allow the tool to proceed but log the escalation.
-    // Full approval gating (pause execution until user responds) requires
-    // async approval support in the gateway hook system.
+    // approval_required — queue the approval and block until resolved or timed out.
     _approvalCounter++;
-    const approval: PendingToolApproval = {
-      id: `approval-${_approvalCounter}-${Date.now()}`,
-      toolName: evt.toolName,
-      skillId: null,
-      timestamp: new Date().toISOString(),
-      resolved: false,
-      approved: false,
-    };
-    _pendingApprovals.push(approval);
-    notifyApprovalListeners();
+    const approvalId = `approval-${_approvalCounter}-${Date.now()}`;
 
-    // Allow the tool to proceed — the approval is informational for now.
-    // When the gateway supports async approval gates, this will block until
-    // the user responds via the dashboard.
-    return undefined;
+    const gatePromise = new Promise<boolean>((resolve) => {
+      const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+      const timeoutHandle = setTimeout(() => {
+        const entry = _pendingApprovals.find((a) => a.id === approvalId);
+        if (entry && !entry.resolved) {
+          entry.resolved = true;
+          entry.resolveGate = null;
+          notifyApprovalListeners();
+        }
+        resolve(false); // auto-reject on timeout
+      }, TIMEOUT_MS);
+
+      const approval: PendingToolApproval = {
+        id: approvalId,
+        toolName: evt.toolName,
+        skillId: null,
+        timestamp: new Date().toISOString(),
+        resolved: false,
+        approved: false,
+        toolParams: evt.params ?? {},
+        resolveGate: (approved: boolean) => {
+          clearTimeout(timeoutHandle);
+          resolve(approved);
+        },
+      };
+
+      _pendingApprovals.push(approval);
+      notifyApprovalListeners();
+    });
+
+    const approved = await gatePromise;
+
+    if (!approved) {
+      return {
+        block: true,
+        blockReason: `ArmorClaw: Tool "${evt.toolName}" was blocked — user rejected or approval timed out.`,
+      };
+    }
+
+    return undefined; // approved — proceed
   });
 }
 

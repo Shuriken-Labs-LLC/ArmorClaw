@@ -300,6 +300,20 @@
     .approval-info { flex: 1; min-width: 0; }
     .approval-name { font-size: 13px; color: var(--ac-text); font-weight: 500; }
     .approval-detail { font-size: 12px; color: var(--ac-muted); margin-top: 2px; }
+    .approval-params {
+      font-family: var(--font-mono, 'DM Mono', monospace);
+      font-size: 11px;
+      color: var(--ac-muted);
+      background: var(--ac-bg);
+      border: 0.5px solid var(--ac-border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-top: 6px;
+      overflow-x: auto;
+      white-space: pre;
+      max-height: 120px;
+      overflow-y: auto;
+    }
     .approval-actions { display: flex; gap: 8px; flex-shrink: 0; margin-left: 12px; }
     .approval-actions button {
       padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer;
@@ -2390,6 +2404,7 @@ function syncApprovals(s) {
       '<div class="approval-info">' +
         '<div class="approval-name">' + escHtml(a.displayName) + '</div>' +
         '<div class="approval-detail">Requested ' + fmtTime(a.requestedAt) + '</div>' +
+        '<pre class="approval-params">' + escHtml(JSON.stringify(a.toolParams ?? {}, null, 2)) + '</pre>' +
       '</div>' +
       '<div class="approval-actions">' +
         '<button class="btn-approve" onclick="approveAction(\'' + escAttr(a.id) + '\')">Approve</button>' +

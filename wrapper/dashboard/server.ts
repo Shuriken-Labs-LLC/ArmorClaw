@@ -464,6 +464,8 @@ export interface PendingApproval {
   requestedAt: string;
   /** "local" = in-process permission engine, "gateway" = OpenClaw gateway */
   source: "local" | "gateway";
+  /** Literal tool params for display in the approval card. */
+  toolParams: Record<string, unknown>;
 }
 
 /**
@@ -485,6 +487,7 @@ export async function getPendingApprovals(): Promise<ReadonlyArray<PendingApprov
     displayName: nameMap.get(a.skillId ?? "") ?? humaniseToolName(a.toolName),
     requestedAt: a.timestamp,
     source: "local" as const,
+    toolParams: a.toolParams,
   }));
 }
 
