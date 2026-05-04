@@ -17,8 +17,6 @@ jobs:
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
