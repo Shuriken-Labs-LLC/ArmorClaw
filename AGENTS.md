@@ -515,7 +515,7 @@ cd ~/armorclaw/wrapper/launcher && npm run build:ts
 cd ~/armorclaw/wrapper/launcher && npm run build:mac
 
 # Install
-cp -r ~/armorclaw/wrapper/launcher/dist/mac-arm64/ArmorClaw.app /Applications/
+ditto ~/armorclaw/wrapper/launcher/dist/mac-arm64/ArmorClaw.app /Applications/ArmorClaw.app
 ```
 
 ---
