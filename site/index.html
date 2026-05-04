@@ -357,27 +357,6 @@
     .footer-links a:hover { color: var(--ac-text); }
 
     /* ── Responsive ── */
-    /* ── Security update banner ── */
-    .security-banner {
-      background: var(--ac-amber-light);
-      border-left: 4px solid var(--ac-amber);
-      padding: 16px 0;
-    }
-    .security-banner .banner-inner p {
-      font-size: 14px;
-      color: var(--ac-text);
-      line-height: 1.6;
-      margin: 0;
-    }
-    .security-banner .banner-inner strong {
-      color: var(--ac-amber);
-      font-weight: 500;
-    }
-    .security-banner a {
-      color: var(--ac-amber);
-      text-decoration: underline;
-    }
-
     @media (max-width: 768px) {
       .hero { padding: 64px 0 56px; }
       .hero h1 { font-size: 32px; }
@@ -404,26 +383,12 @@
       <a href="/" class="wordmark">ArmorClaw</a>
       <div class="nav-links">
         <a href="#how-it-works">How it works</a>
-        <a href="#security">Security</a>
+        <a href="/security">Security</a>
         <a href="#pricing">Pricing</a>
         <a href="#" class="btn-download" style="padding:8px 20px; font-size:13px;">Download</a>
       </div>
     </div>
   </nav>
-
-  <!-- Security update banner — Phase 0, 2026-04-29 -->
-  <section class="security-banner" role="status" aria-live="polite">
-    <div class="container">
-      <div class="banner-inner">
-        <p>
-          <strong>Security update in progress.</strong>
-          We're rebuilding our security disclosures and adding new protections before reopening signups.
-          Existing subscribers are unaffected.
-          <a href="#what-changes">What's changing</a>.
-        </p>
-      </div>
-    </div>
-  </section>
 
   <!-- Hero -->
   <section class="hero">
@@ -461,9 +426,10 @@
           skill is confined to a single folder you pick during setup. It
           can't reach your Desktop, your other apps, or anything outside
           that boundary. Other parts of the agent (browser automation,
-          email access) have separate boundaries we describe on the
-          security page. You get the automation without handing over
-          full keys to your computer.
+          email access) have separate boundaries we describe at
+          <a href="/security" style="color:var(--ac-text);text-decoration:underline;">/security</a>.
+          You get the automation without handing over full keys to your
+          computer.
         </p>
         <p>
           We built it for the professional who doesn't have an engineering
@@ -532,15 +498,19 @@
       </p>
       <div class="feature-grid">
         <div class="feature-card">
-          <div class="accent-bar" style="background:var(--ac-amber);"></div>
-          <h3>Honest about prompt injection</h3>
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Two-layer injection filter</h3>
           <p>
-            Our current input filter screens what you type into the agent.
-            Indirect injection (instructions hidden in emails or web pages
-            the agent reads) is a real attack vector we are actively
-            rebuilding protection for. Until that lands, we recommend not
-            pointing the agent at untrusted content. Full status on the
-            <a href="#what-changes" style="color:var(--ac-amber);text-decoration:underline;">security update page</a>.
+            An outbound filter screens every tool call the agent tries to
+            make — instruction-override patterns, system-prompt references,
+            and encoded payloads are blocked, logged, and rejected. A
+            separate LLM-driven classifier scores every piece of content the
+            agent reads (web pages, email, files, bash output) for
+            injection risk; the model sees both the framed content and a
+            system-level warning. Neither layer is perfect — don't point
+            the agent at content you wouldn't trust with your account
+            credentials. Full threat model at
+            <a href="/security" style="color:var(--ac-teal);text-decoration:underline;">/security</a>.
           </p>
         </div>
         <div class="feature-card">
@@ -559,7 +529,8 @@
             The file skill is scoped to one folder you choose during setup.
             It cannot read or write outside that folder. Path traversal
             attempts are rejected and logged. Browser, email, and network
-            access have separate boundaries documented on the security page.
+            access have separate boundaries documented at
+            <a href="/security" style="color:var(--ac-blue);text-decoration:underline;">/security</a>.
           </p>
         </div>
         <div class="feature-card">
@@ -568,7 +539,10 @@
           <p>
             Every action the agent has taken, with timestamp, skill name,
             outcome, and duration — in a searchable dashboard. Export to
-            CSV anytime. No telemetry leaves your machine.
+            CSV anytime. Every entry is signed with HMAC-SHA256 and
+            chained by hash of the previous entry — tampering produces a
+            verification failure you can see in the dashboard. No
+            telemetry leaves your machine.
           </p>
         </div>
       </div>
@@ -686,19 +660,76 @@
     </div>
   </section>
 
-  <!-- What's changing -->
+  <!-- What 0.3.0 delivers -->
   <section class="features" id="what-changes">
     <div class="container">
-      <h2>What we're rebuilding right now</h2>
-      <p style="color:var(--ac-muted);margin-bottom:24px;max-width:640px;font-size:16px;line-height:1.7;">
-        Our internal review surfaced nine gaps between what ArmorClaw currently does and what our marketing implied. Some of those gaps were claims that overstated our protection. We've taken those claims down, paused signups, and are working through a four-phase update before reopening. We'd rather lose sales than misrepresent what the product does.
+      <h2>What 0.3.0 delivers</h2>
+      <p style="color:var(--ac-muted);margin-bottom:48px;max-width:640px;font-size:16px;line-height:1.7;">
+        A four-month internal security overhaul closes the gaps we flagged earlier this year. The 0.3.0 release ships the full set: real protection against indirect prompt injection, a tamper-evident audit log, literal approval prompts, and a hard-blocking browser allowlist. The full threat model — what we protect against, what's partial, and what's out of scope — lives at <a href="/security" style="color:var(--ac-teal);text-decoration:underline;">/security</a>.
       </p>
-      <p style="color:var(--ac-muted);margin-bottom:24px;max-width:640px;font-size:16px;line-height:1.7;">
-        The 0.3.0 release will include source-tagging on every input the agent reads, a content classifier for indirect prompt injection, signed and tamper-evident audit logging, approval prompts that show the literal action being approved (rather than the agent's description of it), a domain allowlist for browser automation, and a "what we protect against" table with both what's covered and what isn't, including risks we explicitly do not address.
-      </p>
-      <p style="color:var(--ac-muted);max-width:640px;font-size:16px;line-height:1.7;">
-        We have not had a third-party security audit and don't currently have the budget for one. The 0.3.0 release will publish our internal red-team log alongside the disclosures, so you can read what we tested and what we found.
-      </p>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Source-tagged inputs</h3>
+          <p>
+            Every input the agent reads carries a permanent provenance tag
+            (typed by you, read from a file, fetched from the web, output
+            from a shell command). Untrusted content is wrapped in
+            <code style="font-family:'DM Mono',monospace;font-size:13px">&lt;external-content&gt;</code>
+            framing before it reaches the model.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Indirect-injection classifier</h3>
+          <p>
+            An LLM-driven classifier scores untrusted content for
+            prompt-injection risk on every turn. High-scoring content
+            triggers a system-level warning to the model so it treats the
+            content as data, not instruction.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Signed, tamper-evident audit log</h3>
+          <p>
+            Each audit log entry is signed with HMAC-SHA256 and chained by
+            SHA-256 of the previous serialised line. Tampering produces a
+            verification failure visible in the dashboard and via the
+            export tool.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Literal approval prompts</h3>
+          <p>
+            Approval prompts render the tool name and parameters as JSON.
+            The agent cannot describe an action one way and execute
+            another — what you approve is what runs.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Browser domain allowlist</h3>
+          <p>
+            Browser navigation is gated by a user-managed allowlist.
+            Non-allowlisted domains are hard-blocked and logged. Loopback
+            and private-network addresses are always blocked even if
+            explicitly listed — DNS-rebinding defence.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="accent-bar" style="background:var(--ac-amber);"></div>
+          <h3>Threat model at /security</h3>
+          <p>
+            A full threat model and "what we protect against" table at
+            <a href="/security" style="color:var(--ac-amber);text-decoration:underline;">/security</a>
+            — listing what 0.3.0 addresses, what's partial, and what's
+            explicitly out of scope. Security disclosures including our
+            audit status live there too.
+          </p>
+        </div>
+      </div>
     </div>
   </section>
 

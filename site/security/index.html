@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Security — ArmorClaw</title>
+  <meta name="description" content="ArmorClaw 0.3.0 threat model — what the release addresses, what it partially addresses, and what is explicitly out of scope. Self-assessed; no third-party audit.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ac-bg: #0D0F14;
+      --ac-surface: #13161E;
+      --ac-surface2: #1A1D27;
+      --ac-border: #2A2D3A;
+      --ac-border-strong: #3A3D4E;
+      --ac-text: #E8E6FF;
+      --ac-muted: #8B8DA8;
+      --ac-hint: #5A5C75;
+      --ac-teal: #1DE9B6;
+      --ac-teal-light: #0D2E26;
+      --ac-purple: #9B6DFF;
+      --ac-purple-light: #1A1030;
+      --ac-amber: #FFB347;
+      --ac-amber-light: #2A1F0A;
+      --ac-red: #FF5370;
+      --ac-red-light: #2A0F14;
+      --ac-blue: #82AAFF;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--ac-bg);
+      color: var(--ac-text);
+      font-size: 16px;
+      line-height: 1.6;
+      font-weight: 400;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ── Nav ── */
+    nav {
+      padding: 20px 0;
+      border-bottom: 0.5px solid var(--ac-border);
+    }
+    nav .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .wordmark {
+      font-family: 'DM Mono', monospace;
+      font-size: 18px;
+      font-weight: 400;
+      color: var(--ac-teal);
+      text-decoration: none;
+      letter-spacing: -0.5px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      align-items: center;
+    }
+    .nav-links a {
+      color: var(--ac-muted);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 400;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--ac-text); }
+
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 32px;
+      background: var(--ac-teal);
+      color: var(--ac-bg);
+      font-size: 15px;
+      font-weight: 500;
+      border: none;
+      border-radius: 8px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: box-shadow 0.2s;
+    }
+    .btn-download:hover {
+      box-shadow: 0 0 24px rgba(29, 233, 182, 0.35);
+    }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 80px 0 48px;
+    }
+    .hero h1 {
+      font-size: 36px;
+      font-weight: 600;
+      line-height: 1.2;
+      margin-bottom: 24px;
+      letter-spacing: -0.5px;
+      max-width: 780px;
+    }
+    .hero .subtitle {
+      font-size: 16px;
+      color: var(--ac-muted);
+      max-width: 640px;
+      line-height: 1.7;
+    }
+
+    /* ── Section ── */
+    .section {
+      padding: 64px 0;
+      border-top: 0.5px solid var(--ac-border);
+    }
+    .section h2 {
+      font-size: 24px;
+      font-weight: 500;
+      margin-bottom: 12px;
+    }
+    .section .section-intro {
+      color: var(--ac-muted);
+      margin-bottom: 40px;
+      max-width: 640px;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    /* ── Cards ── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .card {
+      padding: 24px;
+      background: var(--ac-surface);
+      border: 0.5px solid var(--ac-border);
+      border-radius: 12px;
+    }
+    .card .accent-bar {
+      width: 32px;
+      height: 3px;
+      border-radius: 2px;
+      margin-bottom: 16px;
+    }
+    .card h3 {
+      font-size: 16px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+    .card p {
+      font-size: 14px;
+      color: var(--ac-muted);
+      line-height: 1.6;
+    }
+    .card .source-ref {
+      display: block;
+      margin-top: 12px;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--ac-hint);
+    }
+
+    .card-grid-single {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .audit-box {
+      padding: 24px;
+      background: var(--ac-amber-light);
+      border: 0.5px solid var(--ac-amber);
+      border-radius: 12px;
+      max-width: 720px;
+    }
+    .audit-box p {
+      font-size: 14px;
+      color: var(--ac-text);
+      line-height: 1.7;
+    }
+    .audit-box strong {
+      color: var(--ac-amber);
+      font-weight: 500;
+    }
+
+    /* ── Footer ── */
+    footer {
+      padding: 48px 0;
+      border-top: 0.5px solid var(--ac-border);
+    }
+    footer .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .footer-left {
+      font-size: 13px;
+      color: var(--ac-hint);
+    }
+    .footer-links {
+      display: flex;
+      gap: 24px;
+    }
+    .footer-links a {
+      font-size: 13px;
+      color: var(--ac-muted);
+      text-decoration: none;
+    }
+    .footer-links a:hover { color: var(--ac-text); }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .hero { padding: 56px 0 40px; }
+      .hero h1 { font-size: 28px; }
+      .card-grid { grid-template-columns: 1fr; }
+      .nav-links { gap: 20px; }
+      .section { padding: 48px 0; }
+    }
+
+    @media (max-width: 480px) {
+      .hero h1 { font-size: 24px; }
+      .nav-links a { font-size: 13px; }
+      .container { padding: 0 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav>
+    <div class="container">
+      <a href="/" class="wordmark">ArmorClaw</a>
+      <div class="nav-links">
+        <a href="/#how-it-works">How it works</a>
+        <a href="/security">Security</a>
+        <a href="/#pricing">Pricing</a>
+        <a href="#" class="btn-download" style="padding:8px 20px; font-size:13px;">Download</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <h1>What ArmorClaw protects against — and what it doesn't</h1>
+      <p class="subtitle">
+        This page is the threat model for ArmorClaw 0.3.0. It describes
+        what the release addresses, what it partially addresses, and
+        what is explicitly out of scope. No third-party security audit
+        has been performed; this is self-assessed.
+      </p>
+    </div>
+  </section>
+
+  <!-- Addressed in 0.3.0 -->
+  <section class="section">
+    <div class="container">
+      <h2>Addressed in 0.3.0</h2>
+      <p class="section-intro">
+        Eight protections that ship with the release. Each runs on every
+        relevant tool call, every turn, or every audit log write —
+        not opt-in.
+      </p>
+      <div class="card-grid">
+        <div class="card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Outbound tool-arg filter</h3>
+          <p>
+            Screens what the agent passes to tool calls. Instruction-override
+            patterns, system-prompt references, and encoded payloads are
+            blocked before the tool call executes. The agent-paused gate
+            also runs here: while paused, every tool call is blocked
+            regardless of content.
+          </p>
+          <span class="source-ref">outbound-tool-arg-filter.ts</span>
+        </div>
+        <div class="card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Inbound content classifier</h3>
+          <p>
+            Scores content the agent reads for prompt-injection risk on
+            every turn. External content (web pages, email, file output,
+            bash output) is wrapped in &lt;external-content&gt; framing
+            with a provenance tag before reaching the model. High-scoring
+            content triggers a system-level warning.
+          </p>
+          <span class="source-ref">inbound-content-classifier.ts, source-tagger.ts</span>
+        </div>
+        <div class="card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Permission manifests</h3>
+          <p>
+            Every skill declares a static permission manifest at load
+            time. Skills cannot escalate to permissions they didn't
+            declare. Hard-banned levels (system:root, files:global,
+            system:exec) throw at load and are never executed.
+          </p>
+          <span class="source-ref">permissions.ts, skill-registry.ts</span>
+        </div>
+        <div class="card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>File skill sandbox</h3>
+          <p>
+            The file skill is scoped to a single folder you choose during
+            setup. Path traversal attempts are rejected and logged. The
+            sandbox path cannot be a system directory or contain
+            ~/.armorclaw/ itself.
+          </p>
+          <span class="source-ref">secure-files/, validators.ts</span>
+        </div>
+        <div class="card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Browser domain allowlist</h3>
+          <p>
+            Browser navigation is gated by a user-managed allowlist.
+            Non-allowlisted domains are hard-blocked and logged. RFC 1918,
+            loopback, and IPv6 link-local addresses are always blocked
+            even if explicitly listed — DNS-rebinding defence.
+          </p>
+          <span class="source-ref">browser-allowlist.ts, browser-allowlist-filter.ts</span>
+        </div>
+        <div class="card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Tamper-evident audit log</h3>
+          <p>
+            Every skill invocation is logged in NDJSON at
+            ~/.armorclaw/audit.log. Each entry is signed with HMAC-SHA256
+            and chained by SHA-256 of the previous serialised line.
+            Tampering produces a verification failure visible in the
+            dashboard.
+          </p>
+          <span class="source-ref">audit-logger.ts, audit-verify.ts</span>
+        </div>
+        <div class="card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Budget hard-stop</h3>
+          <p>
+            The model adapter refuses further API calls once monthly
+            spend exceeds your cap. This is a hard stop, not a
+            notification.
+          </p>
+          <span class="source-ref">token-tracker/store.ts, model-adapter.ts</span>
+        </div>
+        <div class="card">
+          <div class="accent-bar" style="background:var(--ac-teal);"></div>
+          <h3>Approval gate with literal payload</h3>
+          <p>
+            Actions requiring approval are suspended until you confirm in
+            the dashboard. The approval card shows the tool name and
+            parameters as raw JSON — not a model-generated description.
+            The agent cannot describe an action one way and execute
+            another.
+          </p>
+          <span class="source-ref">permissions.ts</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Partially addressed -->
+  <section class="section">
+    <div class="container">
+      <h2>Partially addressed</h2>
+      <p class="section-intro">
+        Threats with real but incomplete mitigations. We name them
+        honestly so you know where the gaps are.
+      </p>
+      <div class="card-grid-single">
+        <div class="card">
+          <div class="accent-bar" style="background:var(--ac-amber);"></div>
+          <h3>Memory poisoning</h3>
+          <p>
+            The memory.md file loads into the system prompt every
+            session. A successful injection that triggers "remember
+            that…" persists across sessions. Source-tagging and
+            trust-gating are in place. No guarantee an adversarial memory
+            write can be prevented in every scenario.
+          </p>
+        </div>
+        <div class="card">
+          <div class="accent-bar" style="background:var(--ac-amber);"></div>
+          <h3>Cross-skill information flow</h3>
+          <p>
+            The model holds context across skill invocations and could
+            pass sensitive data from one skill to another's tool
+            arguments. No cross-skill information-flow control in v1.
+            Mitigated in practice by permission manifests preventing
+            skills from accessing each other's data stores, but not at
+            the model-context layer.
+          </p>
+        </div>
+        <div class="card">
+          <div class="accent-bar" style="background:var(--ac-amber);"></div>
+          <h3>Novel injection patterns</h3>
+          <p>
+            The outbound filter and inbound classifier handle common
+            patterns. Injection using Unicode homoglyphs, non-English
+            paraphrasing, or novel encoding may score below the
+            classifier's reject threshold. No filter is perfect at any
+            sophistication level; we still recommend not pointing the
+            agent at content from untrusted sources.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Out of scope -->
+  <section class="section">
+    <div class="container">
+      <h2>Out of scope</h2>
+      <p class="section-intro">
+        Threats outside the architectural boundary. These are not
+        oversights — they are constraints of running local software as
+        your user account.
+      </p>
+      <div class="card-grid-single">
+        <div class="card">
+          <div class="accent-bar" style="background:var(--ac-red);"></div>
+          <h3>What ArmorClaw does not protect against</h3>
+          <p>
+            ArmorClaw is a local application running as your user. If
+            malware is already running on your computer with the same
+            permissions, ArmorClaw does not protect you. A process with
+            your user permissions can read the audit log, write to the
+            sandbox folder, and interact with the agent's local files.
+            This is an architectural constraint of local software; it is
+            not unique to ArmorClaw. Category 3 threat model (existing
+            malware) is explicitly out of scope.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- No third-party audit -->
+  <section class="section">
+    <div class="container">
+      <h2>Audit status</h2>
+      <div class="audit-box">
+        <p>
+          <strong>No third-party audit.</strong>
+          We have not had a third-party security audit and don't
+          currently have the budget for one. This page is self-assessed.
+          Before reopening signups, we will publish an internal red-team
+          log documenting what we tested and what we found.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-left">
+        Shuriken Labs LLC &middot; Milan, Michigan
+      </div>
+      <div class="footer-links">
+        <a href="/privacy">Privacy Policy</a>
+        <a href="/terms">Terms of Service</a>
+        <a href="mailto:hello@armorclaw.app">Contact</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
