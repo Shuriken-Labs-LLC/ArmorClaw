@@ -143,6 +143,8 @@ Phase 2 adds a content classifier on `before_prompt_build` (see below — Phase 
 
 Subscribed to OpenClaw's `before_prompt_build` lifecycle hook (async; mutation rights are limited to system context). Each turn, walks the messages array for content the source-tagger framed as untrusted, classifies each previously-unseen block via the cheap variant of the user's configured model provider (`CLASSIFIER_MODEL_BY_PROVIDER` in `wrapper/config/classifier.ts`), and aggregates warnings into a single `prependSystemContext` for the upcoming model turn.
 
+This is the inbound half of a two-filter architecture. The outbound counterpart is the outbound tool-arg filter (see above) on the `before_tool_call` hook — it screens what the agent passes TO tools. Do not subscribe this inbound classifier to `before_tool_call`; that hook is the outbound filter's domain.
+
 Decisions per score (default thresholds 0.7 reject / 0.4 warn):
 
 - `score >= 0.7`: listed under "HIGH-RISK CONTENT REJECTED BY CLASSIFIER" in system context. Model is instructed to treat as data only and refuse user requests acting on it. Original content remains in the message log; audit log retains record.
@@ -231,13 +233,17 @@ Providers: Gmail / Google Calendar, Outlook / Microsoft 365. Provider adapter pa
 
 Capabilities: inbox triage, draft replies, schedule/retrieve events, daily briefing.
 
-Constraints: OAuth tokens in system keychain via `keytar` only. Sending always requires user confirmation — never auto-send. Don't read emails older than 90 days unless explicitly requested. **Email OAuth is disabled for v1 launch** — wizard Step 3 is informational only. Code stays intact; re-enable when OAuth is production-ready.
+Constraints: App-password / IMAP is the v1 connection method. The wizard collects a Gmail address and a 16-character app-password, stores it in the system keychain via `keytar`, and connects via IMAP to `imap.gmail.com:993`. App-passwords grant full-inbox read access — the same access level as the user's Google password. Only connect an account you're comfortable sharing at that access level.
+
+Sending always requires user confirmation — never auto-send. Don't read emails older than 90 days unless explicitly requested.
+
+`wrapper/skills/email-calendar/adapters/gmail.ts` (the OAuth adapter) is on disk but not exercised by the wizard or any production code path in v1. Re-enabling OAuth requires: removing or clearly deprecating the app-password path (or scoping both behind explicit wizard selection), passing Google OAuth verification, and confirming the privacy policy covers the broader OAuth scope. Not a one-line swap.
 
 ### 2. Secure file access (`secure-files`)
 
 Capabilities: read/write/move/delete within sandbox, summarise contents, watch directory.
 
-Constraints: sandbox path set during onboarding, must be absolute, not `/` or a system dir. All paths validated with `path.resolve` against sandbox root. Traversal (`../`) rejected and logged. Deletes require explicit confirmation with file path + size shown. Never follow symlinks outside sandbox.
+Constraints: sandbox path set during onboarding, must be absolute, not `/` or a system dir. All paths validated with `path.resolve` against sandbox root. Traversal (`../`) rejected and logged. Sandbox path cannot be `/`, a system directory, or any path that IS or CONTAINS `~/.armorclaw/` — validated in `wrapper/onboarding/validators.ts:validateStep2`. Deletes require explicit confirmation with file path + size shown. Never follow symlinks outside sandbox.
 
 ### 3. Browser automation (`browser`)
 
@@ -297,14 +303,14 @@ Ollama is a primary choice, not a fallback. Cloud: "conversations processed by p
 
 Goal: non-technical user is talking to ArmorClaw from their phone before closing their laptop. 6 steps, all skippable except Step 1. Target: under 15 minutes.
 
-| Step | Name               | Required | Notes                                                                                                  |
-| ---- | ------------------ | -------- | ------------------------------------------------------------------------------------------------------ |
-| 1    | Model provider     | Yes      | Cloud vs Local sections. Validate key before advancing.                                                |
-| 2    | Sandbox directory  | No       | File picker only, no manual path. Default: `~/Documents/ArmorClaw`.                                    |
-| 3    | Email and calendar | No       | Informational "coming soon" for v1.                                                                    |
-| 4    | Tailscale          | No       | Auto-detect. Three states: detected / not installed / deferred. "Learn more" expandable.               |
-| 5    | Mobile channel     | No       | QR code + channel cards (Telegram recommended, WhatsApp, Discord, Slack). Greyed if Tailscale skipped. |
-| 6    | Review and launch  | No       | Summary cards + live launch checklist.                                                                 |
+| Step | Name              | Required | Notes                                                                                                                                          |
+| ---- | ----------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Model provider    | Yes      | Cloud vs Local sections. Validate key before advancing.                                                                                        |
+| 2    | Sandbox directory | No       | File picker only, no manual path. Default: `~/Documents/ArmorClaw`.                                                                            |
+| 3    | Connect Gmail     | No       | App-password / IMAP. Wizard collects Gmail address + 16-char app-password. Stored in system keychain. Full-inbox access scope. Can be skipped. |
+| 4    | Tailscale         | No       | Auto-detect. Three states: detected / not installed / deferred. "Learn more" expandable.                                                       |
+| 5    | Mobile channel    | No       | QR code + channel cards (Telegram recommended, WhatsApp, Discord, Slack). Greyed if Tailscale skipped.                                         |
+| 6    | Review and launch | No       | Summary cards + live launch checklist.                                                                                                         |
 
 Design rules: one screen per step, no scrolling, inline validation errors, progress indicator always visible, warm non-technical tone, no CLI steps required.
 
@@ -362,13 +368,13 @@ Local web UI, served on localhost + Tailscale URL only. Never a public IP. Not a
 
 **Home:** Agent status pill (Running/Paused/Error) → undo banner (conditional, 60s) → pending approvals card (hidden when empty, blue border) → token burn summary (simple view only: one sentence + progress bar + "See breakdown →") → activity feed (last 20, most recent first) → recipes shortcut row (first 3 active).
 
-**Skills:** One card per skill. Two groups: "ArmorClaw skills" (bundled) / "Your skills" (user, "Built by you" label). Each card: name, version, Active/Inactive toggle, permissions in plain English, last run, expandable last-5-runs.
+**Skills:** One card per skill. One group: "ArmorClaw skills" (bundled only — user-skill loading was removed in 0.3.0). Each card: name, version, Active/Inactive toggle, permissions in plain English, last run, expandable last-5-runs.
 
 **Security:** Read-only status view. Injection filter, permission enforcement, and audit logging are always on — not user-configurable. Exposing disable toggles to non-technical users is a footgun with no legitimate use case; the security layer is a permanent feature. Status shown: total rejections today, 7-day sparkline, recent security events.
 
 **Advanced:** Full-screen view with amber warning banner. Embeds OpenClaw Canvas UI (iframe at `/__openclaw__/canvas/`), command runner with confirm dialog, full `openclaw.json` config viewer. Security layer still runs on all tool calls. Commands execute as user, not privileged. Shows amber banner if OpenClaw update available (`update --dry-run --json`); never auto-updates.
 
-**Settings:** Model provider/key, sandbox dir, email OAuth (coming soon), Tailscale, channels, budget, digest schedule, audit CSV export, Stripe Customer Portal link (hidden if `STRIPE_CUSTOMER_PORTAL_URL` not set).
+**Settings:** Model provider/key, sandbox dir, email connection (Gmail app-password), Tailscale, channels, budget, digest schedule, audit CSV export, Stripe Customer Portal link (hidden if `STRIPE_CUSTOMER_PORTAL_URL` not set).
 
 Dashboard never writes application state. "Developer details" expandable for raw data — never shown by default.
 
@@ -564,6 +570,7 @@ ditto ~/armorclaw/wrapper/launcher/dist/mac-arm64/ArmorClaw.app /Applications/Ar
 - Use monospace fonts for end-user-visible UI text.
 - Use a light theme.
 - Re-introduce user-skill loading in any form. Auto-discovery from `~/.armorclaw/skills/`, GitHub URL fetch+install, ClawHub catalog browse, and `skills.json` write paths were all removed in Phase 1a of the security overhaul (0.3.0). If user skills come back later they require a redesign with hash-pinning, signed manifests, and sandboxed execution — not just re-enabling.
+- Re-enable Gmail OAuth by pointing the wizard at `adapters/gmail.ts` without a deliberate migration decision. Re-enabling requires removing or deprecating the app-password path (or adding clear wizard scoping for both), passing Google OAuth verification, and updating the privacy policy scope. Not a one-line change.
 - Persist the skill registry to disk.
 - Allow a skill with `undoable: true` to load without exporting `undo()`.
 - Bypass the ArmorClaw security layer from the Advanced view — it is a visibility pass-through, not a security bypass.
