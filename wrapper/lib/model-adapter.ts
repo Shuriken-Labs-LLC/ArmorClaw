@@ -13,6 +13,7 @@
  * SDK directly or hard-code a provider.
  */
 
+import { isHardStopped } from "../token-tracker/store.ts";
 import { renderForModel, userDirect, type TaggedInput } from "./source-tag.ts";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -282,6 +283,16 @@ export async function completeTagged(
 
   if (!primary) {
     throw new Error("No model provider configured. Set ARMORCLAW_MODEL_PROVIDER in your .env.");
+  }
+
+  // Budget hard-stop gate (Phase 4 red-team finding). Refuse the call when the
+  // token tracker has flipped its hard-stop flag; the user must clear it from
+  // the dashboard. Cloud-only by construction — Ollama keeps estimatedCostUSD
+  // at 0 so the flag never flips under local-only operation.
+  if (isHardStopped()) {
+    throw new Error(
+      "ArmorClaw: monthly budget exhausted — model API calls are paused. Raise the budget or resume from the dashboard to continue.",
+    );
   }
 
   const rendered = renderForModel(inputs);
