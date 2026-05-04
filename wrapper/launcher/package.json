@@ -1,6 +1,6 @@
 {
   "name": "armorclaw-launcher",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "ArmorClaw desktop launcher — system tray app",
   "author": "ArmorClaw <hello@armorclaw.ai>",
   "type": "module",
