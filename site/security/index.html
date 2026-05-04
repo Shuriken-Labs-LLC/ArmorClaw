@@ -328,7 +328,11 @@
             Browser navigation is gated by a user-managed allowlist.
             Non-allowlisted domains are hard-blocked and logged. RFC 1918,
             loopback, and IPv6 link-local addresses are always blocked
-            even if explicitly listed — DNS-rebinding defence.
+            even if explicitly listed — DNS-rebinding defence. The
+            allowlist is a navigation-URL filter, not a flow tracker:
+            once at an allow-listed domain, server-driven redirects
+            (HTTP 302, meta-refresh) can reach origins that are not on
+            the list.
           </p>
           <span class="source-ref">browser-allowlist.ts, browser-allowlist-filter.ts</span>
         </div>
@@ -340,7 +344,10 @@
             ~/.armorclaw/audit.log. Each entry is signed with HMAC-SHA256
             and chained by SHA-256 of the previous serialised line.
             Tampering produces a verification failure visible in the
-            dashboard.
+            dashboard. Tamper-evidence holds against external file
+            corruption and partial-state attacks; it does not hold
+            against a process running as your user that can read the
+            keychain or replace the log file (Cat-3).
           </p>
           <span class="source-ref">audit-logger.ts, audit-verify.ts</span>
         </div>
@@ -350,7 +357,11 @@
           <p>
             The model adapter refuses further API calls once monthly
             spend exceeds your cap. This is a hard stop, not a
-            notification.
+            notification. The gate covers wrapper-mediated completions
+            (the inbound classifier and future skills); OpenClaw's own
+            model loop is bounded by downstream cost alerting, not a
+            pre-call refusal. A before_prompt_build gate that blocks
+            the main loop on the same flag is tracked for 0.3.1.
           </p>
           <span class="source-ref">token-tracker/store.ts, model-adapter.ts</span>
         </div>
@@ -362,7 +373,9 @@
             the dashboard. The approval card shows the tool name and
             parameters as raw JSON — not a model-generated description.
             The agent cannot describe an action one way and execute
-            another.
+            another. Long payloads — a multi-paragraph email body, a
+            large config dump — exceed the card's visible area and
+            require scrolling inside the card to see the full content.
           </p>
           <span class="source-ref">permissions.ts</span>
         </div>
@@ -409,9 +422,27 @@
             The outbound filter and inbound classifier handle common
             patterns. Injection using Unicode homoglyphs, non-English
             paraphrasing, or novel encoding may score below the
-            classifier's reject threshold. No filter is perfect at any
+            classifier's reject threshold. Splitting an
+            instruction-override phrase across separate tool arguments
+            also bypasses the outbound filter — each argument is
+            checked individually and the model only assembles them at
+            prompt time. The inbound classifier is the layer that sees
+            fully-assembled content. No filter is perfect at any
             sophistication level; we still recommend not pointing the
             agent at content from untrusted sources.
+          </p>
+        </div>
+        <div class="card">
+          <div class="accent-bar" style="background:var(--ac-amber);"></div>
+          <h3>Approval payload visibility</h3>
+          <p>
+            The approval card shows every key and value precisely, but a
+            crafted payload can mimic familiar field names — e.g. a
+            decorative "draft_email_to" entry placed before the real
+            "send_to" field. Each value is rendered correctly; the
+            failure mode is visual, not data omission. Read the full
+            payload before approving, especially for sends and
+            deletions, rather than skimming for familiar keys.
           </p>
         </div>
       </div>
