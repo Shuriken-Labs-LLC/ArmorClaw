@@ -15,11 +15,6 @@ export interface DashboardSnapshot {
   [key: string]: unknown;
 }
 
-/** Pending skill install slot: code + filename + import source. */
-export interface PendingInstall {
-  [key: string]: unknown;
-}
-
 /** Channel type info as returned by /api/channels. */
 export interface ChannelInfo {
   [key: string]: unknown;
@@ -59,10 +54,8 @@ export interface DashboardState {
   // ── Token Burn ──
   tbBreakdownOpen: boolean;
 
-  // ── Skills / ClawHub ──
+  // ── Skills ──
   _bundledSkillsLoaded: boolean;
-  _clawHubLoaded: boolean;
-  _pendingInstall: PendingInstall | null;
 
   // ── Channels view ──
   channelsData: ChannelInfo[] | null;
@@ -116,8 +109,6 @@ export const INITIAL_STATE: Readonly<DashboardState> = {
   _paymentLinkBase: "",
   tbBreakdownOpen: false,
   _bundledSkillsLoaded: false,
-  _clawHubLoaded: false,
-  _pendingInstall: null,
   channelsData: null,
   channelsLoaded: false,
   tgSetupOpen: false,

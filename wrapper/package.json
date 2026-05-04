@@ -30,7 +30,6 @@
     "digest/",
     "token-tracker/",
     "undo/",
-    "marketplace/",
     "index.ts",
     "openclaw.plugin.json"
   ],

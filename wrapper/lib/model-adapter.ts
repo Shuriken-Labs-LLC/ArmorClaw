@@ -13,6 +13,9 @@
  * SDK directly or hard-code a provider.
  */
 
+import { isHardStopped } from "../token-tracker/store.ts";
+import { renderForModel, userDirect, type TaggedInput } from "./source-tag.ts";
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export type ProviderName = "anthropic" | "openai" | "ollama";
@@ -23,6 +26,18 @@ export interface CompletionResult {
   model: string;
   inputTokens: number;
   outputTokens: number;
+}
+
+/**
+ * Options for completeTagged calls. All optional. Used by the inbound content
+ * classifier to route to a cheap-variant model (modelOverride) and to apply a
+ * shorter deadline (timeoutMs) than the default 60s for production calls.
+ */
+export interface CompleteOptions {
+  /** Provider-specific model identifier to use instead of the default. */
+  readonly modelOverride?: string;
+  /** Per-call request timeout in ms; falls back to the provider's default. */
+  readonly timeoutMs?: number;
 }
 
 export interface IModelAdapter {
@@ -109,7 +124,10 @@ export async function probeOllama(): Promise<{ reachable: boolean; models: strin
 
 // ── Provider implementations ─────────────────────────────────────────────────
 
-async function completeWithAnthropic(prompt: string): Promise<CompletionResult> {
+async function completeWithAnthropic(
+  prompt: string,
+  options?: CompleteOptions,
+): Promise<CompletionResult> {
   const apiKey = process.env["ANTHROPIC_API_KEY"]?.trim();
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY not configured");
@@ -123,11 +141,11 @@ async function completeWithAnthropic(prompt: string): Promise<CompletionResult> 
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
+      model: options?.modelOverride ?? "claude-sonnet-4-6",
       max_tokens: 4096,
       messages: [{ role: "user", content: prompt }],
     }),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(options?.timeoutMs ?? 60_000),
   });
 
   if (!res.ok) {
@@ -150,7 +168,10 @@ async function completeWithAnthropic(prompt: string): Promise<CompletionResult> 
   };
 }
 
-async function completeWithOpenAI(prompt: string): Promise<CompletionResult> {
+async function completeWithOpenAI(
+  prompt: string,
+  options?: CompleteOptions,
+): Promise<CompletionResult> {
   const apiKey = process.env["OPENAI_API_KEY"]?.trim();
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY not configured");
@@ -163,10 +184,10 @@ async function completeWithOpenAI(prompt: string): Promise<CompletionResult> {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4o",
+      model: options?.modelOverride ?? "gpt-4o",
       messages: [{ role: "user", content: prompt }],
     }),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(options?.timeoutMs ?? 60_000),
   });
 
   if (!res.ok) {
@@ -189,16 +210,19 @@ async function completeWithOpenAI(prompt: string): Promise<CompletionResult> {
   };
 }
 
-async function completeWithOllama(prompt: string): Promise<CompletionResult> {
+async function completeWithOllama(
+  prompt: string,
+  options?: CompleteOptions,
+): Promise<CompletionResult> {
   const base = getOllamaBaseUrl();
   // Prefer the smallest available model for speed; fall back to llama3.2
-  const model = _ollamaModels[0] ?? "llama3.2:latest";
+  const model = options?.modelOverride ?? _ollamaModels[0] ?? "llama3.2:latest";
 
   const res = await fetch(`${base}/api/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model, prompt, stream: false }),
-    signal: AbortSignal.timeout(120_000), // local models can be slow
+    signal: AbortSignal.timeout(options?.timeoutMs ?? 120_000), // local models can be slow
   });
 
   if (!res.ok) {
@@ -222,34 +246,69 @@ async function completeWithOllama(prompt: string): Promise<CompletionResult> {
   };
 }
 
-function completeWith(provider: ProviderName, prompt: string): Promise<CompletionResult> {
+function completeWith(
+  provider: ProviderName,
+  prompt: string,
+  options?: CompleteOptions,
+): Promise<CompletionResult> {
   switch (provider) {
     case "anthropic":
-      return completeWithAnthropic(prompt);
+      return completeWithAnthropic(prompt, options);
     case "openai":
-      return completeWithOpenAI(prompt);
+      return completeWithOpenAI(prompt, options);
     case "ollama":
-      return completeWithOllama(prompt);
+      return completeWithOllama(prompt, options);
   }
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Run a completion using the configured provider.
- * No automatic fallback — the user chose their provider deliberately.
- * If the provider fails, the error surfaces directly.
+ * Run a completion using the configured provider, accepting tagged inputs.
+ * Untrusted-source content is wrapped in framing before being sent to the
+ * model. Order is preserved.
+ *
+ * Skills should prefer this entry point over `complete(prompt)` once their
+ * input pipelines have been refactored (Phases 1c, 1d).
+ *
+ * `options.modelOverride` selects a specific model identifier (used by the
+ * Phase 2a inbound content classifier to route to a cheap variant). Without
+ * an override the provider's default model is used.
  */
-export async function complete(prompt: string): Promise<CompletionResult> {
+export async function completeTagged(
+  inputs: ReadonlyArray<TaggedInput>,
+  options?: CompleteOptions,
+): Promise<CompletionResult> {
   const primary = getPrimaryProvider();
 
   if (!primary) {
     throw new Error("No model provider configured. Set ARMORCLAW_MODEL_PROVIDER in your .env.");
   }
 
-  const result = await completeWith(primary, prompt);
+  // Budget hard-stop gate (Phase 4 red-team finding). Refuse the call when the
+  // token tracker has flipped its hard-stop flag; the user must clear it from
+  // the dashboard. Cloud-only by construction — Ollama keeps estimatedCostUSD
+  // at 0 so the flag never flips under local-only operation.
+  if (isHardStopped()) {
+    throw new Error(
+      "ArmorClaw: monthly budget exhausted — model API calls are paused. Raise the budget or resume from the dashboard to continue.",
+    );
+  }
+
+  const rendered = renderForModel(inputs);
+  const result = await completeWith(primary, rendered, options);
   _activeProvider = primary;
   return result;
+}
+
+/**
+ * Backward-compat shim: auto-tags the prompt as `user-direct` and delegates
+ * to `completeTagged`. Existing callers continue to work unchanged. New
+ * callers that consume external content should migrate to `completeTagged`
+ * and tag explicitly (Phases 1c, 1d).
+ */
+export async function complete(prompt: string): Promise<CompletionResult> {
+  return completeTagged([userDirect(prompt)]);
 }
 
 /**

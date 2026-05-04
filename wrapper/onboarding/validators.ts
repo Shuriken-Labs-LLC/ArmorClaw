@@ -6,6 +6,9 @@
  * validation (test API calls) lives in server.ts route handlers.
  */
 
+import { homedir } from "node:os";
+import { resolve } from "node:path";
+
 // ── Step 1 ──────────────────────────────────────────────────────────────────��─
 
 export type ModelProvider = "anthropic" | "openai" | "ollama";
@@ -163,6 +166,19 @@ export function validateStep2(data: Partial<Step2Data>): ValidationResult {
           "That folder is a system folder. Please choose a folder inside your home directory, like ~/Documents/ArmorClaw.",
       };
     }
+  }
+  // Reject paths that ARE or CONTAIN ~/.armorclaw/ — that directory holds
+  // the audit log; allowing the agent to write into it would let a poisoned
+  // tool call rewrite its own forensic record.
+  const armorclawDir = resolve(homedir(), ".armorclaw");
+  const resolved = resolve(normalised);
+  if (resolved === armorclawDir || armorclawDir.startsWith(resolved + "/")) {
+    return {
+      ok: false,
+      field: "sandboxDir",
+      message:
+        "That folder contains ArmorClaw's own data directory (~/.armorclaw). Please choose a different folder, like ~/Documents/ArmorClaw.",
+    };
   }
   return { ok: true };
 }

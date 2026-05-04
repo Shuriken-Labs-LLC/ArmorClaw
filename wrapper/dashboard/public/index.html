@@ -300,6 +300,20 @@
     .approval-info { flex: 1; min-width: 0; }
     .approval-name { font-size: 13px; color: var(--ac-text); font-weight: 500; }
     .approval-detail { font-size: 12px; color: var(--ac-muted); margin-top: 2px; }
+    .approval-params {
+      font-family: var(--font-mono, 'DM Mono', monospace);
+      font-size: 11px;
+      color: var(--ac-muted);
+      background: var(--ac-bg);
+      border: 0.5px solid var(--ac-border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-top: 6px;
+      overflow-x: auto;
+      white-space: pre;
+      max-height: 120px;
+      overflow-y: auto;
+    }
     .approval-actions { display: flex; gap: 8px; flex-shrink: 0; margin-left: 12px; }
     .approval-actions button {
       padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer;
@@ -1138,11 +1152,6 @@
     }
     .skill-card-version { font-size: 11px; color: var(--ac-hint); margin-top: 1px; }
     .skill-card-missing { font-size: 11.5px; color: var(--ac-amber); margin-top: 3px; }
-    .skill-badge-user {
-      display: inline-block; font-size: 11px; font-weight: 500;
-      padding: 2px 7px; border-radius: 20px;
-      background: var(--ac-blue-light); color: var(--ac-blue);
-    }
     .skills-empty { padding: 16px 16px 6px; font-size: 13px; color: var(--ac-hint); }
 
     /* Import tabs */
@@ -1509,75 +1518,15 @@
       <!-- ── PLACEHOLDER VIEWS ─────────────────────────────────────────── -->
       <div class="view" id="view-skills">
 
-        <!-- ── Skills sub-tabs ─────────────────────────────────────────── -->
-        <div class="import-tabs" style="margin-bottom:16px;">
-          <button class="import-tab active" id="skills-tab-installed" onclick="switchSkillsSection('installed')">Your skills</button>
-          <button class="import-tab" id="skills-tab-file" onclick="switchSkillsSection('file')">Add a skill</button>
-        </div>
-
-        <!-- ── Add a skill: install from a local file ─────────────────── -->
-        <div class="skills-section" id="skills-section-file">
-          <div class="card">
-            <div class="card-hdr"><span class="card-title">Install from file</span></div>
-            <div style="padding: 0 16px 16px;">
-              <p style="font-size:13px;color:var(--ac-muted);line-height:1.6;margin-bottom:16px;">
-                Drop a skill file you built yourself — a <code style="font-family:'DM Mono',monospace;font-size:12px;color:var(--ac-teal);">.ts</code> or <code style="font-family:'DM Mono',monospace;font-size:12px;color:var(--ac-teal);">.js</code> file that exports <code style="font-family:'DM Mono',monospace;font-size:12px;color:var(--ac-teal);">SKILL_NAME</code>, <code style="font-family:'DM Mono',monospace;font-size:12px;color:var(--ac-teal);">SKILL_VERSION</code>, <code style="font-family:'DM Mono',monospace;font-size:12px;color:var(--ac-teal);">PERMISSION_MANIFEST</code>, and <code style="font-family:'DM Mono',monospace;font-size:12px;color:var(--ac-teal);">run()</code>.
-                ArmorClaw will analyse the skill and show you exactly what permissions it requests before anything is installed.
-              </p>
-
-              <!-- Upload zone -->
-              <div class="upload-zone" id="upload-zone"
-                ondragover="handleFileDragover(event)"
-                ondragleave="handleFileDragleave(event)"
-                ondrop="handleFileDrop(event)"
-                onclick="document.getElementById('import-file-input').click()"
-                style="cursor:pointer;">
-                <div class="upload-zone-icon">📂</div>
-                <div class="upload-zone-label">Drop your skill file here, or click to browse</div>
-                <div class="upload-zone-hint">.ts or .js files only</div>
-              </div>
-              <input type="file" id="import-file-input" accept=".ts,.js"
-                style="display:none"
-                onchange="if(this.files[0]) analyzeSkillFile(this.files[0])">
-
-              <!-- Report card renders here after analysis -->
-              <div id="import-file-report" style="margin-top:16px;"></div>
-              <div id="import-file-error" class="import-error-msg" style="display:none;margin-top:8px;"></div>
-            </div>
+        <!-- ── Built-in skills (the only kind ArmorClaw loads) ─────────── -->
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-title">Built in</span>
+            <span class="card-meta">Ships with ArmorClaw</span>
           </div>
-        </div>
-
-        <!-- ── Your skills: bundled (built-in) + user-added ───────────── -->
-        <div class="skills-section active" id="skills-section-installed">
-          <!-- ── Built-in skills ──────────────────────────────────────── -->
-          <div class="card">
-            <div class="card-hdr">
-              <span class="card-title">Built in</span>
-              <span class="card-meta">Ships with ArmorClaw</span>
-            </div>
-            <div id="bundled-skills-list">
-              <div style="padding:16px;font-size:13px;color:var(--ac-hint)">Loading skills…</div>
-            </div>
+          <div id="bundled-skills-list">
+            <div style="padding:16px;font-size:13px;color:var(--ac-hint)">Loading skills…</div>
           </div>
-
-          <!-- ── User-added skills (from file install) ────────────────── -->
-          <div class="card" style="margin-top:16px;">
-            <div class="card-hdr">
-              <span class="card-title">Added by you</span>
-              <span class="card-meta" id="user-skills-count"></span>
-            </div>
-            <div id="user-skills-list">
-              <div style="padding:16px;font-size:13px;color:var(--ac-hint)">
-                You haven't added any skills yet. Use "Add a skill" above to install one from a file.
-              </div>
-            </div>
-          </div>
-
-          <!-- Legacy placeholder list container — kept for backwards compat with
-               installed-skills-list references in the skills JS. Hidden because
-               the real data renders in bundled-skills-list and user-skills-list. -->
-          <div id="installed-skills-list" style="display:none"></div>
-          <div id="installed-skills-count" style="display:none"></div>
         </div>
 
       </div><!-- /view-skills -->
@@ -1856,6 +1805,31 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- 2b. Browser allowlist -->
+        <div class="card settings-card">
+          <div class="card-hdr"><span class="card-title">Browser allowlist</span></div>
+          <div style="padding:14px 16px">
+            <p class="settings-field-hint" style="margin:0 0 12px">
+              Domains in this list can be visited by the agent's browser tool.
+              Subdomains are included automatically — adding <span class="mono">github.com</span>
+              also allows <span class="mono">api.github.com</span> and <span class="mono">gist.github.com</span>.
+              Localhost and private IPs are always blocked.
+            </p>
+            <div id="ba-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+            <div id="ba-empty" style="font-size:13px;color:var(--ac-hint);margin-bottom:12px;display:none">
+              No domains allowed. The browser tool will be blocked until you add at least one domain.
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <input class="settings-field" id="ba-domain-input" type="text"
+                     placeholder="github.com" style="flex:1;min-width:160px;max-width:280px"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();baAddDomain();}">
+              <button class="btn-settings primary" onclick="baAddDomain()" type="button">Add domain</button>
+              <span class="settings-save-msg" id="ba-save-msg" style="display:none">Saved ✓</span>
+            </div>
+            <p class="settings-field-hint" id="ba-error" style="display:none;color:var(--ac-red);margin-top:8px"></p>
           </div>
         </div>
 
@@ -2144,11 +2118,11 @@
 // escHtml, escAttr, fmtUSD, fmtTime, humaniseSkillName, maskKey
 // — loaded from /dashboard-lib.js (src/utils.ts)
 // activeView, dashState, undoDismissed, undoTickerId, selectedProvider,
-// tbBreakdownOpen, _bundledSkillsLoaded, _pendingInstall, advancedPollTimer,
+// tbBreakdownOpen, _bundledSkillsLoaded, advancedPollTimer,
 // advancedGatewayOnline, _updateBannerDismissed, _lastAgentStatus,
 // _lastApprovalIds, _lastChannelIds, _lastBudgetKey, _lastFeedKey,
 // _stripePortalUrl,
-// _clawHubLoaded, channelsData, channelsLoaded, tgSetupOpen, tgValidated,
+// channelsData, channelsLoaded, tgSetupOpen, tgValidated,
 // tgBotUsername, chatDebugLog, chatClickCount, chatClickTimer, chatGatewayUrl,
 // chatGatewayToken, chatWs, chatConnected, chatAuthenticated, chatResponding,
 // chatPendingId, chatResponseBuffer, chatLastUserMessage, chatMsgIdCounter,
@@ -2372,7 +2346,6 @@ function syncUI(s) {
   syncTokenBurn(s);
   syncSecurity(s);
   syncSettings(s);
-  syncSkills(s);
   syncChannelsView();
 }
 
@@ -2431,6 +2404,7 @@ function syncApprovals(s) {
       '<div class="approval-info">' +
         '<div class="approval-name">' + escHtml(a.displayName) + '</div>' +
         '<div class="approval-detail">Requested ' + fmtTime(a.requestedAt) + '</div>' +
+        '<pre class="approval-params">' + escHtml(JSON.stringify(a.toolParams ?? {}, null, 2)) + '</pre>' +
       '</div>' +
       '<div class="approval-actions">' +
         '<button class="btn-approve" onclick="approveAction(\'' + escAttr(a.id) + '\')">Approve</button>' +
@@ -2967,6 +2941,89 @@ async function saveSandbox() {
   }
 }
 
+// ── Browser allowlist ─────────────────────────────────────────────────────────
+
+async function baLoadAndRender() {
+  const list = document.getElementById('ba-list');
+  const empty = document.getElementById('ba-empty');
+  if (!list || !empty) return;
+  try {
+    const r = await fetch('/api/security/browser-allowlist');
+    const d = await r.json().catch(() => ({ domains: [] }));
+    const domains = Array.isArray(d.domains) ? d.domains : [];
+    list.innerHTML = '';
+    if (domains.length === 0) {
+      empty.style.display = '';
+      return;
+    }
+    empty.style.display = 'none';
+    for (const domain of domains) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--ac-surface2);border:0.5px solid var(--ac-border);border-radius:6px';
+      const span = document.createElement('span');
+      span.className = 'mono';
+      span.style.cssText = 'flex:1;font-size:13px;color:var(--ac-text);word-break:break-all';
+      span.textContent = domain;
+      const btn = document.createElement('button');
+      btn.className = 'btn-settings';
+      btn.type = 'button';
+      btn.textContent = 'Remove';
+      btn.onclick = () => baRemoveDomain(domain);
+      row.appendChild(span);
+      row.appendChild(btn);
+      list.appendChild(row);
+    }
+  } catch { /* ignore */ }
+}
+
+async function baAddDomain() {
+  const input = document.getElementById('ba-domain-input');
+  const errEl = document.getElementById('ba-error');
+  if (!input) return;
+  const value = (input.value || '').trim();
+  if (errEl) errEl.style.display = 'none';
+  if (value === '') {
+    if (errEl) {
+      errEl.textContent = 'Enter a domain (e.g. github.com).';
+      errEl.style.display = '';
+    }
+    return;
+  }
+  try {
+    const r = await fetch('/api/security/browser-allowlist/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain: value }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!d.ok) {
+      if (errEl) {
+        errEl.textContent = d.message || 'Could not save domain.';
+        errEl.style.display = '';
+      }
+      return;
+    }
+    input.value = '';
+    showSaveMsg('ba-save-msg');
+    await baLoadAndRender();
+  } catch {
+    if (errEl) {
+      errEl.textContent = 'Network error — please try again.';
+      errEl.style.display = '';
+    }
+  }
+}
+
+async function baRemoveDomain(domain) {
+  try {
+    await fetch('/api/security/browser-allowlist/' + encodeURIComponent(domain), { method: 'DELETE' });
+    await baLoadAndRender();
+  } catch { /* ignore */ }
+}
+
+// Load on first settings render
+baLoadAndRender();
+
 async function saveSettingsBudget() {
   const input = document.getElementById('s-budget-input');
   if (!input) return;
@@ -3364,332 +3421,6 @@ function loadBundledSkills() {
 
 // Load bundled skills when the page loads
 loadBundledSkills();
-// Load installed skills
-loadInstalledSkills();
-
-function syncSkills(s) {
-  const skills = (s.skills || []).filter(sk => sk.author === 'user');
-  const list   = document.getElementById('user-skills-list');
-  const count  = document.getElementById('user-skills-count');
-  if (!list) return;
-  if (count) count.textContent = skills.length > 0 ? String(skills.length) : '';
-  if (skills.length === 0) {
-    list.innerHTML = '<div class="skills-empty">No user skills installed yet. Import one below.</div>';
-    return;
-  }
-  list.innerHTML = skills.map(sk => {
-    const perms = (sk.permissionManifest || []).map(p =>
-      `<span class="perm-badge">${escHtml(PERM_LABELS[p] || p)}</span>`
-    ).join('');
-    return `<div class="skill-card">
-      <div class="skill-card-icon">⚡</div>
-      <div class="skill-card-body">
-        <div class="skill-card-name">${escHtml(sk.displayName || sk.skillId)}</div>
-        <div class="skill-card-desc">${escHtml(sk.description || '')}</div>
-        <div class="skill-card-badges">
-          <span class="skill-badge-user">Built by you</span>
-          ${perms}
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ── Skills tab: section switching ──────────────────────────────────────────
-
-function switchSkillsSection(which) {
-  ['file', 'installed'].forEach(s => {
-    document.getElementById('skills-tab-' + s)?.classList.toggle('active', s === which);
-    document.getElementById('skills-section-' + s)?.classList.toggle('active', s === which);
-  });
-  if (which === 'installed') loadInstalledSkills();
-}
-
-// ── GitHub URL install ────────────────────────────────────────────────────
-
-function updateGithubInstallState() {
-  const url = (document.getElementById('github-install-url')?.value || '').trim();
-  const confirm = (document.getElementById('github-confirm-input')?.value || '').trim();
-  const btn = document.getElementById('github-install-btn');
-  if (btn) btn.disabled = !(url && confirm === 'CONFIRM');
-  // Clear messages on edit
-  const errEl = document.getElementById('github-install-error');
-  const succEl = document.getElementById('github-install-success');
-  if (errEl) errEl.style.display = 'none';
-  if (succEl) succEl.style.display = 'none';
-}
-
-async function installFromGithub() {
-  const url = (document.getElementById('github-install-url')?.value || '').trim();
-  const confirm = (document.getElementById('github-confirm-input')?.value || '').trim();
-  const btn = document.getElementById('github-install-btn');
-  const errEl = document.getElementById('github-install-error');
-  const succEl = document.getElementById('github-install-success');
-  if (errEl) errEl.style.display = 'none';
-  if (succEl) succEl.style.display = 'none';
-  if (!url || confirm !== 'CONFIRM') return;
-  if (btn) btn.disabled = true;
-  try {
-    const res = await fetch('/api/skills/github/install', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, confirm }),
-    });
-    const data = await res.json();
-    if (res.ok && data.ok) {
-      if (succEl) {
-        succEl.textContent = `Skill installed successfully at ${data.dest}`;
-        succEl.style.display = 'block';
-      }
-      // Clear inputs
-      const urlInput = document.getElementById('github-install-url');
-      const confirmInput = document.getElementById('github-confirm-input');
-      if (urlInput) urlInput.value = '';
-      if (confirmInput) confirmInput.value = '';
-    } else {
-      if (errEl) {
-        errEl.textContent = data.message || 'Install failed';
-        errEl.style.display = 'block';
-      }
-    }
-  } catch {
-    if (errEl) {
-      errEl.textContent = 'Network error — check your connection and try again.';
-      errEl.style.display = 'block';
-    }
-  }
-  if (btn) btn.disabled = true; // Re-disable since inputs are cleared
-}
-
-// ── Installed skills ──────────────────────────────────────────────────────
-
-function loadInstalledSkills() {
-  const list = document.getElementById('installed-skills-list');
-  const countEl = document.getElementById('installed-skills-count');
-  if (!list) return;
-  fetch('/api/skills/installed')
-    .then(r => r.json())
-    .then(data => {
-      const skills = data.skills || [];
-      if (countEl) countEl.textContent = skills.length ? `${skills.length} installed` : '';
-      if (skills.length === 0) {
-        list.innerHTML = '<div style="padding:16px;font-size:13px;color:var(--ac-hint)">No skills installed yet. Browse ClawHub or install from GitHub.</div>';
-        return;
-      }
-      list.innerHTML = skills.map(s => `
-        <div class="installed-skill-card">
-          <div class="installed-skill-info">
-            <div class="installed-skill-name">${escHtml(s.name)}</div>
-            <div class="installed-skill-desc">${escHtml(s.description)}</div>
-            <div class="installed-skill-meta">Source: ${escHtml(s.source)} ${s.enabled ? '' : '(disabled)'}</div>
-          </div>
-          <div class="installed-skill-actions">
-            <button class="toggle-switch ${s.enabled ? 'on' : ''}"
-              title="${s.enabled ? 'Disable' : 'Enable'}"
-              onclick="toggleInstalledSkill('${escAttr(s.id)}')"></button>
-            <button class="btn-remove" onclick="removeInstalledSkill('${escAttr(s.id)}')">Remove</button>
-          </div>
-        </div>
-      `).join('');
-    })
-    .catch(() => {
-      list.innerHTML = '<div style="padding:16px;font-size:13px;color:var(--ac-red)">Failed to load installed skills.</div>';
-    });
-}
-
-async function toggleInstalledSkill(id) {
-  await fetch(`/api/skills/installed/${encodeURIComponent(id)}/toggle`, { method: 'POST' });
-  loadInstalledSkills();
-}
-
-async function removeInstalledSkill(id) {
-  await fetch(`/api/skills/installed/${encodeURIComponent(id)}/remove`, { method: 'POST' });
-  loadInstalledSkills();
-}
-
-function switchImportTab(which) {
-  ['github', 'file', 'marketplace'].forEach(t => {
-    document.getElementById('tab-' + t)?.classList.toggle('active', t === which);
-    document.getElementById('import-panel-' + t)?.classList.toggle('active', t === which);
-  });
-}
-
-function clearImportReport(source) {
-  const errEl = document.getElementById('import-' + source + '-error');
-  const repEl = document.getElementById('import-' + source + '-report');
-  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
-  if (repEl) repEl.innerHTML = '';
-  _pendingInstall = null;
-}
-
-function showImportError(source, message) {
-  const errEl = document.getElementById('import-' + source + '-error');
-  if (!errEl) return;
-  errEl.textContent = message;
-  errEl.style.display = 'block';
-}
-
-function renderReportCard(report, code, filename, source) {
-  _pendingInstall = { code, filename, source };
-  const safe      = report.safe;
-  const safeClass = safe ? 'safe' : 'unsafe';
-  const icon      = safe ? '✅' : '⛔';
-  const title     = safe
-    ? 'No dangerous patterns detected'
-    : 'Dangerous patterns found — review before installing';
-
-  const dangerBadges = (report.dangerousPatterns || [])
-    .filter(p => p.severity === 'danger')
-    .map(p => `<span class="report-badge danger">${escHtml(p.label)}</span>`).join('');
-  const warnBadges  = (report.warnings || [])
-    .map(w => `<span class="report-badge warn">${escHtml(w)}</span>`).join('');
-  const permBadges  = (report.permissionsFound || [])
-    .map(p => `<span class="report-badge perm">${escHtml(PERM_LABELS[p] || p)}</span>`).join('');
-  const domainBadges = (report.domainsFound || [])
-    .map(d => `<span class="report-badge domain">${escHtml(d)}</span>`).join('');
-  const allBadges = dangerBadges + warnBadges + permBadges + domainBadges;
-
-  const overrideHtml = safe ? '' : `
-    <div class="report-danger-override">
-      <input type="checkbox" id="danger-override-${escAttr(source)}"
-        onchange="onDangerOverrideChange('${escAttr(source)}')">
-      <label for="danger-override-${escAttr(source)}">
-        I understand this skill contains dangerous patterns and want to install it anyway.
-        This may allow the skill to execute shell commands, eval code, or manipulate system state.
-      </label>
-    </div>`;
-
-  const repEl = document.getElementById('import-' + source + '-report');
-  if (repEl) repEl.innerHTML = `
-    <div class="report-card ${safeClass}" id="report-card-${escAttr(source)}">
-      <div class="report-card-hdr">
-        <span class="report-card-icon">${icon}</span>
-        <span class="report-card-title">${escHtml(title)}</span>
-      </div>
-      <div class="report-card-summary">${escHtml(report.summary)}</div>
-      ${allBadges ? `<div class="report-badges">${allBadges}</div>` : ''}
-      ${overrideHtml}
-      <div class="report-actions">
-        <button class="btn-install" id="btn-install-${escAttr(source)}"
-          ${safe ? '' : 'disabled'}
-          onclick="confirmInstall('${escAttr(source)}')">
-          Install ${escHtml(filename)}
-        </button>
-        <button class="btn-cancel-import" onclick="cancelImport('${escAttr(source)}')">Cancel</button>
-        <span id="install-msg-${escAttr(source)}"></span>
-      </div>
-    </div>`;
-}
-
-function onDangerOverrideChange(source) {
-  const cb  = document.getElementById('danger-override-' + source);
-  const btn = document.getElementById('btn-install-' + source);
-  if (cb && btn) btn.disabled = !cb.checked;
-}
-
-async function analyzeSkillUrl() {
-  const input = document.getElementById('import-url-input');
-  const btn   = document.getElementById('import-url-btn');
-  const url   = (input?.value || '').trim();
-  clearImportReport('url');
-  if (!url) { showImportError('url', 'Please enter a GitHub URL.'); return; }
-  if (btn) btn.disabled = true;
-  try {
-    const res  = await fetch('/api/skills/analyze-url', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) {
-      showImportError('url', data.message || 'Failed to fetch the skill. Check the URL and try again.');
-      return;
-    }
-    renderReportCard(data.report, data.code, data.filename, 'url');
-  } catch {
-    showImportError('url', 'Network error — could not reach the server.');
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
-
-function handleFileDragover(event) {
-  event.preventDefault();
-  document.getElementById('upload-zone')?.classList.add('drag-over');
-}
-function handleFileDragleave(event) {
-  event.preventDefault();
-  document.getElementById('upload-zone')?.classList.remove('drag-over');
-}
-function handleFileDrop(event) {
-  event.preventDefault();
-  document.getElementById('upload-zone')?.classList.remove('drag-over');
-  const file = event.dataTransfer?.files?.[0];
-  if (file) analyzeSkillFile(file);
-}
-
-function analyzeSkillFile(file) {
-  clearImportReport('file');
-  const reader = new FileReader();
-  reader.onload = async () => {
-    const dataUrl = reader.result;
-    const b64 = typeof dataUrl === 'string' ? dataUrl.split(',')[1] : '';
-    try {
-      const res  = await fetch('/api/skills/analyze-file', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: b64, filename: file.name }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) {
-        showImportError('file', data.message || 'Failed to analyze the file.');
-        return;
-      }
-      renderReportCard(data.report, data.code, data.filename, 'file');
-    } catch {
-      showImportError('file', 'Network error — could not reach the server.');
-    }
-  };
-  reader.onerror = () => showImportError('file', 'Could not read the file.');
-  reader.readAsDataURL(file);
-}
-
-async function confirmInstall(source) {
-  const msgEl = document.getElementById('install-msg-' + source);
-  const btn   = document.getElementById('btn-install-' + source);
-  if (!_pendingInstall || _pendingInstall.source !== source) return;
-  if (btn) btn.disabled = true;
-  try {
-    const res  = await fetch('/api/skills/install', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: _pendingInstall.code, filename: _pendingInstall.filename }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) {
-      if (msgEl) { msgEl.style.color = 'var(--ac-red)'; msgEl.textContent = data.message || 'Install failed.'; }
-      if (btn) btn.disabled = false;
-      return;
-    }
-    const repEl = document.getElementById('import-' + source + '-report');
-    if (repEl) repEl.innerHTML = `<div class="import-success-msg">✓ ${escHtml(_pendingInstall.filename)} installed to ~/.armorclaw/skills/</div>`;
-    _pendingInstall = null;
-  } catch {
-    if (msgEl) { msgEl.style.color = 'var(--ac-red)'; msgEl.textContent = 'Network error.'; }
-    if (btn) btn.disabled = false;
-  }
-}
-
-function cancelImport(source) {
-  clearImportReport(source);
-  if (source === 'url') {
-    const input = document.getElementById('import-url-input');
-    if (input) input.value = '';
-  } else if (source === 'file') {
-    const fi = document.getElementById('import-file-input');
-    if (fi) fi.value = '';
-  }
-}
 
 // ── Actions ─────────────────────────────────────────────────────────────────────
 async function pauseAgent()  { await fetch('/api/agent/pause',  { method: 'POST' }); }

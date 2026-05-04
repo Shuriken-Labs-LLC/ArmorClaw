@@ -29,24 +29,26 @@ ArmorClaw is a hardened Electron wrapper around the OpenClaw open-source agent r
 
 **Repo structure:**
 
+The OpenClaw upstream fork lives at the repo root. ArmorClaw code lives entirely in `wrapper/` (plus `site/` for the landing page and `ArmorClaw Vault/` for session continuity).
+
 ```
 armorclaw/
-├── CLAUDE.md
-├── core/          ← OpenClaw fork (treat as upstream; minimise changes)
-├── wrapper/
-│   ├── security/  ← injection-filter.ts, permissions.ts, audit-logger.ts
-│   ├── skills/    ← email-calendar, secure-files, browser
-│   ├── onboarding/
-│   ├── dashboard/
-│   ├── token-tracker/
-│   ├── digest/
-│   ├── recipes/
-│   ├── undo/
-│   ├── config/    ← gateway.ts, system-prompt.ts, models.ts
-│   └── lib/       ← skill-registry.ts, model-adapter.ts, logger.ts, platform-paths.ts
-├── tests/
-└── docs/
+├── docs/, src/, ui/, skills/, packages/, .github/   ← OpenClaw upstream (treat as read-only)
+├── README.md, CHANGELOG.md, VISION.md, ...          ← OpenClaw upstream root *.md files
+├── AGENTS.md                                        ← ArmorClaw spec (CLAUDE.md is a symlink)
+├── ArmorClaw Vault/                                 ← ArmorClaw session continuity (Cowork-managed)
+├── site/                                            ← ArmorClaw landing page (armorclaw.app)
+└── wrapper/                                         ← ArmorClaw code — all behaviour lives here
+    ├── security/    ← outbound-tool-arg-filter.ts, permissions.ts, audit-logger.ts
+    ├── skills/      ← email-calendar, secure-files, browser (bundled only)
+    ├── onboarding/, dashboard/, token-tracker/
+    ├── digest/, recipes/, undo/
+    ├── config/      ← gateway.ts, system-prompt.ts, models.ts
+    ├── lib/         ← skill-registry.ts, model-adapter.ts, source-tag.ts, platform-paths.ts, ...
+    └── tests/       ← ArmorClaw test suites
 ```
+
+Note: `skills/` at the repo root is OpenClaw's; ArmorClaw's bundled skills are in `wrapper/skills/`. Don't conflate them.
 
 **Runtime:** Node.js 22+, TypeScript throughout. No `.js` files in `wrapper/` or `tests/`.
 
@@ -56,7 +58,7 @@ armorclaw/
 
 1. **Security first.** Evaluate security surface before writing any code. Flag permission-broadening changes before proceeding.
 2. **Minimal footprint.** Request the smallest permission set that makes a skill functional.
-3. **Upstream separation.** Don't modify `core/` without a documented security reason. All ArmorClaw behaviour lives in `wrapper/`.
+3. **Upstream separation.** Don't modify upstream OpenClaw paths at the repo root (`/docs`, `/src`, `/ui`, `/skills`, `/.github`, and root-level `*.md` files except `AGENTS.md`/`CLAUDE.md`) without a documented security reason. All ArmorClaw behaviour lives in `wrapper/`.
 4. **Explicit over implicit.** No runtime auto-discovery of permissions or implicit elevation.
 5. **Test security twice.** Injection filter, permission engine, audit logger each need unit + integration tests.
 
@@ -64,19 +66,23 @@ armorclaw/
 
 ## Security architecture
 
-### Injection filter — `wrapper/security/injection-filter.ts`
+### Outbound tool-arg filter — `wrapper/security/outbound-tool-arg-filter.ts`
 
-Pre-skill hook. Runs on every invocation, before any skill, without exception. Cannot be bypassed by calling a skill directly.
+Subscribed to OpenClaw's `before_tool_call` hook. Screens the arguments the agent is about to pass TO a tool — the _outbound_ side of the security pipeline. Runs first in the `before_tool_call` chain, before the permission engine and the browser allowlist filter. Synchronous, cannot be bypassed.
 
-Reject inputs that:
+Reject outbound tool args that:
 
 - Contain instruction-override patterns ("ignore previous instructions", "you are now", "disregard your", "new system prompt", "pretend you are", semantic equivalents)
 - Attempt to reference or rewrite the system prompt
 - Contain base64 or other encoded payloads that decode to instruction patterns
 
-On rejection: log to audit log (timestamp, skill target, reason, first 120 chars of input), return a structured error. Never silently swallow or partially execute. Filter must be synchronous.
+The filter also enforces the agent-paused gate: while the dashboard pause toggle is on, every `before_tool_call` is blocked regardless of arg content. User must resume from the dashboard to continue.
 
-Run `npm run test:security` before marking any injection filter change done.
+On rejection: log to audit log (timestamp, tool target, reason, first 120 chars of input), return a `block: true` decision. Never silently swallow or partially execute.
+
+This is the _outbound_ half of a two-filter architecture. The _inbound_ counterpart is the inbound content classifier (`wrapper/security/inbound-content-classifier.ts`, see below) on the `before_prompt_build` hook — it screens content the agent has READ from prior tool results before the next prompt turn. Do not subscribe this outbound filter to `before_prompt_build`; that hook is the inbound classifier's domain.
+
+Run `npm run test:security` before marking any outbound tool-arg filter change done.
 
 ### Permission engine — `wrapper/security/permissions.ts`
 
@@ -108,6 +114,113 @@ Every skill invocation logs: ISO 8601 timestamp, skill name+version, permission 
 
 Logs → `~/.armorclaw/audit.log` (NDJSON). Logger must never throw — fail silently to in-memory buffer. `npm run export:audit` produces CSV.
 
+Each entry is signed with HMAC-SHA256 (key in keychain via keytar) and chained via `prevHash` (SHA-256 of the previous serialized line, `GENESIS` for the first). `wrapper/security/audit-verify.ts` walks the chain and returns `ok` / `partial` / `broken` / `missing`.
+
+The chain validator enforces an additional rule: once a chain entry has a non-null HMAC, all subsequent entries must also have a non-null HMAC. The keychain warm-up window at daemon start may produce a small number of leading `hmac: null` entries (acceptable, treated as `partial`); a `hmac: null` entry appearing after the chain has demonstrably been signing is treated as `broken` with reason `null-after-signed`. This converts an attacker who exploits a transient keychain outage from "indistinguishable from cold-start partial" into an observable tamper signal.
+
+### Source-tagger — `wrapper/security/source-tagger.ts`
+
+Subscribed to OpenClaw's `tool_result_persist` lifecycle hook (mutation rights). Wraps external tool-result content in `<external-content>` framing via `renderForModel()` before it reaches the model's next-turn context. Allowlist-style: only tools listed in `TOOL_TO_SOURCE_TAG` get tagged. Unmapped tools pass through unchanged.
+
+Current map:
+
+| Tool                                 | Source tag      |
+| ------------------------------------ | --------------- |
+| `web_fetch`, `web_search`, `browser` | `external-web`  |
+| `read`, `grep`                       | `user-file`     |
+| `bash`, `exec`                       | `external-bash` |
+| `pdf`, `image`                       | `user-file`     |
+
+Mutation contract: returns a new message object with framed text content; `event.message` is never mutated in place. Image and other non-text content blocks pass through. Synchronous handler (the OpenClaw runtime calls `tool_result_persist` synchronously in the session-transcript append hot path).
+
+Tools `bash` and `exec` are tagged `external-bash` by default. The exemption list `BASH_EXEMPT_PREFIXES` (empty by default) lets us exempt specific known-safe command prefixes (`pwd`, `whoami`, etc.) from framing. The exemption mechanism is wired but the per-command lookup is a no-op until Phase 2a introduces the side channel for tool-call params.
+
+Tools `pdf` and `image` are tagged `user-file` (untrusted) for v1. Phase 3 may introduce a `media-attachment` distinction.
+
+Phase 2 adds a content classifier on `before_prompt_build` (see below — Phase 2a `inbound-content-classifier.ts`) and may consolidate the source-tagger's framing with OpenClaw's existing per-tool wrapping (`src/security/external-content.ts`). Memory tagging (`before_prompt_build`) and vector tagging (`registerContextEngine`) are separate phases.
+
+### Inbound content classifier — `wrapper/security/inbound-content-classifier.ts`
+
+Subscribed to OpenClaw's `before_prompt_build` lifecycle hook (async; mutation rights are limited to system context). Each turn, walks the messages array for content the source-tagger framed as untrusted, classifies each previously-unseen block via the cheap variant of the user's configured model provider (`CLASSIFIER_MODEL_BY_PROVIDER` in `wrapper/config/classifier.ts`), and aggregates warnings into a single `prependSystemContext` for the upcoming model turn.
+
+This is the inbound half of a two-filter architecture. The outbound counterpart is the outbound tool-arg filter (see above) on the `before_tool_call` hook — it screens what the agent passes TO tools. Do not subscribe this inbound classifier to `before_tool_call`; that hook is the outbound filter's domain.
+
+Decisions per score (default thresholds 0.7 reject / 0.4 warn):
+
+- `score >= 0.7`: listed under "HIGH-RISK CONTENT REJECTED BY CLASSIFIER" in system context. Model is instructed to treat as data only and refuse user requests acting on it. Original content remains in the message log; audit log retains record.
+- `0.4 <= score < 0.7`: listed under "ELEVATED-RISK CONTENT IN MESSAGE LOG" with weaker guidance.
+- `score < 0.4`: no system-context entry.
+
+Mediated interception, not hard redaction: `before_prompt_build`'s mutation rights are limited to system context (the messages array is read-only at this hook). The model sees both the framed content and the system warning; modern LLMs follow system-level security directives reliably. OpenClaw's `mergeBeforePromptBuild` (`src/plugins/hooks.ts:172-189`) concatenates `prependSystemContext` from multiple plugin handlers, so our warning composes additively with anything else.
+
+Module-level cache keyed by `toolCallId` (or content hash when none) stores classification results across the session. Each unique framed block is classified once. Cache is cleared on `session_end`.
+
+Fail-open: classifier timeout, error, parse failure, or no active provider all mean no system-context warning is added; source-tagger framing remains as the soft mitigation. Audit log records every classifier call under `skill: "classifier"` with cost attribution separately tracked in `tokens.ndjson` so the dashboard can show classifier spend distinct from agent spend.
+
+Always-on by default. Disable via `ARMORCLAW_CLASSIFIER_DISABLED=true` env var (intended dashboard Advanced view toggle in Phase 2a follow-up). Disabling weakens indirect-injection mitigation and is not recommended for production.
+
+Cost: ~$1/month at the $20 default budget on Anthropic (Haiku ~$0.0006/call; cached results so each unique tool result costs once per session).
+
+### Browser domain allowlist — `wrapper/security/browser-allowlist.ts`
+
+The agent's browser tool can only navigate to domains in the user-managed allowlist at `~/.armorclaw/browser-allowlist.json`. Apex domain matches its subdomains — listing `github.com` allows `github.com`, `api.github.com`, `gist.github.com`, but not `githubusercontent.com` or `github.com.attacker.com`. Punycode/IDN normalized before comparison. Localhost / RFC 1918 / IPv6 loopback / link-local / IPv4-mapped IPv6 are ALWAYS blocked, even if explicitly added to the allowlist — DNS rebinding defense.
+
+Enforcement runs at `before_tool_call` after the permission filter, before the audit logger (see `wrapper/security/browser-allowlist-filter.ts`). The filter inspects only browser-tool calls (`toolName === "browser"`) whose action is `open` or `navigate`. URL params inspected: `targetUrl` (preferred) and `url` (legacy fallback) per `src/agents/tools/browser-tool.ts`. Tool calls that don't navigate (`status`, `tabs`, `snapshot`, `screenshot`, `console`, `pdf`, `upload`, `dialog`, `act`, …) are unaffected.
+
+Rejection is a hard block: `{ block: true, blockReason }` with a clear message pointing the user at Settings → Browser allowlist. Every blocked navigation is logged as `outcome: "rejected"` under `skill: "browser-allowlist"`. No silent allow-and-queue, no first-navigation prompt (that requires async approval, deferred to Phase 2e).
+
+Default allowlist is empty. Users seed it through dashboard Settings → Browser allowlist (add/remove domains) or onboarding Step 6 review screen (three opt-in defaults: `google.com`, `wikipedia.org`, `github.com`).
+
+### Vendored OpenClaw upstream pin — `wrapper/security/openclaw-pin/`
+
+ArmorClaw is a vendored fork of `github.com/openclaw/openclaw`. To prevent drift from importing unintended (or malicious) upstream changes during sync, the repo records:
+
+- `PINNED_SHA.txt` — the upstream commit SHA we last reviewed and synced to.
+- `PATHS.json` — classifies every tracked top-level path as `armorclawPaths` (not enforced), `openclawPaths` (must match upstream byte-for-byte), or `localModsPaths` (OpenClaw-owned with intentional ArmorClaw modifications, enforced manually at sync time). `ambiguousPathsToInvestigate` must be empty for the check to run — any new top-level path landing in the repo must be classified before the next release.
+- `UPSTREAM_KEYS.txt` — the SSH public keys allowed to sign upstream release tags, in the `gpg.ssh.allowedSignersFile` format. Repo-committed (NOT `~/.ssh/allowed_signers`, which an attacker with shell access could rewrite silently). Every key change goes through PR review.
+- `SYNC_LOG.md` — append-only log of pin bumps with diff summaries, reviewer sign-off, and signature status (verified / UNVERIFIED with reason).
+- `check-pin.sh` — drift + signature check. Verifies (a) local OpenClaw-owned files match `upstream@PIN` modulo `localModsPaths`, and (b) `PINNED_SHA` is at a tag signed by a key in `UPSTREAM_KEYS.txt`. Exit codes: `0` both checks pass (or applicable overrides); `1` drift outside localMods OR signature failed OR untagged commit; `2` environmental failure (missing pin / keys / config, unreachable SHA).
+- `bump-pin.sh <new-sha>` — sync workflow. Validates the new SHA exists upstream, runs the same signature gate, prints a diff report scoped to `openclawPaths`, prompts for confirmation, updates the pin, appends a templated `SYNC_LOG.md` entry that records signature status. Does not commit.
+
+The check runs as `prebuild:mac` / `prebuild:win` / `prebuild:all` in `wrapper/launcher/package.json`, so `npm run build:mac` automatically aborts on undocumented drift OR on an unsigned/untagged pin. Two overrides:
+
+- `ALLOW_OPENCLAW_DRIFT=1` — bypasses the tree-drift check (signature still enforced).
+- `ALLOW_UNSIGNED_PIN=1` — bypasses the signature check; on `bump-pin.sh` this also requires a Notes reason captured in the SYNC_LOG entry. Never bypass on a release build without explicit sign-off.
+
+Sync workflow: human reviews upstream diff, runs `bump-pin.sh <new-sha>`, inspects the generated `SYNC_LOG.md` entry, commits with message `security: bump openclaw pin to <short-sha>`.
+
+Key rotation: append a new line to `UPSTREAM_KEYS.txt` and commit as `security: rotate openclaw upstream signer key (<who>)`. Removed keys are deleted from the file but their lines remain in git history (needed for retroactive verification of historical pinned tags). PR review on every key change is the entire defence — squash-merging this file is forbidden.
+
+Threat model: the SHA pin protects against importing the wrong upstream commit during sync; the signature pin converts "the SHA matches" into "the SHA is at a tag signed by a key we vendor". Together they close the gap where an attacker who could rewrite upstream history (or run a malicious mirror) could otherwise publish a matching SHA without a corresponding signed tag. Does not protect against local tampering of files we control via git (covered by code review) and does not verify commit-by-commit signatures (only release tags).
+
+---
+
+## Source tagging — `wrapper/lib/source-tag.ts`
+
+Every piece of content the model sees carries a permanent provenance tag. Skills wrap external content in `TaggedInput<T>` at ingestion. The model adapter renders inputs to the model with explicit "data not instruction" framing for untrusted-source content.
+
+Tag values:
+
+| Tag                   | Trust     | Origin                                                       |
+| --------------------- | --------- | ------------------------------------------------------------ |
+| `user-direct`         | trusted   | typed in chat window, Telegram, dashboard                    |
+| `system`              | trusted   | wrapper-internal text, system prompt                         |
+| `retrieved-memory`    | trusted   | pulled from `memory.md` (writes are gated separately)        |
+| `user-file`           | untrusted | file content the agent reads from disk (sandbox or pointed)  |
+| `external-email`      | untrusted | read from inbox via email-calendar skill                     |
+| `external-web`        | untrusted | fetched by browser/web tools                                 |
+| `external-attachment` | untrusted | file attached to an external email                           |
+| `external-bash`       | untrusted | shell command output via OpenClaw's `bash`/`exec` tools      |
+| `retrieved-vector`    | untrusted | OpenClaw vector index (may include indexed external content) |
+
+**Rules:**
+
+- Skills construct `TaggedInput` at the boundary where external content first enters the wrapper. Don't tag downstream of that point.
+- Tags are immutable once constructed. Reuse a `TaggedInput` rather than retag.
+- Untrusted content is wrapped in `<external-content>` framing by `renderForModel()` before reaching the model. Trusted content is passed through unframed.
+- Phase 2 introduces an injection classifier that operates on untrusted-tagged content only; trusted content bypasses the classifier.
+- `complete(prompt: string)` is a backward-compat shim. It auto-tags as `user-direct`. Skills that consume external content must migrate to `completeTagged()` and tag explicitly.
+
 ---
 
 ## Skills
@@ -120,13 +233,17 @@ Providers: Gmail / Google Calendar, Outlook / Microsoft 365. Provider adapter pa
 
 Capabilities: inbox triage, draft replies, schedule/retrieve events, daily briefing.
 
-Constraints: OAuth tokens in system keychain via `keytar` only. Sending always requires user confirmation — never auto-send. Don't read emails older than 90 days unless explicitly requested. **Email OAuth is disabled for v1 launch** — wizard Step 3 is informational only. Code stays intact; re-enable when OAuth is production-ready.
+Constraints: App-password / IMAP is the v1 connection method. The wizard collects a Gmail address and a 16-character app-password, stores it in the system keychain via `keytar`, and connects via IMAP to `imap.gmail.com:993`. App-passwords grant full-inbox read access — the same access level as the user's Google password. Only connect an account you're comfortable sharing at that access level.
+
+Sending always requires user confirmation — never auto-send. Don't read emails older than 90 days unless explicitly requested.
+
+`wrapper/skills/email-calendar/adapters/gmail.ts` (the OAuth adapter) is on disk but not exercised by the wizard or any production code path in v1. Re-enabling OAuth requires: removing or clearly deprecating the app-password path (or scoping both behind explicit wizard selection), passing Google OAuth verification, and confirming the privacy policy covers the broader OAuth scope. Not a one-line swap.
 
 ### 2. Secure file access (`secure-files`)
 
 Capabilities: read/write/move/delete within sandbox, summarise contents, watch directory.
 
-Constraints: sandbox path set during onboarding, must be absolute, not `/` or a system dir. All paths validated with `path.resolve` against sandbox root. Traversal (`../`) rejected and logged. Deletes require explicit confirmation with file path + size shown. Never follow symlinks outside sandbox.
+Constraints: sandbox path set during onboarding, must be absolute, not `/` or a system dir. All paths validated with `path.resolve` against sandbox root. Traversal (`../`) rejected and logged. Sandbox path cannot be `/`, a system directory, or any path that IS or CONTAINS `~/.armorclaw/` — validated in `wrapper/onboarding/validators.ts:validateStep2`. Deletes require explicit confirmation with file path + size shown. Never follow symlinks outside sandbox.
 
 ### 3. Browser automation (`browser`)
 
@@ -138,7 +255,7 @@ Constraints: dedicated Chromium profile at `~/.armorclaw/browser-profile` only �
 
 ## Skill registry — `wrapper/lib/skill-registry.ts`
 
-In-memory, rebuilt on every daemon restart. Bundled and user-created skills register at load time for dashboard visibility, token attribution, digest mentions, and undo integration.
+In-memory, rebuilt on every daemon restart. Only bundled skills register — user-authored skill loading was removed in 0.3.0 (Phase 1a of the security overhaul).
 
 ```typescript
 interface ArmorClawSkillManifest {
@@ -146,7 +263,7 @@ interface ArmorClawSkillManifest {
   displayName: string; // shown in activity feed
   description: string; // one sentence
   version: string; // semver
-  author: "bundled" | "user";
+  author: "bundled";
   permissionManifest: PermissionLevel[];
   undoable: boolean; // must also export undo() if true
   recipeEligible: boolean;
@@ -162,11 +279,9 @@ Registry rules:
 - Duplicate `skillId` → throws `SkillRegistryError`.
 - `undoable: true` without exported `undo()` → throws `SkillRegistryError` at load time, never at runtime.
 - Unregistered skills still execute safely (security layer catches all tool calls) but appear as "Unknown skill" in dashboard.
-- No persistent registry file. Discovery errors are logged and skipped — daemon doesn't crash.
+- No persistent registry file. No filesystem auto-discovery. The registry only contains skills that bundled code explicitly registers at startup.
 
-Query functions (read-only): `getSkill()`, `getAllSkills()`, `getBundledSkills()`, `getUserSkills()`, `isUndoable()`, `isRecipeEligible()`.
-
-Auto-discovery: scans `~/.armorclaw/skills/` at daemon startup for `.ts`/`.js` files.
+Query functions (read-only): `getSkill()`, `getAllSkills()`, `getBundledSkills()`, `isUndoable()`, `isRecipeEligible()`.
 
 ---
 
@@ -188,14 +303,14 @@ Ollama is a primary choice, not a fallback. Cloud: "conversations processed by p
 
 Goal: non-technical user is talking to ArmorClaw from their phone before closing their laptop. 6 steps, all skippable except Step 1. Target: under 15 minutes.
 
-| Step | Name               | Required | Notes                                                                                                  |
-| ---- | ------------------ | -------- | ------------------------------------------------------------------------------------------------------ |
-| 1    | Model provider     | Yes      | Cloud vs Local sections. Validate key before advancing.                                                |
-| 2    | Sandbox directory  | No       | File picker only, no manual path. Default: `~/Documents/ArmorClaw`.                                    |
-| 3    | Email and calendar | No       | Informational "coming soon" for v1.                                                                    |
-| 4    | Tailscale          | No       | Auto-detect. Three states: detected / not installed / deferred. "Learn more" expandable.               |
-| 5    | Mobile channel     | No       | QR code + channel cards (Telegram recommended, WhatsApp, Discord, Slack). Greyed if Tailscale skipped. |
-| 6    | Review and launch  | No       | Summary cards + live launch checklist.                                                                 |
+| Step | Name              | Required | Notes                                                                                                                                          |
+| ---- | ----------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Model provider    | Yes      | Cloud vs Local sections. Validate key before advancing.                                                                                        |
+| 2    | Sandbox directory | No       | File picker only, no manual path. Default: `~/Documents/ArmorClaw`.                                                                            |
+| 3    | Connect Gmail     | No       | App-password / IMAP. Wizard collects Gmail address + 16-char app-password. Stored in system keychain. Full-inbox access scope. Can be skipped. |
+| 4    | Tailscale         | No       | Auto-detect. Three states: detected / not installed / deferred. "Learn more" expandable.                                                       |
+| 5    | Mobile channel    | No       | QR code + channel cards (Telegram recommended, WhatsApp, Discord, Slack). Greyed if Tailscale skipped.                                         |
+| 6    | Review and launch | No       | Summary cards + live launch checklist.                                                                                                         |
 
 Design rules: one screen per step, no scrolling, inline validation errors, progress indicator always visible, warm non-technical tone, no CLI steps required.
 
@@ -253,13 +368,13 @@ Local web UI, served on localhost + Tailscale URL only. Never a public IP. Not a
 
 **Home:** Agent status pill (Running/Paused/Error) → undo banner (conditional, 60s) → pending approvals card (hidden when empty, blue border) → token burn summary (simple view only: one sentence + progress bar + "See breakdown →") → activity feed (last 20, most recent first) → recipes shortcut row (first 3 active).
 
-**Skills:** One card per skill. Two groups: "ArmorClaw skills" (bundled) / "Your skills" (user, "Built by you" label). Each card: name, version, Active/Inactive toggle, permissions in plain English, last run, expandable last-5-runs.
+**Skills:** One card per skill. One group: "ArmorClaw skills" (bundled only — user-skill loading was removed in 0.3.0). Each card: name, version, Active/Inactive toggle, permissions in plain English, last run, expandable last-5-runs.
 
 **Security:** Read-only status view. Injection filter, permission enforcement, and audit logging are always on — not user-configurable. Exposing disable toggles to non-technical users is a footgun with no legitimate use case; the security layer is a permanent feature. Status shown: total rejections today, 7-day sparkline, recent security events.
 
 **Advanced:** Full-screen view with amber warning banner. Embeds OpenClaw Canvas UI (iframe at `/__openclaw__/canvas/`), command runner with confirm dialog, full `openclaw.json` config viewer. Security layer still runs on all tool calls. Commands execute as user, not privileged. Shows amber banner if OpenClaw update available (`update --dry-run --json`); never auto-updates.
 
-**Settings:** Model provider/key, sandbox dir, email OAuth (coming soon), Tailscale, channels, budget, digest schedule, audit CSV export, Stripe Customer Portal link (hidden if `STRIPE_CUSTOMER_PORTAL_URL` not set).
+**Settings:** Model provider/key, sandbox dir, email connection (Gmail app-password), Tailscale, channels, budget, digest schedule, audit CSV export, Stripe Customer Portal link (hidden if `STRIPE_CUSTOMER_PORTAL_URL` not set).
 
 Dashboard never writes application state. "Developer details" expandable for raw data — never shown by default.
 
@@ -406,7 +521,7 @@ cd ~/armorclaw/wrapper/launcher && npm run build:ts
 cd ~/armorclaw/wrapper/launcher && npm run build:mac
 
 # Install
-cp -r ~/armorclaw/wrapper/launcher/dist/mac-arm64/ArmorClaw.app /Applications/
+ditto ~/armorclaw/wrapper/launcher/dist/mac-arm64/ArmorClaw.app /Applications/ArmorClaw.app
 ```
 
 ---
@@ -430,14 +545,14 @@ cp -r ~/armorclaw/wrapper/launcher/dist/mac-arm64/ArmorClaw.app /Applications/
 - **Memory — Layer 2:** OpenClaw vector search indexes sandbox. Configured via `memory.paths` in `openclaw.json`.
 - **Platform config paths** (`wrapper/lib/platform-paths.ts`): Mac `~/Library/Application Support/armorclaw-launcher/`, Windows `%APPDATA%\armorclaw-launcher\`, Linux `~/.config/armorclaw-launcher/`. Never hardcode Mac paths — use `getLauncherDataPath()`.
 - **Advanced view:** BrowserView at `http://127.0.0.1:18789`. Sidebar offset 200px, banner offset 90px. Managed by `wrapper/launcher/dashboard-window.ts`.
-- **Skills config:** `armorclaw-launcher/skills.json`. **Channels config:** `armorclaw-launcher/channels.json`.
+- **Channels config:** `armorclaw-launcher/channels.json`. (Skills config no longer written — user skills are not supported.)
 - **OpenClaw version monitoring:** Watch `https://github.com/openclaw/openclaw/releases.atom`. Pin version in `package.json`. Schema changes to channels/providers/gateway protocol can silently break ArmorClaw.
 
 ---
 
 ## Hard stops — never do these
 
-- Modify `core/` without explicit instruction and a documented security reason.
+- Modify upstream OpenClaw paths at the repo root (`/docs`, `/src`, `/ui`, `/skills`, `/.github`, and root-level `*.md` files except `AGENTS.md`/`CLAUDE.md`) without explicit instruction and a documented security reason. All ArmorClaw behaviour lives in `wrapper/`.
 - Add a permission level not in the permissions table.
 - Expose the gateway on a non-localhost address.
 - Store API keys, OAuth tokens, or auth tokens outside `.env` or the system keychain.
@@ -454,7 +569,8 @@ cp -r ~/armorclaw/wrapper/launcher/dist/mac-arm64/ArmorClaw.app /Applications/
 - Skip the daily digest when budget is hit — send the budget warning message instead.
 - Use monospace fonts for end-user-visible UI text.
 - Use a light theme.
-- Allow a user skill to bypass the permission engine by skipping registration.
+- Re-introduce user-skill loading in any form. Auto-discovery from `~/.armorclaw/skills/`, GitHub URL fetch+install, ClawHub catalog browse, and `skills.json` write paths were all removed in Phase 1a of the security overhaul (0.3.0). If user skills come back later they require a redesign with hash-pinning, signed manifests, and sandboxed execution — not just re-enabling.
+- Re-enable Gmail OAuth by pointing the wizard at `adapters/gmail.ts` without a deliberate migration decision. Re-enabling requires removing or deprecating the app-password path (or adding clear wizard scoping for both), passing Google OAuth verification, and updating the privacy policy scope. Not a one-line change.
 - Persist the skill registry to disk.
 - Allow a skill with `undoable: true` to load without exporting `undo()`.
 - Bypass the ArmorClaw security layer from the Advanced view — it is a visibility pass-through, not a security bypass.

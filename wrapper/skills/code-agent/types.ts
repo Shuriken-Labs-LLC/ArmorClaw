@@ -7,7 +7,7 @@
 
 /** Input accepted by the code-agent skill's run() function. */
 export interface CodeAgentInput {
-  /** The coding task prompt, e.g. "fix the flaky test in injection-filter.test.ts". */
+  /** The coding task prompt, e.g. "fix the flaky test in outbound-tool-arg-filter.test.ts". */
   prompt: string;
 
   /**

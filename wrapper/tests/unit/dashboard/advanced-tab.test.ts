@@ -83,13 +83,7 @@ vi.mock("node:net", () => {
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
-import {
-  readSkillsConfig,
-  writeSkillsConfig,
-  readChannelsConfig,
-  writeChannelsConfig,
-  createApp,
-} from "../../../dashboard/server.ts";
+import { readChannelsConfig, writeChannelsConfig, createApp } from "../../../dashboard/server.ts";
 import { getLauncherDataPath } from "../../../lib/platform-paths.ts";
 
 // ── Setup / teardown ─────────────────────────────────────────────────────────
@@ -103,23 +97,6 @@ afterEach(() => {
 });
 
 // ── Platform-aware config paths ─────────────────────────────────────────────
-
-describe("skillsConfigPath uses platform-paths", () => {
-  it("readSkillsConfig returns empty array when file absent", () => {
-    vi.mocked(existsSync).mockReturnValue(false);
-    const config = readSkillsConfig();
-    expect(config).toEqual({ installed: [] });
-  });
-
-  it("writeSkillsConfig writes to platform-correct path", () => {
-    writeSkillsConfig({ installed: [] });
-    const expectedDir = getLauncherDataPath();
-    expect(vi.mocked(mkdirSync)).toHaveBeenCalledWith(expectedDir, { recursive: true });
-    const writtenPath = vi.mocked(writeFileSync).mock.calls[0]?.[0] as string;
-    expect(writtenPath).toContain("skills.json");
-    expect(writtenPath.startsWith(expectedDir)).toBe(true);
-  });
-});
 
 describe("channelsConfigPath uses platform-paths", () => {
   it("readChannelsConfig returns empty when file absent", () => {

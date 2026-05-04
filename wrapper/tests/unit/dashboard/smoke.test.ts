@@ -132,7 +132,6 @@ describe("dashboard smoke", () => {
     expect(INITIAL_STATE.selectedProvider).toBe("");
     expect(INITIAL_STATE.tbBreakdownOpen).toBe(false);
     expect(INITIAL_STATE._bundledSkillsLoaded).toBe(false);
-    expect(INITIAL_STATE._pendingInstall).toBeNull();
 
     // Advanced view
     expect(INITIAL_STATE.advancedPollTimer).toBeNull();
@@ -145,9 +144,6 @@ describe("dashboard smoke", () => {
     expect(INITIAL_STATE._lastChannelIds).toBe("");
     expect(INITIAL_STATE._lastBudgetKey).toBe("");
     expect(INITIAL_STATE._lastFeedKey).toBe("");
-
-    // Skills / ClawHub
-    expect(INITIAL_STATE._clawHubLoaded).toBe(false);
 
     // Channels
     expect(INITIAL_STATE.channelsData).toBeNull();
@@ -181,7 +177,7 @@ describe("dashboard smoke", () => {
     expect(INITIAL_STATE.chatLastSessionTokens).toEqual({ input: 0, output: 0 });
     expect(INITIAL_STATE.chatUsagePendingCallbacks).toEqual({});
 
-    expect(Object.keys(INITIAL_STATE)).toHaveLength(43);
+    expect(Object.keys(INITIAL_STATE)).toHaveLength(41);
   });
 
   it("generated /dashboard-lib.js contains state var declarations", () => {
