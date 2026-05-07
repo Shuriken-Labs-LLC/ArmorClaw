@@ -28,6 +28,7 @@ import * as fsPromises from "node:fs/promises";
 import * as nodePath from "node:path";
 import { registerSkill } from "../../lib/skill-registry.ts";
 import { writeAuditEntry } from "../../security/audit-logger.ts";
+import { loadPermissionManifest } from "../../security/permissions.ts";
 import { registerUndo } from "../../undo/registry.ts";
 import type {
   FileInfo,
@@ -562,3 +563,11 @@ registerSkill(
   },
   { run, undo },
 );
+
+// ── Permission manifest (approval flow) ──────────────────────────────────────
+
+loadPermissionManifest({
+  skillId: SKILL_NAME,
+  allowedTools: ["read", "write", "edit"],
+  allowedPermissions: [...PERMISSION_MANIFEST],
+});

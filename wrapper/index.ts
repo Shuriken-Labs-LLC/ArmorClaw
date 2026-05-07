@@ -6,7 +6,11 @@ import { registerAuditLogger } from "./security/audit-logger.ts";
 import { registerBrowserAllowlistFilter } from "./security/browser-allowlist-filter.ts";
 import { registerInboundContentClassifier } from "./security/inbound-content-classifier.ts";
 import { registerOutboundToolArgFilter } from "./security/outbound-tool-arg-filter.ts";
-import { registerPermissionFilter, setApprovalNotifier } from "./security/permissions.ts";
+import {
+  loadPermissionManifest,
+  registerPermissionFilter,
+  setApprovalNotifier,
+} from "./security/permissions.ts";
 import { registerSourceTagger } from "./security/source-tagger.ts";
 
 // ── ArmorClaw plugin entry point ──────────────────────────────────────────────
@@ -27,6 +31,46 @@ const armorClawPlugin = {
     // Token management is NOT done here — the gateway owns its token entirely.
     // ArmorClaw reads it back from openclaw.json after the gateway is reachable.
     validateGatewayHost();
+
+    // Core agent manifest — covers all standard OpenClaw tools the agent uses
+    // directly (not via ArmorClaw skills). Loaded first so the registry is
+    // non-empty before skill manifests register; any tool NOT listed here AND
+    // not listed in a skill manifest will be queued for dashboard approval.
+    loadPermissionManifest({
+      skillId: "core-agent",
+      allowedTools: [
+        // File system
+        "read",
+        "write",
+        "edit",
+        // Runtime
+        "exec",
+        "process",
+        // Web
+        "web_search",
+        "web_fetch",
+        "browser",
+        // Memory
+        "memory_search",
+        "memory_get",
+        // Sessions / agents
+        "sessions_list",
+        "sessions_history",
+        "sessions_send",
+        "sessions_spawn",
+        "sessions_yield",
+        "subagents",
+        "session_status",
+        "agents_list",
+        // Messaging & media
+        "message",
+        "tts",
+        "image",
+        "pdf",
+        "canvas",
+      ],
+      allowedPermissions: ["network:outbound", "files:local", "browser:sandboxed"],
+    });
     // Security filter stack — order is load-bearing:
     //   1. Outbound tool-arg filter: blocks malicious args + enforces pause.
     //   2. Permission engine: validates declared permissions.

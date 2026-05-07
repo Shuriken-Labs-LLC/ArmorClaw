@@ -27,6 +27,7 @@ import { homedir } from "node:os";
 import * as nodePath from "node:path";
 import { registerSkill } from "../../lib/skill-registry.ts";
 import { writeAuditEntry } from "../../security/audit-logger.ts";
+import { loadPermissionManifest } from "../../security/permissions.ts";
 import type {
   BrowserInput,
   BrowserOutput,
@@ -537,3 +538,11 @@ registerSkill(
   },
   { run, undo },
 );
+
+// ── Permission manifest (approval flow) ──────────────────────────────────────
+
+loadPermissionManifest({
+  skillId: SKILL_NAME,
+  allowedTools: ["browser"],
+  allowedPermissions: [...PERMISSION_MANIFEST],
+});

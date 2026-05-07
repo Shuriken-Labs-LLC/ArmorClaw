@@ -29,6 +29,7 @@ import { execFile } from "node:child_process";
 import * as nodePath from "node:path";
 import { registerSkill } from "../../lib/skill-registry.ts";
 import { writeAuditEntry } from "../../security/audit-logger.ts";
+import { loadPermissionManifest } from "../../security/permissions.ts";
 import type { CodeAgentConfig, CodeAgentInput, CodeAgentOutput } from "./types.ts";
 
 // ── Skill metadata ────────────────────────────────────────────────────────────
@@ -356,3 +357,11 @@ registerSkill(
   },
   { run, undo },
 );
+
+// ── Permission manifest (approval flow) ──────────────────────────────────────
+
+loadPermissionManifest({
+  skillId: SKILL_NAME,
+  allowedTools: ["exec", "process", "read", "write", "edit", "sessions_spawn", "sessions_yield"],
+  allowedPermissions: [...PERMISSION_MANIFEST],
+});

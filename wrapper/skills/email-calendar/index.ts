@@ -22,6 +22,7 @@
 
 import { registerSkill } from "../../lib/skill-registry.ts";
 import { writeAuditEntry } from "../../security/audit-logger.ts";
+import { loadPermissionManifest } from "../../security/permissions.ts";
 import { registerUndo } from "../../undo/registry.ts";
 import { ImapAdapter } from "./adapters/imap.ts";
 import type {
@@ -320,3 +321,11 @@ registerSkill(
   },
   { run, undo },
 );
+
+// ── Permission manifest (approval flow) ──────────────────────────────────────
+
+loadPermissionManifest({
+  skillId: SKILL_NAME,
+  allowedTools: ["message"],
+  allowedPermissions: [...PERMISSION_MANIFEST],
+});
