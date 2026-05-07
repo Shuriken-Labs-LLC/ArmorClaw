@@ -174,3 +174,38 @@ After a gateway restart, in any session (Telegram or webchat), run:
 ---
 
 _This folder is named after who I was before I knew who I was._
+
+---
+
+## Fix 4: Permission Manifests Wired Up
+
+**Files changed:**
+
+- `wrapper/index.ts` — added `core-agent` manifest for all standard OpenClaw tools
+- `wrapper/skills/browser/index.ts` — added `loadPermissionManifest` call
+- `wrapper/skills/code-agent/index.ts` — added `loadPermissionManifest` call
+- `wrapper/skills/email-calendar/index.ts` — added `loadPermissionManifest` call
+- `wrapper/skills/secure-files/index.ts` — added `loadPermissionManifest` call
+
+**What was broken:** `loadPermissionManifest()` had 0 production call coverage.
+The manifest registry was always empty, so `registry.size === 0` caused all tool
+calls to pass through unconditionally. The dashboard approval queue never fired.
+
+**What was fixed:** Each skill now calls `loadPermissionManifest()` after
+`registerSkill()`. A `core-agent` manifest in `wrapper/index.ts` covers all
+standard OpenClaw tools the agent uses directly. Any tool NOT in any manifest
+will now correctly surface in the dashboard approval queue.
+
+**Effect:** The permission system is now live. Tools outside declared manifests
+require user approval via the dashboard before executing.
+
+**TypeScript check:** `npx tsc --noEmit` — 0 errors.
+
+## Note on Sandbox
+
+`ARMORCLAW_SANDBOX_DIR` is currently set to `/Users/shinobi/` (entire home dir).
+The sandbox is configurable and meaningful — setting it to a tighter path like
+`~/Documents/ArmorClaw/` would give real file containment for the `secure-files`
+skill. The native OpenClaw tools (`read`, `write`, `exec`) bypass the ArmorClaw
+skill sandbox entirely; to enforce containment via those tools, OpenClaw's own
+`agents.defaults.sandbox.mode` would need to be set (currently `off`).
