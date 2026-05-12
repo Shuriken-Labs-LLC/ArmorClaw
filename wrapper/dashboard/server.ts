@@ -134,8 +134,9 @@ let _licenseRefreshTimer: NodeJS.Timeout | null = null;
 
 /**
  * Load the license once and start the 60 s refresh loop. Idempotent —
- * second call is a no-op. Also runs pollForActivation() so a trial install
- * gets promoted to pro on the first dashboard launch after checkout.
+ * second call is a no-op. Each tick re-reads license.json and runs
+ * pollForActivation() so a customer who subscribes inside a running app
+ * gets promoted to active within one refresh interval, no restart needed.
  */
 export async function primeLicenseCache(): Promise<License> {
   if (_cachedLicense) {
@@ -149,7 +150,8 @@ export async function primeLicenseCache(): Promise<License> {
     _licenseRefreshTimer = setInterval(() => {
       void (async () => {
         try {
-          _cachedLicense = await loadLicense();
+          const fresh = await loadLicense();
+          _cachedLicense = await pollForActivation(fresh);
         } catch {
           /* keep last-known-good */
         }
