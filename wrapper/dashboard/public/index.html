@@ -249,6 +249,29 @@
     }
     .btn-dismiss-undo:hover { color: var(--ac-muted); background: var(--ac-surface2); }
 
+    /* ── License banner ────────────────────────────────────────────────────── */
+    .license-banner {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px;
+      background: var(--ac-red-light);
+      border: 0.5px solid var(--ac-red);
+      border-left: 4px solid var(--ac-red);
+      border-radius: 12px;
+      margin-bottom: 14px;
+      font-size: 14px;
+      color: var(--ac-text);
+    }
+    .license-banner-text { flex: 1; }
+    .license-banner-title { font-weight: 500; margin-bottom: 2px; }
+    .license-banner-sub { color: var(--ac-muted); font-size: 13px; }
+    .btn-license-banner {
+      padding: 8px 14px; border-radius: 8px;
+      background: var(--ac-red); color: var(--ac-bg);
+      font-weight: 500; font-size: 13px;
+      text-decoration: none; white-space: nowrap;
+      border: none; cursor: pointer;
+    }
+    .btn-license-banner:hover { opacity: 0.88; }
 
     /* ── Card shell ───────────────────────────────────────────────────────── */
     .card {
@@ -1411,6 +1434,20 @@
           <button class="btn-undo" onclick="doUndo()" type="button">Undo</button>
           <button class="btn-dismiss-undo" onclick="dismissUndo()"
                   type="button" aria-label="Dismiss">×</button>
+        </div>
+
+        <!-- License banner — wired to license.valid via SSE snapshot.
+             Shown when subscription is lapsed, card declined, or otherwise invalid.
+             Red border = hard stop. Mirrors budget-hard-stop pattern. -->
+        <div class="license-banner" id="license-banner" style="display:none">
+          <div class="license-banner-text">
+            <div class="license-banner-title" id="license-banner-title">Subscription required</div>
+            <div class="license-banner-sub" id="license-banner-sub">
+              Reactivate to keep your agent working.
+            </div>
+          </div>
+          <a id="license-banner-cta" class="btn-license-banner"
+             href="#" target="_blank" rel="noopener">Subscribe</a>
         </div>
 
 
@@ -2769,6 +2806,53 @@ function syncSettings(s) {
         '</div>';
     } else {
       subscriptionCard.style.display = 'none';
+    }
+  }
+
+  // ── License banner (Home view) ──
+  // Mirrors budget hard-stop: red border, hard-stop state. The Settings
+  // subscription card above is the persistent surface; this banner is the
+  // loud alert when license.valid is false so the user isn't silently locked
+  // out of an agent they expect to be running.
+  const licBanner = document.getElementById('license-banner');
+  if (licBanner) {
+    const lic = s.license || {};
+    const tier = lic.tier || 'inactive';
+    const cta = document.getElementById('license-banner-cta');
+    const title = document.getElementById('license-banner-title');
+    const sub = document.getElementById('license-banner-sub');
+    if (lic.valid) {
+      licBanner.style.display = 'none';
+    } else if (tier === 'inactive') {
+      licBanner.style.display = '';
+      if (title) title.textContent = 'Subscription required';
+      if (sub) sub.textContent = 'Subscribe to keep your agent working.';
+      if (cta) {
+        if (_paymentLinkBase) {
+          const href = _paymentLinkBase + '?client_reference_id=' + encodeURIComponent(lic.installId || '');
+          cta.setAttribute('href', href);
+          cta.textContent = 'Subscribe';
+          cta.style.display = '';
+        } else {
+          cta.style.display = 'none';
+        }
+      }
+    } else if (tier === 'active') {
+      licBanner.style.display = '';
+      if (title) title.textContent = 'Payment problem with your subscription';
+      if (sub) sub.textContent = 'Update your billing in Stripe to keep your agent working.';
+      if (cta) {
+        if (_stripePortalUrl) {
+          cta.setAttribute('href', _stripePortalUrl);
+          cta.textContent = 'Manage billing';
+          cta.style.display = '';
+        } else {
+          cta.style.display = 'none';
+        }
+      }
+    } else {
+      // Unknown tier — fail closed: don't show banner.
+      licBanner.style.display = 'none';
     }
   }
 }
