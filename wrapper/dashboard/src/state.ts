@@ -38,7 +38,6 @@ export interface DashboardState {
   _lastApprovalIds: string;
   _lastChannelIds: string;
   _lastBudgetKey: string;
-  _lastFeedKey: string;
 
   // ── Undo ──
   undoDismissed: boolean;
@@ -101,7 +100,6 @@ export const INITIAL_STATE: Readonly<DashboardState> = {
   _lastApprovalIds: "",
   _lastChannelIds: "",
   _lastBudgetKey: "",
-  _lastFeedKey: "",
   undoDismissed: false,
   undoTickerId: null,
   selectedProvider: "",

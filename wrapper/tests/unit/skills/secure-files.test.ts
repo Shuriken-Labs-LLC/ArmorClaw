@@ -138,6 +138,17 @@ describe("validatePath", () => {
     expect(caught).toBeInstanceOf(PathValidationError);
     expect(caught?.message).toContain("../etc/passwd");
   });
+
+  it("rejects a path containing a null byte", () => {
+    let caught: Error | null = null;
+    try {
+      validatePath("path/with\0null", SANDBOX);
+    } catch (e) {
+      caught = e as Error;
+    }
+    expect(caught).toBeInstanceOf(PathValidationError);
+    expect(caught?.message).toContain("null-byte");
+  });
 });
 
 // ── getSandboxRoot ────────────────────────────────────────────────────────────
@@ -313,6 +324,28 @@ describe("symlink escape prevention", () => {
     });
     expect(result.success).toBe(false);
     expect(result.message).toContain("Symlink");
+  });
+
+  it("rejects an intermediate ancestor symlink that escapes the sandbox", async () => {
+    // Tree:  ${SANDBOX}/dir  → symlink to /tmp/outside
+    //        ${SANDBOX}/dir/file.txt  (leaf — itself a normal file)
+    // The leaf check alone misses this; the ancestor walk must catch it.
+    const intermediate = `${SANDBOX}/dir`;
+    const { skill, fs } = makeSkill({
+      lstat: vi.fn().mockImplementation(async (p: string) => {
+        if (p === intermediate) return { isSymbolicLink: () => true, size: 0 };
+        return { isSymbolicLink: () => false, size: 100 };
+      }),
+      realpath: vi.fn().mockImplementation(async (p: string) => {
+        if (p === intermediate) return "/tmp/outside";
+        return p;
+      }),
+    });
+    const result = await skill.run({ action: "read", path: "dir/file.txt" });
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Symlink");
+    expect(result.message).toContain(intermediate);
+    expect(fs.realpath).toHaveBeenCalledWith(intermediate);
   });
 });
 

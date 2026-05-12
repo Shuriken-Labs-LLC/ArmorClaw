@@ -377,7 +377,8 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      height: 320px;
+      min-height: 320px;
+      height: min(60vh, 600px);
     }
     .chat-panel-hdr {
       display: flex; align-items: center; justify-content: space-between;
@@ -1490,17 +1491,6 @@
           </div>
         </div>
 
-        <!-- Activity feed — translated from audit log NDJSON -->
-        <div class="card">
-          <div class="card-hdr">
-            <span class="card-title">Recent activity</span>
-            <span class="card-meta" id="feed-count"></span>
-          </div>
-          <div id="feed-list">
-            <div class="feed-empty">No activity recorded yet.</div>
-          </div>
-        </div>
-
         <!-- Active recipes shortcut row — wired to recipes/store.ts via SSE snapshot. -->
         <div class="card">
           <div class="card-hdr">
@@ -2120,7 +2110,7 @@
 // activeView, dashState, undoDismissed, undoTickerId, selectedProvider,
 // tbBreakdownOpen, _bundledSkillsLoaded, advancedPollTimer,
 // advancedGatewayOnline, _updateBannerDismissed, _lastAgentStatus,
-// _lastApprovalIds, _lastChannelIds, _lastBudgetKey, _lastFeedKey,
+// _lastApprovalIds, _lastChannelIds, _lastBudgetKey,
 // _stripePortalUrl,
 // channelsData, channelsLoaded, tgSetupOpen, tgValidated,
 // tgBotUsername, chatDebugLog, chatClickCount, chatClickTimer, chatGatewayUrl,
@@ -2341,7 +2331,6 @@ function syncUI(s) {
   syncChannelBtns(s);
   syncUndo(s);
   syncBudget(s);
-  syncFeed(s);
   syncRecipes(s);
   syncTokenBurn(s);
   syncSecurity(s);
@@ -2498,47 +2487,6 @@ function syncBudget(s) {
   bar.className   = 'budget-bar-fill' + (pct >= 100 ? ' over' : pct >= 80 ? ' warn' : '');
 
   if (hardStop) hardStop.style.display = b.isHardStopped ? '' : 'none';
-}
-
-// Activity feed — translate audit log entries to plain English
-function syncFeed(s) {
-  const list  = document.getElementById('feed-list');
-  const count = document.getElementById('feed-count');
-  if (!list) return;
-
-  const entries = s.feed || [];
-  // Build a lightweight fingerprint to skip DOM rebuild when feed is unchanged
-  const feedKey = entries.length + ':' + (entries[0]?.timestamp || '') + ':' + (entries[entries.length - 1]?.timestamp || '');
-  if (feedKey === _lastFeedKey) return;
-  _lastFeedKey = feedKey;
-  if (count) count.textContent = entries.length > 0 ? `${entries.length}` : '';
-
-  if (entries.length === 0) {
-    list.innerHTML = '<div class="feed-empty">No activity recorded yet.</div>';
-    return;
-  }
-
-  // Build skill display-name map from the registry
-  const names = {};
-  for (const sk of (s.skills || [])) names[sk.skillId] = sk.displayName;
-
-  list.innerHTML = entries.map(e => {
-    const outcome  = e.outcome || 'success';
-    const sentence = translateEntry(e, names);
-    const badge    = { success: 'Success', rejected: 'Blocked', error: 'Error', undone: 'Undone' }[outcome] || outcome;
-    // inputSummary is never shown — it contains raw log data / JSON that is
-    // not user-facing. The translated sentence is the only text displayed.
-    return `
-      <div class="feed-item outcome-${escHtml(outcome)}">
-        <div class="feed-body">
-          <div class="feed-sentence">${escHtml(sentence)}</div>
-        </div>
-        <div class="feed-right">
-          <span class="feed-time">${fmtTime(e.timestamp)}</span>
-          <span class="feed-badge ${escHtml(outcome)}">${badge}</span>
-        </div>
-      </div>`;
-  }).join('');
 }
 
 /**

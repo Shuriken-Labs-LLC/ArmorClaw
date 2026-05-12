@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ArmorClaw — Your AI agent. Runs on your computer.</title>
-  <meta name="description" content="ArmorClaw is an AI agent that works autonomously on your behalf — triaging email, managing files, and automating tasks — from your computer, reachable from your phone. Built for agents, advisors, and freelancers who need real leverage.">
+  <meta name="description" content="ArmorClaw is OpenClaw plus a security layer, packaged with a setup wizard and dashboard for people who haven't opened a terminal. Triages email, manages files, automates tasks. Runs on your Mac.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
@@ -395,11 +395,13 @@
     <div class="container">
       <h1>An AI agent that<br><span class="highlight">works while you're working</span></h1>
       <p class="subtitle">
-        ArmorClaw handles your inbox, drafts replies, manages files, and
-        automates tasks while your Mac is running. Message it from Telegram
-        and it reports back. Files the agent reads or writes are scoped to
-        one folder you choose. Browser actions and email access have their
-        own boundaries.
+        ArmorClaw is OpenClaw plus a security layer, packaged for people
+        who haven't opened a terminal. It triages your inbox, drafts replies,
+        manages files, and runs tasks on a schedule while your Mac is running.
+        Message it from Telegram and it reports back. The file skill is
+        scoped to a folder you choose; browser, email, and shell access
+        have their own boundaries documented at
+        <a href="/security" style="color:var(--ac-text);text-decoration:underline;">/security</a>.
       </p>
       <div class="cta-row">
         <a href="#" class="btn-download">Download for macOS</a>
@@ -432,10 +434,12 @@
           computer.
         </p>
         <p>
-          We built it for the professional who doesn't have an engineering
-          team. Real estate agents who need to stay on top of a pipeline.
-          Financial advisors who can't afford to let anything slip. Freelancers
-          who bill by the hour and need to spend it on the right things.
+          We built it for people who want a real agent without learning to
+          operate one. If you've watched OpenClaw or other open-source agent
+          frameworks from a distance and decided you don't have the time or
+          the engineering background to set them up, ArmorClaw is the install
+          path. A wizard, a dashboard, and a security layer on top of the
+          same runtime engineers use directly. No terminal required.
         </p>
       </div>
     </div>
@@ -524,7 +528,7 @@
         </div>
         <div class="feature-card">
           <div class="accent-bar" style="background:var(--ac-blue);"></div>
-          <h3>The agent stays in one folder</h3>
+          <h3>The file skill stays in one folder</h3>
           <p>
             The file skill is scoped to one folder you choose during setup.
             It cannot read or write outside that folder. Path traversal

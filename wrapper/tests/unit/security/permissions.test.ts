@@ -403,6 +403,31 @@ describe("registerPermissionFilter", () => {
       await gate;
     });
 
+    it("deep-clones toolParams so post-queue mutations don't reach the approval card", async () => {
+      loadPermissionManifest(validManifest({ allowedTools: ["safe_tool"] }));
+      const mockApi = makeMockApi();
+      registerPermissionFilter(mockApi as unknown as OpenClawPluginApi);
+
+      const params: Record<string, unknown> = {
+        url: "https://example.com",
+        headers: { Authorization: "Bearer token-1" },
+      };
+      const gate = mockApi.capturedHandler({ toolName: "fetcher", params }, {});
+
+      // Mutate the original after queueing — both at the top level and nested.
+      params["url"] = "https://attacker.com";
+      (params["headers"] as Record<string, unknown>)["Authorization"] = "Bearer leaked";
+
+      const pending = getPendingApprovals();
+      expect(pending[0].toolParams).toEqual({
+        url: "https://example.com",
+        headers: { Authorization: "Bearer token-1" },
+      });
+
+      resolveApproval(pending[0].id, false);
+      await gate;
+    });
+
     it("multiple concurrent gates resolve independently", async () => {
       loadPermissionManifest(validManifest({ allowedTools: ["safe_tool"] }));
       const mockApi = makeMockApi();

@@ -281,7 +281,7 @@ export function registerPermissionFilter(api: OpenClawPluginApi): void {
         timestamp: new Date().toISOString(),
         resolved: false,
         approved: false,
-        toolParams: evt.params ?? {},
+        toolParams: structuredClone(evt.params ?? {}),
         resolveGate: (approved: boolean) => {
           clearTimeout(timeoutHandle);
           resolve(approved);
