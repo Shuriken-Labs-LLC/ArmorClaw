@@ -1743,7 +1743,14 @@
 
       <div class="view" id="view-settings">
 
-        <!-- 1. Model provider -->
+        <!-- Subscription — first so cancellation is at least as discoverable
+             as signup (FTC click-to-cancel / ROSCA). Hidden until tier resolves. -->
+        <div class="card settings-card" id="subscription-card" style="display:none">
+          <div class="card-hdr"><span class="card-title">Subscription</span></div>
+          <div id="subscription-card-body"></div>
+        </div>
+
+        <!-- Model provider -->
         <div class="card settings-card">
           <div class="card-hdr"><span class="card-title">Model provider</span></div>
           <div class="settings-row">
@@ -1773,7 +1780,7 @@
           </div>
         </div>
 
-        <!-- 2. Sandbox directory -->
+        <!-- Sandbox directory -->
         <div class="card settings-card">
           <div class="card-hdr"><span class="card-title">Sandbox directory</span></div>
           <div class="settings-row">
@@ -1823,7 +1830,7 @@
           </div>
         </div>
 
-        <!-- 3. Email and calendar -->
+        <!-- Email and calendar -->
         <div class="card settings-card">
           <div class="card-hdr"><span class="card-title">Email &amp; Calendar</span></div>
           <div class="settings-row" style="margin-bottom:8px;">
@@ -1847,7 +1854,7 @@
           </div>
         </div>
 
-        <!-- 4. Mobile setup -->
+        <!-- Mobile setup -->
         <div class="card settings-card">
           <div class="card-hdr"><span class="card-title">Mobile setup</span></div>
           <div style="padding:14px 16px">
@@ -1865,7 +1872,7 @@
           </div>
         </div>
 
-        <!-- 6. Token budget -->
+        <!-- Token budget -->
         <div class="card settings-card">
           <div class="card-hdr"><span class="card-title">Token budget</span></div>
           <div class="budget-editor">
@@ -1880,7 +1887,7 @@
           </div>
         </div>
 
-        <!-- 7. Audit log export -->
+        <!-- Audit log export -->
         <div class="card settings-card">
           <div class="card-hdr"><span class="card-title">Audit log</span></div>
           <div style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -1894,7 +1901,7 @@
           </div>
         </div>
 
-        <!-- 8. Memory -->
+        <!-- Memory -->
         <div class="card settings-card">
           <div class="card-hdr"><span class="card-title">Memory</span></div>
           <div class="settings-row">
@@ -1921,13 +1928,7 @@
           </div>
         </div>
 
-        <!-- 9. Subscription -->
-        <div class="card settings-card" id="subscription-card" style="display:none">
-          <div class="card-hdr"><span class="card-title">Subscription</span></div>
-          <div id="subscription-card-body"></div>
-        </div>
-
-        <!-- 10. Launch on startup -->
+        <!-- Launch on startup -->
         <div class="card settings-card">
           <div class="card-hdr"><span class="card-title">Launch on startup</span></div>
           <div class="settings-row">
@@ -1947,7 +1948,7 @@
           </div>
         </div>
 
-        <!-- 9. Danger zone -->
+        <!-- Danger zone -->
         <div class="danger-card">
           <div class="card-hdr"><span class="card-title">Danger zone</span></div>
           <div class="danger-warning">
