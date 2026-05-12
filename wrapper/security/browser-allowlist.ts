@@ -134,13 +134,20 @@ export function isPrivateAddress(host: string): boolean {
   if (/^fe[89ab][0-9a-f]?:/.test(lower) || /^f[cd][0-9a-f]{2}:/.test(lower)) {
     return true;
   }
-  // IPv4-mapped IPv6 like ::ffff:127.0.0.1
+  // IPv4-mapped IPv6 like ::ffff:127.0.0.1 (decimal form)
   const v4MappedMatch = lower.match(/^::ffff:([0-9.]+)$/);
   if (v4MappedMatch) {
     const inner = isIPv4(v4MappedMatch[1]);
     if (inner !== null) {
       return isPrivateIPv4(inner);
     }
+  }
+  // IPv4-mapped IPv6 hex form like ::ffff:c0a8:0101 (== ::ffff:192.168.1.1)
+  const v4MappedHexMatch = lower.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (v4MappedHexMatch) {
+    const high = parseInt(v4MappedHexMatch[1], 16);
+    const low = parseInt(v4MappedHexMatch[2], 16);
+    return isPrivateIPv4([(high >> 8) & 0xff, high & 0xff, (low >> 8) & 0xff, low & 0xff]);
   }
   const octets = isIPv4(lower);
   if (octets !== null) {

@@ -175,6 +175,22 @@ describe("isPrivateAddress", () => {
     expect(isPrivateAddress("::ffff:999.0.0.1")).toBe(false);
   });
 
+  it("returns true for IPv4-mapped IPv6 hex form pointing at a private address", () => {
+    // ::ffff:c0a8:0101 == ::ffff:192.168.1.1
+    expect(isPrivateAddress("::ffff:c0a8:0101")).toBe(true);
+    // ::ffff:7f00:0001 == ::ffff:127.0.0.1
+    expect(isPrivateAddress("::ffff:7f00:0001")).toBe(true);
+    // ::ffff:0a00:0001 == ::ffff:10.0.0.1
+    expect(isPrivateAddress("::ffff:0a00:0001")).toBe(true);
+    // Short hex groups: ::ffff:c0a8:1 == ::ffff:192.168.0.1
+    expect(isPrivateAddress("::ffff:c0a8:1")).toBe(true);
+  });
+
+  it("returns false for IPv4-mapped IPv6 hex form pointing at a public address", () => {
+    // ::ffff:0808:0808 == ::ffff:8.8.8.8
+    expect(isPrivateAddress("::ffff:0808:0808")).toBe(false);
+  });
+
   it("returns true for 127.0.0.0/8", () => {
     expect(isPrivateAddress("127.0.0.1")).toBe(true);
     expect(isPrivateAddress("127.255.255.254")).toBe(true);
