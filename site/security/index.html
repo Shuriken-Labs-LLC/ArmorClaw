@@ -270,7 +270,7 @@
     <div class="container">
       <h2>Addressed in 0.3.0</h2>
       <p class="section-intro">
-        Eight protections that ship with the release. Each runs on every
+        Seven protections that ship with the release. Each runs on every
         relevant tool call, every turn, or every audit log write —
         not opt-in.
       </p>
@@ -335,21 +335,6 @@
             the list.
           </p>
           <span class="source-ref">browser-allowlist.ts, browser-allowlist-filter.ts</span>
-        </div>
-        <div class="card">
-          <div class="accent-bar" style="background:var(--ac-teal);"></div>
-          <h3>Tamper-evident audit log</h3>
-          <p>
-            Every skill invocation is logged in NDJSON at
-            ~/.armorclaw/audit.log. Each entry is signed with HMAC-SHA256
-            and chained by SHA-256 of the previous serialised line.
-            Tampering produces a verification failure visible in the
-            dashboard. Tamper-evidence holds against external file
-            corruption and partial-state attacks; it does not hold
-            against a process running as your user that can read the
-            keychain or replace the log file (Cat-3).
-          </p>
-          <span class="source-ref">audit-logger.ts, audit-verify.ts</span>
         </div>
         <div class="card">
           <div class="accent-bar" style="background:var(--ac-teal);"></div>
