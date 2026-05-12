@@ -537,12 +537,9 @@
           <div class="accent-bar" style="background:var(--ac-amber);"></div>
           <h3>Plain-English audit log</h3>
           <p>
-            Every action the agent has taken, with timestamp, skill name,
-            outcome, and duration — in a searchable dashboard. Export to
-            CSV anytime. Every entry is signed with HMAC-SHA256 and
-            chained by hash of the previous entry — tampering produces a
-            verification failure you can see in the dashboard. No
-            telemetry leaves your machine.
+            Every action the agent has taken — timestamp, skill, outcome,
+            and duration — in a searchable dashboard. Export to CSV
+            anytime. No telemetry leaves your machine.
           </p>
         </div>
       </div>
@@ -665,7 +662,7 @@
     <div class="container">
       <h2>What 0.3.0 delivers</h2>
       <p style="color:var(--ac-muted);margin-bottom:48px;max-width:640px;font-size:16px;line-height:1.7;">
-        A four-month internal security overhaul closes the gaps we flagged earlier this year. The 0.3.0 release ships the full set: real protection against indirect prompt injection, a tamper-evident audit log, literal approval prompts, and a hard-blocking browser allowlist. The full threat model — what we protect against, what's partial, and what's out of scope — lives at <a href="/security" style="color:var(--ac-teal);text-decoration:underline;">/security</a>.
+        A four-month internal security overhaul closes the gaps we flagged earlier this year. The 0.3.0 release ships the full set: real protection against indirect prompt injection, literal approval prompts, and a hard-blocking browser allowlist. The full threat model — what we protect against, what's partial, and what's out of scope — lives at <a href="/security" style="color:var(--ac-teal);text-decoration:underline;">/security</a>.
       </p>
       <div class="feature-grid">
         <div class="feature-card">
@@ -687,16 +684,6 @@
             prompt-injection risk on every turn. High-scoring content
             triggers a system-level warning to the model so it treats the
             content as data, not instruction.
-          </p>
-        </div>
-        <div class="feature-card">
-          <div class="accent-bar" style="background:var(--ac-teal);"></div>
-          <h3>Signed, tamper-evident audit log</h3>
-          <p>
-            Each audit log entry is signed with HMAC-SHA256 and chained by
-            SHA-256 of the previous serialised line. Tampering produces a
-            verification failure visible in the dashboard and via the
-            export tool.
           </p>
         </div>
         <div class="feature-card">

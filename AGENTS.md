@@ -112,11 +112,7 @@ Every skill declares a static `PERMISSION_MANIFEST`. Validated at skill-load tim
 
 Every skill invocation logs: ISO 8601 timestamp, skill name+version, permission levels used, input summary (first 80 chars, no secrets), outcome (`success`/`rejected`/`error`/`undone`), duration ms.
 
-Logs → `~/.armorclaw/audit.log` (NDJSON). Logger must never throw — fail silently to in-memory buffer. `npm run export:audit` produces CSV.
-
-Each entry is signed with HMAC-SHA256 (key in keychain via keytar) and chained via `prevHash` (SHA-256 of the previous serialized line, `GENESIS` for the first). `wrapper/security/audit-verify.ts` walks the chain and returns `ok` / `partial` / `broken` / `missing`.
-
-The chain validator enforces an additional rule: once a chain entry has a non-null HMAC, all subsequent entries must also have a non-null HMAC. The keychain warm-up window at daemon start may produce a small number of leading `hmac: null` entries (acceptable, treated as `partial`); a `hmac: null` entry appearing after the chain has demonstrably been signing is treated as `broken` with reason `null-after-signed`. This converts an attacker who exploits a transient keychain outage from "indistinguishable from cold-start partial" into an observable tamper signal.
+Logs → `~/.armorclaw/audit.log` (NDJSON). Fire-and-forget from the `after_tool_call` hook; the writer is wrapped in try/catch and never throws — on any I/O error the entry falls into an in-memory buffer for export. `permissionsUsed` is populated via `getPermissionsForTool()` (reverse-lookup against the permission registry). The dashboard exposes a CSV export at `/api/audit/export.csv` (6 columns: timestamp, skill, permissionsUsed, inputSummary, outcome, durationMs).
 
 ### Source-tagger — `wrapper/security/source-tagger.ts`
 
