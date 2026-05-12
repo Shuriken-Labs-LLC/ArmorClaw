@@ -80,6 +80,10 @@ export function validatePath(inputPath: string, sandboxRoot: string): string {
     throw new PathValidationError("Path is required.");
   }
 
+  if (inputPath.includes("\0")) {
+    throw new PathValidationError(`Path "${inputPath}" rejected: null-byte.`);
+  }
+
   const normalizedRoot = nodePath.resolve(sandboxRoot);
   const resolved = nodePath.resolve(normalizedRoot, inputPath);
 

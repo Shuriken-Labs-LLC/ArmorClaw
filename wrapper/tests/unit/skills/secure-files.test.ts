@@ -138,6 +138,17 @@ describe("validatePath", () => {
     expect(caught).toBeInstanceOf(PathValidationError);
     expect(caught?.message).toContain("../etc/passwd");
   });
+
+  it("rejects a path containing a null byte", () => {
+    let caught: Error | null = null;
+    try {
+      validatePath("path/with\0null", SANDBOX);
+    } catch (e) {
+      caught = e as Error;
+    }
+    expect(caught).toBeInstanceOf(PathValidationError);
+    expect(caught?.message).toContain("null-byte");
+  });
 });
 
 // ── getSandboxRoot ────────────────────────────────────────────────────────────
