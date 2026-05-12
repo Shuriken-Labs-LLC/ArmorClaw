@@ -108,25 +108,40 @@ async function assertNotSymlinkEscape(
   sandboxRoot: string,
   fs: IFileSystemAdapter,
 ): Promise<void> {
-  let lstat: { isSymbolicLink(): boolean };
-  try {
-    lstat = await fs.lstat(resolvedPath);
-  } catch {
-    // Path does not exist — acceptable for write/move destinations
-    return;
-  }
-
-  if (!lstat.isSymbolicLink()) {
-    return;
-  }
-
-  const real = await fs.realpath(resolvedPath);
   const normalizedRoot = nodePath.resolve(sandboxRoot);
 
-  if (real !== normalizedRoot && !real.startsWith(normalizedRoot + nodePath.sep)) {
-    throw new PathValidationError(
-      `Symlink at "${resolvedPath}" points outside the sandbox to "${real}".`,
-    );
+  // Walk each ancestor segment between sandbox root (exclusive) and the leaf
+  // (inclusive). Any intermediate symlink whose realpath escapes the sandbox
+  // is a sandbox break, even if the leaf itself never gets followed.
+  const segments: string[] = [];
+  let cursor = resolvedPath;
+  while (cursor !== normalizedRoot && cursor.startsWith(normalizedRoot + nodePath.sep)) {
+    segments.unshift(cursor);
+    const parent = nodePath.dirname(cursor);
+    if (parent === cursor) break;
+    cursor = parent;
+  }
+
+  for (const segment of segments) {
+    let lstat: { isSymbolicLink(): boolean };
+    try {
+      lstat = await fs.lstat(segment);
+    } catch {
+      // Path does not exist — acceptable for write/move destinations and for
+      // ancestors of a path that's about to be created.
+      continue;
+    }
+
+    if (!lstat.isSymbolicLink()) {
+      continue;
+    }
+
+    const real = await fs.realpath(segment);
+    if (real !== normalizedRoot && !real.startsWith(normalizedRoot + nodePath.sep)) {
+      throw new PathValidationError(
+        `Symlink at "${segment}" points outside the sandbox to "${real}".`,
+      );
+    }
   }
 }
 
