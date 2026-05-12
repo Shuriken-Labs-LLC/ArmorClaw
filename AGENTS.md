@@ -362,7 +362,7 @@ Local web UI, served on localhost + Tailscale URL only. Never a public IP. Not a
 
 **Views:** Home, Skills, Recipes, Security, Token Burn, Advanced, Settings.
 
-**Home:** Agent status pill (Running/Paused/Error) → undo banner (conditional, 60s) → pending approvals card (hidden when empty, blue border) → token burn summary (simple view only: one sentence + progress bar + "See breakdown →") → activity feed (last 20, most recent first) → recipes shortcut row (first 3 active).
+**Home:** Agent status pill (Running/Paused/Error) → undo banner (conditional, 60s) → pending approvals card (hidden when empty, blue border) → channel buttons card (`#chat-card`, hidden when no channels connected) → inline chat panel → token burn summary (simple view only: one sentence + progress bar + "See breakdown →") → recipes shortcut row (first 3 active). The activity feed is no longer on Home — audit data still ships to `~/.armorclaw/audit.log` and `/api/audit/export.csv`, and the Security view continues to render security-relevant events.
 
 **Skills:** One card per skill. One group: "ArmorClaw skills" (bundled only — user-skill loading was removed in 0.3.0). Each card: name, version, Active/Inactive toggle, permissions in plain English, last run, expandable last-5-runs.
 
