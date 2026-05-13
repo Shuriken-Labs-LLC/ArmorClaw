@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  activateWithEmail,
   clearLicenseForTesting,
   createInactiveLicense,
   loadLicense,
@@ -384,5 +385,187 @@ describe("pollForActivation", () => {
     const [, init] = fetchFn.mock.calls[0];
     const body = JSON.parse((init as { body: string }).body) as { installId: string };
     expect(body.installId).toBe(inactiveLicense.installId);
+  });
+});
+
+// ── activateWithEmail ────────────────────────────────────────────────────────
+
+describe("activateWithEmail", () => {
+  const inactiveLicense: License = {
+    tier: "inactive",
+    installId: "44444444-4444-4444-4444-444444444444",
+    valid: false,
+  };
+
+  function activeResponse(): ValidateBody {
+    return { active: true, subscriptionId: "sub_EMAIL", customerId: "cus_EMAIL" };
+  }
+  type ValidateBody = {
+    active?: boolean;
+    subscriptionId?: string;
+    customerId?: string;
+  };
+
+  function okFetch(body: ValidateBody) {
+    return vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(body),
+    });
+  }
+
+  it("rejects an empty email as invalid_email", async () => {
+    const fetchFn = vi.fn();
+    const result = await activateWithEmail("", inactiveLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("invalid_email");
+    }
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed email without calling the network", async () => {
+    const fetchFn = vi.fn();
+    const result = await activateWithEmail("not-an-email", inactiveLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("invalid_email");
+    }
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("posts the trimmed email to /validate-email", async () => {
+    const fetchFn = okFetch({ active: false });
+    await activateWithEmail("  buyer@example.com  ", inactiveLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    const [, init] = fetchFn.mock.calls[0];
+    const body = JSON.parse((init as { body: string }).body) as { email: string };
+    expect(body.email).toBe("buyer@example.com");
+  });
+
+  it("promotes an inactive license to active on a positive response", async () => {
+    writeLicense(inactiveLicense);
+    const fetchFn = okFetch(activeResponse());
+    const result = await activateWithEmail("buyer@example.com", inactiveLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.license.tier).toBe("active");
+      expect(result.license.valid).toBe(true);
+      expect(result.license.stripeSubscriptionId).toBe("sub_EMAIL");
+      expect(result.license.stripeCustomerId).toBe("cus_EMAIL");
+      expect(result.license.installId).toBe(inactiveLicense.installId);
+    }
+  });
+
+  it("persists the promoted license to disk", async () => {
+    writeLicense(inactiveLicense);
+    const fetchFn = okFetch(activeResponse());
+    await activateWithEmail("buyer@example.com", inactiveLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    const ondisk = readLicense();
+    expect(ondisk.tier).toBe("active");
+    expect(ondisk.stripeSubscriptionId).toBe("sub_EMAIL");
+  });
+
+  it("returns not_found when the worker says active:false", async () => {
+    const fetchFn = okFetch({ active: false });
+    const result = await activateWithEmail("buyer@example.com", inactiveLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("not_found");
+    }
+  });
+
+  it("returns not_found when the worker omits the ids", async () => {
+    const fetchFn = okFetch({ active: true });
+    const result = await activateWithEmail("buyer@example.com", inactiveLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("not_found");
+    }
+  });
+
+  it("refuses when the license is already bound to a different subscription", async () => {
+    const bound: License = {
+      ...inactiveLicense,
+      stripeSubscriptionId: "sub_OTHER",
+      stripeCustomerId: "cus_EMAIL",
+    };
+    const fetchFn = okFetch(activeResponse());
+    const result = await activateWithEmail("buyer@example.com", bound, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("mismatch");
+    }
+  });
+
+  it("refuses when the license is bound to a different customer", async () => {
+    const bound: License = {
+      ...inactiveLicense,
+      stripeCustomerId: "cus_OTHER",
+    };
+    const fetchFn = okFetch(activeResponse());
+    const result = await activateWithEmail("buyer@example.com", bound, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("mismatch");
+    }
+  });
+
+  it("accepts a matching prior binding (idempotent re-activation)", async () => {
+    const bound: License = {
+      ...inactiveLicense,
+      stripeSubscriptionId: "sub_EMAIL",
+      stripeCustomerId: "cus_EMAIL",
+    };
+    writeLicense(bound);
+    const fetchFn = okFetch(activeResponse());
+    const result = await activateWithEmail("buyer@example.com", bound, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.license.tier).toBe("active");
+    }
+  });
+
+  it("returns network on a non-ok response without persisting", async () => {
+    writeLicense(inactiveLicense);
+    const fetchFn = vi.fn().mockResolvedValue({ ok: false });
+    const result = await activateWithEmail("buyer@example.com", inactiveLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("network");
+    }
+    expect(readLicense().tier).toBe("inactive");
+  });
+
+  it("returns network on fetch rejection", async () => {
+    const fetchFn = vi.fn().mockRejectedValue(new Error("offline"));
+    const result = await activateWithEmail("buyer@example.com", inactiveLicense, {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("network");
+    }
   });
 });

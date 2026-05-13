@@ -179,6 +179,16 @@ async function postValidate(env: Env, body: unknown): Promise<Response> {
   return worker.fetch(req, env, ctx);
 }
 
+async function postValidateEmail(env: Env, body: unknown): Promise<Response> {
+  const ctx = makeCtx();
+  const req = new Request("https://billing.armorclaw.app/validate-email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return worker.fetch(req, env, ctx);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
@@ -524,5 +534,233 @@ describe("router", () => {
     const req = new Request("https://billing.armorclaw.app/nope", { method: "POST" });
     const res = await worker.fetch(req, env, ctx);
     expect(res.status).toBe(404);
+  });
+});
+
+// ── Email-fallback webhook path ──────────────────────────────────────────────
+
+const EMAIL = "Buyer@Example.COM";
+const EMAIL_LOWER = "buyer@example.com";
+
+function checkoutCompletedNoRefEmail(): string {
+  return JSON.stringify({
+    id: "evt_email_1",
+    type: "checkout.session.completed",
+    data: {
+      object: {
+        id: "cs_email_1",
+        client_reference_id: null,
+        customer: CUS_ID,
+        subscription: SUB_ID,
+        customer_email: EMAIL,
+      },
+    },
+  });
+}
+
+function checkoutCompletedNoRefNoEmail(): string {
+  return JSON.stringify({
+    id: "evt_email_2",
+    type: "checkout.session.completed",
+    data: {
+      object: {
+        id: "cs_email_2",
+        client_reference_id: null,
+        customer: CUS_ID,
+        subscription: SUB_ID,
+      },
+    },
+  });
+}
+
+describe("POST /webhook — email fallback (no client_reference_id)", () => {
+  it("writes email:<lowercase> record using session.customer_email", async () => {
+    const env = makeEnv();
+    const body = checkoutCompletedNoRefEmail();
+    const sig = await signPayload(body, Math.floor(Date.now() / 1000));
+    await postWebhook(env, body, sig);
+
+    const stored = env.KV._store.get(__test.emailKey(EMAIL_LOWER));
+    expect(stored).toBeDefined();
+    const record = JSON.parse(stored as string);
+    expect(record.tier).toBe("active");
+    expect(record.subscriptionId).toBe(SUB_ID);
+    expect(record.customerId).toBe(CUS_ID);
+    // No install binding should have been written.
+    expect(env.KV._store.get(__test.subKey(SUB_ID))).toBeUndefined();
+  });
+
+  it("lowercases the email key (case-insensitive lookup)", async () => {
+    const env = makeEnv();
+    const body = checkoutCompletedNoRefEmail();
+    const sig = await signPayload(body, Math.floor(Date.now() / 1000));
+    await postWebhook(env, body, sig);
+
+    expect(env.KV._store.has(__test.emailKey(EMAIL_LOWER))).toBe(true);
+    expect(env.KV._store.has(__test.emailKey(EMAIL))).toBe(true); // same lowercased key
+  });
+
+  it("falls back to Stripe Customer fetch when customer_email is absent", async () => {
+    const env = makeEnv();
+    mockStripeFetch(
+      () =>
+        new Response(JSON.stringify({ id: CUS_ID, email: EMAIL_LOWER }), {
+          status: 200,
+        }),
+    );
+    const body = checkoutCompletedNoRefNoEmail();
+    const sig = await signPayload(body, Math.floor(Date.now() / 1000));
+    await postWebhook(env, body, sig);
+
+    expect(fetchCalls[0]?.url).toContain(`/v1/customers/${CUS_ID}`);
+    const stored = env.KV._store.get(__test.emailKey(EMAIL_LOWER));
+    expect(stored).toBeDefined();
+  });
+
+  it("drops the event when no email can be resolved", async () => {
+    const env = makeEnv();
+    mockStripeFetch(() => new Response("{}", { status: 200 }));
+    const body = checkoutCompletedNoRefNoEmail();
+    const sig = await signPayload(body, Math.floor(Date.now() / 1000));
+    const res = await postWebhook(env, body, sig);
+    expect(res.status).toBe(200);
+    expect(env.KV._store.size).toBe(0);
+  });
+
+  it("still ignores events with no customer or subscription id", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      id: "evt_x",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_x",
+          client_reference_id: null,
+          customer: null,
+          subscription: null,
+          customer_email: EMAIL,
+        },
+      },
+    });
+    const sig = await signPayload(body, Math.floor(Date.now() / 1000));
+    const res = await postWebhook(env, body, sig);
+    expect(res.status).toBe(200);
+    expect(env.KV._store.size).toBe(0);
+  });
+});
+
+describe("POST /validate-email", () => {
+  function seedEmailRecord(env: Env & { KV: FakeKV }, email: string): void {
+    env.KV._store.set(
+      __test.emailKey(email),
+      JSON.stringify({
+        customerId: CUS_ID,
+        subscriptionId: SUB_ID,
+        tier: "active",
+      }),
+    );
+  }
+
+  it("returns active:true with ids when Stripe confirms active", async () => {
+    const env = makeEnv();
+    seedEmailRecord(env, EMAIL_LOWER);
+    mockStripeFetch(
+      () =>
+        new Response(JSON.stringify({ id: SUB_ID, status: "active", customer: CUS_ID }), {
+          status: 200,
+        }),
+    );
+
+    const res = await postValidateEmail(env, { email: EMAIL });
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.active).toBe(true);
+    expect(body.subscriptionId).toBe(SUB_ID);
+    expect(body.customerId).toBe(CUS_ID);
+  });
+
+  it("matches case-insensitively (uppercase email finds lowercase record)", async () => {
+    const env = makeEnv();
+    seedEmailRecord(env, EMAIL_LOWER);
+    mockStripeFetch(
+      () =>
+        new Response(JSON.stringify({ id: SUB_ID, status: "trialing", customer: CUS_ID }), {
+          status: 200,
+        }),
+    );
+    const res = await postValidateEmail(env, { email: "BUYER@EXAMPLE.com" });
+    const body = await res.json();
+    expect(body.active).toBe(true);
+  });
+
+  it("trims whitespace before lookup", async () => {
+    const env = makeEnv();
+    seedEmailRecord(env, EMAIL_LOWER);
+    mockStripeFetch(
+      () =>
+        new Response(JSON.stringify({ id: SUB_ID, status: "active", customer: CUS_ID }), {
+          status: 200,
+        }),
+    );
+    const res = await postValidateEmail(env, { email: `  ${EMAIL}  ` });
+    const body = await res.json();
+    expect(body.active).toBe(true);
+  });
+
+  it("returns active:false when the email has no KV record", async () => {
+    const env = makeEnv();
+    mockStripeFetch(() => new Response("{}", { status: 200 }));
+    const res = await postValidateEmail(env, { email: "unknown@example.com" });
+    const body = await res.json();
+    expect(body.active).toBe(false);
+    expect(fetchCalls.length).toBe(0); // no Stripe call on KV miss
+  });
+
+  it("returns active:false when Stripe says canceled", async () => {
+    const env = makeEnv();
+    seedEmailRecord(env, EMAIL_LOWER);
+    mockStripeFetch(
+      () =>
+        new Response(JSON.stringify({ id: SUB_ID, status: "canceled", customer: CUS_ID }), {
+          status: 200,
+        }),
+    );
+    const res = await postValidateEmail(env, { email: EMAIL });
+    const body = await res.json();
+    expect(body.active).toBe(false);
+    expect(body.subscriptionId).toBe(SUB_ID);
+  });
+
+  it("returns active:false on Stripe network error", async () => {
+    const env = makeEnv();
+    seedEmailRecord(env, EMAIL_LOWER);
+    mockStripeFetch(() => {
+      throw new Error("offline");
+    });
+    const res = await postValidateEmail(env, { email: EMAIL });
+    const body = await res.json();
+    expect(body.active).toBe(false);
+    expect(body.error).toBe("stripe_unreachable");
+  });
+
+  it("returns active:false when email is missing or empty", async () => {
+    const env = makeEnv();
+    const res1 = await postValidateEmail(env, {});
+    expect((await res1.json()).active).toBe(false);
+    const res2 = await postValidateEmail(env, { email: "   " });
+    expect((await res2.json()).active).toBe(false);
+  });
+
+  it("returns active:false on invalid JSON", async () => {
+    const env = makeEnv();
+    const ctx = makeCtx();
+    const req = new Request("https://billing.armorclaw.app/validate-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{not json",
+    });
+    const res = await worker.fetch(req, env, ctx);
+    expect(res.status).toBe(200);
+    expect((await res.json()).active).toBe(false);
   });
 });

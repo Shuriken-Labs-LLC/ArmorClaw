@@ -36,6 +36,7 @@ export interface License {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const VALIDATION_URL = "https://armorclaw-billing.armorclaw.workers.dev/validate";
+const VALIDATION_EMAIL_URL = "https://armorclaw-billing.armorclaw.workers.dev/validate-email";
 
 // ── File path (injectable for testing) ────────────────────────────────────────
 
@@ -247,6 +248,90 @@ export async function pollForActivation(
   } catch {
     return license;
   }
+}
+
+// ── Email-keyed manual activation ─────────────────────────────────────────────
+
+export interface ActivateWithEmailOptions {
+  /** Override the fetch function (default: globalThis.fetch). */
+  fetchFn?: typeof fetch;
+  /** Override the email-validation endpoint. */
+  validationUrl?: string;
+}
+
+export type ActivateWithEmailResult =
+  | { ok: true; license: License }
+  | { ok: false; reason: "invalid_email" | "not_found" | "mismatch" | "network" };
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Activate a license by email. Used for the "Already subscribed?" flow when a
+ * user paid through the public payment link (no client_reference_id), so the
+ * webhook stored an `email:<lowercase_email>` KV record instead of an
+ * install-keyed one.
+ *
+ * Asks the billing Worker's /validate-email endpoint whether an active
+ * subscription exists for this email. On a positive answer, promotes the
+ * license to `active` and persists. If the license already has a different
+ * subscriptionId/customerId on file (a previous binding to another sub), the
+ * activation is refused — prevents one user's email from silently re-binding
+ * an install that's already tied to a different customer.
+ *
+ * Never throws. Returns a discriminated result so the dashboard can render a
+ * specific failure message.
+ */
+export async function activateWithEmail(
+  email: string,
+  license: License,
+  options: ActivateWithEmailOptions = {},
+): Promise<ActivateWithEmailResult> {
+  const trimmed = typeof email === "string" ? email.trim() : "";
+  if (!trimmed || !EMAIL_RE.test(trimmed)) {
+    return { ok: false, reason: "invalid_email" };
+  }
+
+  const fetchFn = options.fetchFn ?? globalThis.fetch;
+  const url = options.validationUrl ?? VALIDATION_EMAIL_URL;
+
+  let body: ValidateResponse;
+  try {
+    const res = await fetchFn(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: trimmed }),
+    });
+    if (!res.ok) {
+      return { ok: false, reason: "network" };
+    }
+    body = (await res.json()) as ValidateResponse;
+  } catch {
+    return { ok: false, reason: "network" };
+  }
+
+  if (body.active !== true || !body.subscriptionId || !body.customerId) {
+    return { ok: false, reason: "not_found" };
+  }
+
+  if (
+    license.stripeSubscriptionId &&
+    license.stripeSubscriptionId !== body.subscriptionId
+  ) {
+    return { ok: false, reason: "mismatch" };
+  }
+  if (license.stripeCustomerId && license.stripeCustomerId !== body.customerId) {
+    return { ok: false, reason: "mismatch" };
+  }
+
+  const promoted: License = {
+    ...license,
+    tier: "active",
+    stripeCustomerId: body.customerId,
+    stripeSubscriptionId: body.subscriptionId,
+    valid: true,
+  };
+  writeLicenseFile(promoted);
+  return { ok: true, license: promoted };
 }
 
 /** Reset for test isolation. */

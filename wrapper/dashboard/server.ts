@@ -19,8 +19,8 @@ import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import express from "express";
-import { loadLicense, pollForActivation } from "../billing/license.ts";
-import type { License } from "../billing/license.ts";
+import { activateWithEmail, loadLicense, pollForActivation } from "../billing/license.ts";
+import type { ActivateWithEmailResult, License } from "../billing/license.ts";
 import { STRIPE_DEFAULTS } from "../billing/stripe-redirect.ts";
 import { type AgentStatus, getAgentStatus, setAgentStatus } from "../lib/agent-status.ts";
 import { getModelAdapterState } from "../lib/model-adapter.ts";
@@ -166,6 +166,13 @@ export async function primeLicenseCache(): Promise<License> {
 /** Synchronously read whatever the cache currently holds. */
 export function getCachedLicense(): License | null {
   return _cachedLicense;
+}
+
+/** Replace the cached license — used by the email-activation route after a
+ * successful promotion writes a new license.json. Keeps the SSE snapshot in
+ * sync without waiting for the 60 s refresh tick. */
+export function setCachedLicense(license: License): void {
+  _cachedLicense = license;
 }
 
 /** Stop the refresh timer and forget the cached license. Test-only. */
@@ -953,6 +960,29 @@ export function createApp(): express.Application {
     resumeFromHardStop();
     notifyListeners();
     res.json({ ok: true });
+  });
+
+  app.post("/api/license/activate-by-email", async (req, res) => {
+    const body = req.body as { email?: unknown };
+    const email = typeof body?.email === "string" ? body.email : "";
+
+    const current = getCachedLicense();
+    if (!current) {
+      res.status(503).json({ ok: false, reason: "not_ready" });
+      return;
+    }
+
+    const result: ActivateWithEmailResult = await activateWithEmail(email, current);
+    if (result.ok) {
+      setCachedLicense(result.license);
+      notifyListeners();
+      res.json({ ok: true });
+      return;
+    }
+    res.status(result.reason === "invalid_email" ? 422 : 400).json({
+      ok: false,
+      reason: result.reason,
+    });
   });
 
   // ── Token tracking: record usage from gateway chat ──

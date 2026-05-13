@@ -2780,6 +2780,14 @@ function syncSettings(s) {
             (checkoutHref
               ? '<a href="' + escAttr(checkoutHref) + '" target="_blank" rel="noopener" class="btn-settings" style="display:inline-block;text-decoration:none;text-align:center;background:var(--ac-teal);color:var(--ac-bg);font-weight:500">Subscribe to ArmorClaw</a>'
               : '') +
+            '<div style="margin-top:16px;padding-top:12px;border-top:0.5px solid var(--ac-border)">' +
+              '<p style="font-size:13px;color:var(--ac-muted);margin:0 0 6px">Already subscribed? Enter your email:</p>' +
+              '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' +
+                '<input class="settings-field" id="activate-email-input" type="email" autocomplete="email" placeholder="you@example.com" style="flex:1;min-width:180px">' +
+                '<button class="btn-settings primary" id="activate-email-btn" type="button" onclick="activateByEmail()">Activate</button>' +
+              '</div>' +
+              '<p id="activate-email-msg" style="font-size:12px;margin:6px 0 0;display:none"></p>' +
+            '</div>' +
           '</div>' +
         '</div>';
     } else if (tier === 'active' && _stripePortalUrl) {
@@ -2972,6 +2980,54 @@ async function saveSandbox() {
     showSaveMsg('sandbox-save-msg');
     toggleSettingsForm('sandbox-form');
   }
+}
+
+async function activateByEmail() {
+  const input = document.getElementById('activate-email-input');
+  const btn = document.getElementById('activate-email-btn');
+  const msg = document.getElementById('activate-email-msg');
+  if (!input || !msg || !btn) return;
+  const email = (input.value || '').trim();
+  msg.style.display = 'none';
+  msg.textContent = '';
+  if (!email) {
+    msg.textContent = 'Enter your subscription email.';
+    msg.style.color = 'var(--ac-red)';
+    msg.style.display = '';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Checking…';
+  let d = {};
+  try {
+    const r = await fetch('/api/license/activate-by-email', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    d = await r.json().catch(() => ({}));
+  } catch (_e) {
+    d = { ok: false, reason: 'network' };
+  }
+  btn.disabled = false;
+  btn.textContent = 'Activate';
+  if (d.ok) {
+    msg.textContent = 'Activated. Welcome back.';
+    msg.style.color = 'var(--ac-teal)';
+    msg.style.display = '';
+    return;
+  }
+  const reason = d.reason || 'network';
+  if (reason === 'invalid_email') {
+    msg.textContent = 'That doesn’t look like a valid email.';
+  } else if (reason === 'not_found') {
+    msg.textContent = 'No active subscription found for that email.';
+  } else if (reason === 'mismatch') {
+    msg.textContent = 'This install is already bound to a different subscription.';
+  } else {
+    msg.textContent = 'Couldn’t reach the billing service. Try again.';
+  }
+  msg.style.color = 'var(--ac-red)';
+  msg.style.display = '';
 }
 
 // ── Browser allowlist ─────────────────────────────────────────────────────────
