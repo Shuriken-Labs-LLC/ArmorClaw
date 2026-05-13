@@ -79,6 +79,7 @@
     "zizmor.yml"
   ],
   "localModsPaths": [
+    ".github/workflows/",
     ".gitignore",
     "AGENTS.md",
     "CLAUDE.md",
