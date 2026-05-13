@@ -61,7 +61,7 @@ export function useDashboard() {
 
     return () => {
       esRef.current?.close()
-      if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+      if (retryTimerRef.current) {clearTimeout(retryTimerRef.current)}
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

@@ -165,7 +165,7 @@ function SandboxSection({ sandboxDir }: { sandboxDir: string | null }) {
   const [error, setError] = useState<string | null>(null)
 
   async function handleSave() {
-    if (!path.trim()) return
+    if (!path.trim()) {return}
     setError(null)
     setSaving(true)
     try {
@@ -247,20 +247,20 @@ function ChannelsSection() {
   }, [])
 
   async function handleValidate() {
-    if (!telegramToken.trim()) return
+    if (!telegramToken.trim()) {return}
     setValidating(true)
     setValidationResult(null)
     try {
       const r = await validateTelegramToken(telegramToken.trim())
       setValidationResult(r)
-      if (r.ok && r.username) setTelegramUsername(r.username)
+      if (r.ok && r.username) {setTelegramUsername(r.username)}
     } finally {
       setValidating(false)
     }
   }
 
   async function handleSave() {
-    if (!telegramToken.trim() || !telegramUsername.trim()) return
+    if (!telegramToken.trim() || !telegramUsername.trim()) {return}
     setSaving(true)
     try {
       await saveTelegramConfig(telegramToken.trim(), telegramUsername.trim())
@@ -434,7 +434,7 @@ function StartupSection() {
     }
   }
 
-  if (!loaded) return null
+  if (!loaded) {return null}
 
   return (
     <Card>
@@ -629,7 +629,7 @@ function SubscriptionSection({
   license: DashboardSnapshot['license']
   stripeUrl: string
 }) {
-  if (!stripeUrl) return null
+  if (!stripeUrl) {return null}
 
   return (
     <Card>
@@ -665,7 +665,7 @@ function DangerZone() {
   const [result, setResult] = useState<string | null>(null)
 
   async function handleReset() {
-    if (confirmText !== 'reset') return
+    if (confirmText !== 'reset') {return}
     setResetting(true)
     try {
       const r = await resetData()

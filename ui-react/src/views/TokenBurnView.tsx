@@ -116,8 +116,8 @@ function SkillBreakdown({
   monthBySkill: Record<string, number>
   skills: DashboardSnapshot['skills']
 }) {
-  const entries = Object.entries(monthBySkill).sort((a, b) => b[1] - a[1])
-  if (entries.length === 0) return <p className="text-sm text-ac-muted">No data yet.</p>
+  const entries = Object.entries(monthBySkill).toSorted((a, b) => b[1] - a[1])
+  if (entries.length === 0) {return <p className="text-sm text-ac-muted">No data yet.</p>}
   const max = entries[0][1]
 
   function displayName(skillId: string) {

@@ -56,7 +56,7 @@ function BrowserAllowlist() {
   }, [])
 
   async function handleAdd() {
-    if (!newDomain.trim()) return
+    if (!newDomain.trim()) {return}
     setAddError(null)
     setAdding(true)
     try {

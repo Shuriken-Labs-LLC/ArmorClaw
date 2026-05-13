@@ -40,16 +40,16 @@ function UndoBanner({ undo }: { undo: NonNullable<DashboardSnapshot['undo']> }) 
   const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
-    if (seconds <= 0) return
+    if (seconds <= 0) {return}
     const id = setInterval(() => {
       const s = formatCountdown(undo.expiresAt)
       setSeconds(s)
-      if (s <= 0) clearInterval(id)
+      if (s <= 0) {clearInterval(id)}
     }, 1000)
     return () => clearInterval(id)
   }, [undo.expiresAt, seconds])
 
-  if (dismissed || seconds <= 0) return null
+  if (dismissed || seconds <= 0) {return null}
 
   const label =
     undo.actionType === 'email-draft'
@@ -82,13 +82,13 @@ function ApprovalCard({ approvals }: { approvals: DashboardSnapshot['pendingAppr
   const [expanded, setExpanded] = useState<string | null>(null)
   const [loading, setLoading] = useState<string | null>(null)
 
-  if (approvals.length === 0) return null
+  if (approvals.length === 0) {return null}
 
   async function handle(id: string, action: 'approve' | 'reject') {
     setLoading(id)
     try {
-      if (action === 'approve') await approveRequest(id)
-      else await rejectRequest(id)
+      if (action === 'approve') {await approveRequest(id)}
+      else {await rejectRequest(id)}
     } finally {
       setLoading(null)
     }
@@ -237,7 +237,7 @@ function ActivityFeed({ feed }: { feed: DashboardSnapshot['feed'] }) {
 
 function RecipeShortcutRow({ recipes }: { recipes: DashboardSnapshot['recipes'] }) {
   const active = recipes.filter((r) => r.active).slice(0, 3)
-  if (active.length === 0) return null
+  if (active.length === 0) {return null}
 
   return (
     <div className="flex gap-3 flex-wrap">
@@ -270,11 +270,11 @@ export function HomeView({ snapshot }: Props) {
   }
 
   async function toggleAgent() {
-    if (!snapshot) return
+    if (!snapshot) {return}
     setAgentLoading(true)
     try {
-      if (snapshot.agentStatus === 'running') await pauseAgent()
-      else await resumeAgent()
+      if (snapshot.agentStatus === 'running') {await pauseAgent()}
+      else {await resumeAgent()}
     } finally {
       setAgentLoading(false)
     }

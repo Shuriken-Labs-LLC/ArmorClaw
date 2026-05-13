@@ -20,8 +20,8 @@ function RecipeRow({ recipe }: { recipe: RecipeWithState }) {
   async function handleToggle(checked: boolean) {
     setToggling(true)
     try {
-      if (checked) await activateRecipe(recipe.id)
-      else await deactivateRecipe(recipe.id)
+      if (checked) {await activateRecipe(recipe.id)}
+      else {await deactivateRecipe(recipe.id)}
     } finally {
       setToggling(false)
     }

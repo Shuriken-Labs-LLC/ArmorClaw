@@ -6,8 +6,8 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatCost(usd: number): string {
-  if (usd < 0.01) return '$0.00'
-  if (usd < 1) return `$${usd.toFixed(2)}`
+  if (usd < 0.01) {return '$0.00'}
+  if (usd < 1) {return `$${usd.toFixed(2)}`}
   return `$${usd.toFixed(2)}`
 }
 
@@ -15,9 +15,9 @@ export function formatRelativeTime(isoString: string): string {
   const now = Date.now()
   const then = new Date(isoString).getTime()
   const diff = now - then
-  if (diff < 60_000) return 'just now'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
+  if (diff < 60_000) {return 'just now'}
+  if (diff < 3_600_000) {return `${Math.floor(diff / 60_000)}m ago`}
+  if (diff < 86_400_000) {return `${Math.floor(diff / 3_600_000)}h ago`}
   return `${Math.floor(diff / 86_400_000)}d ago`
 }
 

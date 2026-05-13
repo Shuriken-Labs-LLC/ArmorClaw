@@ -124,7 +124,7 @@ function UpdateNotice({ updateInfo }: { updateInfo: OpenClawUpdateInfo }) {
     }
   }
 
-  if (!updateInfo.updateAvailable) return null
+  if (!updateInfo.updateAvailable) {return null}
 
   return (
     <Alert variant="amber">
@@ -171,7 +171,7 @@ function CommandRunner() {
   const [pendingCommand, setPendingCommand] = useState('')
 
   function handleSubmit() {
-    if (!command.trim()) return
+    if (!command.trim()) {return}
     setPendingCommand(command.trim())
     setConfirmOpen(true)
   }
