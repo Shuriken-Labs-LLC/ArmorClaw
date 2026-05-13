@@ -7,18 +7,18 @@
   <meta name="description" content="ArmorClaw is OpenClaw plus a security layer, packaged with a setup wizard and dashboard for people who haven't opened a terminal. Triages email, manages files, automates tasks. Runs on your Mac.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700&family=DM+Mono:wght@400&family=Work+Sans:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --ac-bg: #0D0F14;
-      --ac-surface: #13161E;
-      --ac-surface2: #1A1D27;
-      --ac-border: #2A2D3A;
-      --ac-border-strong: #3A3D4E;
-      --ac-text: #E8E6FF;
-      --ac-muted: #8B8DA8;
-      --ac-hint: #5A5C75;
-      --ac-teal: #1DE9B6;
+      --ac-bg: #07080C;
+      --ac-surface: #0D0F16;
+      --ac-surface2: #131622;
+      --ac-border: #181B28;
+      --ac-border-strong: #1D2030;
+      --ac-text: #ECEAF4;
+      --ac-muted: #565870;
+      --ac-hint: #252738;
+      --ac-teal: #00E5B3;
       --ac-teal-light: #0D2E26;
       --ac-purple: #9B6DFF;
       --ac-purple-light: #1A1030;
@@ -31,13 +31,21 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: 'Work Sans', -apple-system, BlinkMacSystemFont, sans-serif;
       background: var(--ac-bg);
       color: var(--ac-text);
       font-size: 16px;
       line-height: 1.6;
       font-weight: 400;
       -webkit-font-smoothing: antialiased;
+    }
+
+    h1, h2, h3,
+    .feature-card h3,
+    .provider-card h3,
+    .pricing-card .price {
+      font-family: 'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-weight: 700;
     }
 
     .container {
@@ -90,6 +98,9 @@
       margin-bottom: 24px;
       letter-spacing: -0.5px;
     }
+    .hero h1 .lede {
+      color: var(--ac-text);
+    }
     .hero h1 .highlight {
       color: var(--ac-teal);
     }
@@ -133,7 +144,7 @@
 
     /* ── Story section ── */
     .story {
-      padding: 80px 0;
+      padding: 104px 0;
       border-top: 0.5px solid var(--ac-border);
     }
     .story-content {
@@ -155,7 +166,7 @@
 
     /* ── Features ── */
     .features {
-      padding: 80px 0;
+      padding: 104px 0;
       border-top: 0.5px solid var(--ac-border);
     }
     .features h2 {
@@ -170,9 +181,9 @@
     }
     .feature-card {
       padding: 24px;
-      background: var(--ac-surface);
+      background: var(--ac-bg);
       border: 0.5px solid var(--ac-border);
-      border-radius: 12px;
+      border-radius: 4px;
     }
     .feature-card h3 {
       font-size: 16px;
@@ -193,7 +204,7 @@
 
     /* ── Provider choice ── */
     .providers {
-      padding: 80px 0;
+      padding: 104px 0;
       border-top: 0.5px solid var(--ac-border);
     }
     .providers h2 {
@@ -214,9 +225,9 @@
     }
     .provider-card {
       padding: 24px;
-      background: var(--ac-surface);
+      background: var(--ac-bg);
       border: 0.5px solid var(--ac-border);
-      border-radius: 12px;
+      border-radius: 4px;
     }
     .provider-card .tag {
       display: inline-block;
@@ -249,7 +260,7 @@
 
     /* ── Pricing ── */
     .pricing {
-      padding: 80px 0;
+      padding: 104px 0;
       border-top: 0.5px solid var(--ac-border);
       text-align: center;
     }
@@ -269,7 +280,7 @@
       padding: 32px;
       background: var(--ac-surface);
       border: 0.5px solid var(--ac-border);
-      border-radius: 12px;
+      border-radius: 4px;
       text-align: left;
     }
     .pricing-card .price {
@@ -393,7 +404,7 @@
   <!-- Hero -->
   <section class="hero">
     <div class="container">
-      <h1>An AI agent that<br><span class="highlight">works while you're working</span></h1>
+      <h1><span class="lede">An AI agent that</span><br><span class="highlight">works while you're working</span></h1>
       <p class="subtitle">
         ArmorClaw is OpenClaw plus a security layer, packaged for people
         who haven't opened a terminal. It triages your inbox, drafts replies,
