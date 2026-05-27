@@ -1,8 +1,9 @@
 import Database from "better-sqlite3";
 import { app } from "electron";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { logger } from "./logger";
+import migration0001 from "./migrations/0001_initial.sql?raw";
 
 let db: Database.Database | undefined;
 
@@ -34,6 +35,10 @@ export function initDatabase(): Database.Database {
   return db;
 }
 
+const MIGRATIONS: Array<{ version: number; sql: string }> = [
+  { version: 1, sql: migration0001 },
+];
+
 function migrate(database: Database.Database): void {
   database.exec(`
     CREATE TABLE IF NOT EXISTS schema_versions (
@@ -47,28 +52,14 @@ function migrate(database: Database.Database): void {
     .all() as Array<{ version: number }>;
   const appliedSet = new Set(applied.map((r) => r.version));
 
-  const migrationsDir = join(__dirname, "migrations");
-
-  const migrations = [
-    { version: 1, file: "0001_initial.sql" },
-  ];
-
-  for (const migration of migrations) {
+  for (const migration of MIGRATIONS) {
     if (appliedSet.has(migration.version)) {
       logger.info(`Migration ${migration.version} already applied, skipping`);
       continue;
     }
 
-    const sqlPath = join(migrationsDir, migration.file);
-    if (!existsSync(sqlPath)) {
-      throw new Error(`Migration file not found: ${sqlPath}`);
-    }
-
-    const sql = readFileSync(sqlPath, "utf-8");
-    logger.info(`Applying migration ${migration.version}: ${migration.file}`);
-
-    database.exec(sql);
-
+    logger.info(`Applying migration ${migration.version}`);
+    database.exec(migration.sql);
     logger.info(`Migration ${migration.version} applied`);
   }
 }

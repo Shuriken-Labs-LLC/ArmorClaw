@@ -7,6 +7,8 @@ import { spawnOpenClaw, setMessageHandler, killOpenClaw } from "./openclaw";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
+app.setName("ArmorClaw");
+
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow(): void {

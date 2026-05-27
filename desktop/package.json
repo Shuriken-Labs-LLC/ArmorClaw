@@ -5,6 +5,7 @@
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
+    "postinstall": "electron-rebuild",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
@@ -30,6 +31,7 @@
     "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.0",
     "@vitejs/plugin-react": "^4.3.0",
+    "@electron/rebuild": "^3.7.0",
     "electron": "^33.0.0",
     "electron-builder": "^25.1.0",
     "electron-vite": "^2.3.0",

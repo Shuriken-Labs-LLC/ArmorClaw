@@ -24,9 +24,9 @@ export default defineConfig({
     plugins: [react()],
     root: "src/renderer",
     build: {
-      outDir: "out/renderer",
+      outDir: "../../out/renderer",
       rollupOptions: {
-        input: "src/renderer/index.html",
+        input: "index.html",
       },
     },
   },
