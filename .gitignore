@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+release/
+
+# Electron
+desktop/release/
+desktop/dist-electron/
+desktop/out/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Cloudflare
+.wrangler/
+.dev.vars
+
+# TypeScript
+*.tsbuildinfo
+
+# Test
+coverage/
+
+# Secrets — NEVER COMMIT
+secrets/
+*.pem
+*.key
+*.p12
+*.provisionprofile
+*.cer
+*.mobileprovision
+
+# Local user data accidentally placed in repo
+brain/
+audit.log

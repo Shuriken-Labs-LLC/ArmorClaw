@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-2022]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm -F @armorclaw/desktop build
+
+      # ---------- macOS ----------
+      - name: Import Apple certificates
+        if: matrix.os == 'macos-14'
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
+      - name: Package and notarize macOS
+        if: matrix.os == 'macos-14'
+        run: pnpm -F @armorclaw/desktop package:mac
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      # ---------- Windows ----------
+      - name: Decode Windows EV certificate
+        if: matrix.os == 'windows-2022'
+        shell: pwsh
+        run: |
+          $b64 = "${{ secrets.WIN_CSC_LINK }}"
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", [Convert]::FromBase64String($b64))
+          echo "CSC_LINK=$env:RUNNER_TEMP\cert.pfx" >> $env:GITHUB_ENV
+
+      - name: Package Windows
+        if: matrix.os == 'windows-2022'
+        run: pnpm -F @armorclaw/desktop package:win
+        env:
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+
+      # ---------- Upload ----------
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: armorclaw-${{ matrix.os }}
+          path: |
+            desktop/release/**/*.dmg
+            desktop/release/**/*.zip
+            desktop/release/**/*.exe
+            desktop/release/**/latest*.yml
+
+      # TODO: separate job that downloads artifacts and uploads to Cloudflare R2
+      # so updates.armorclaw.app serves them and electron-updater picks them up

@@ -1,0 +1,51 @@
+appId: app.armorclaw.desktop
+productName: ArmorClaw
+directories:
+  output: release/${version}
+  buildResources: build
+files:
+  - out/**
+  - package.json
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
+  - "**/node_modules/keytar/**"
+
+mac:
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize:
+    teamId: ${env.APPLE_TEAM_ID}
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - arm64
+  # Code signing happens via env vars CSC_LINK and CSC_KEY_PASSWORD when present.
+  # For EV cert via hardware token, configure signtoolOptions.sign.
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+  shortcutName: ArmorClaw
+
+publish:
+  provider: generic
+  url: https://updates.armorclaw.app/${os}/${arch}
+  channel: stable
+
+artifactName: ArmorClaw-${version}-${arch}.${ext}
