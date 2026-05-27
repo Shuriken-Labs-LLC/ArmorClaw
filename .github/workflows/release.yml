@@ -14,7 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-2022]
+        os: [macos-14]
+        # Windows added with v1.1 fast-follow
 
     steps:
       - uses: actions/checkout@v4

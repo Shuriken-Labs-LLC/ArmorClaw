@@ -186,7 +186,7 @@ export default app;
 // ---------- helpers (stubs) ----------
 
 function stripeClient(env: Env): Stripe {
-  return new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: "2024-12-18.acacia" });
+  return new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: "2025-02-24.acacia" });
 }
 
 function isValidEmail(email: string): boolean {
@@ -252,8 +252,3 @@ async function verifyJwtAllowingExpired(_jwt: string, _key: string, _maxDaysExpi
   return null;
 }
 
-// Cloudflare type stub (real types come from @cloudflare/workers-types)
-interface KVNamespace {
-  get(key: string): Promise<string | null>;
-  put(key: string, value: string): Promise<void>;
-}

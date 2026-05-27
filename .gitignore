@@ -4,9 +4,11 @@ node_modules/
 
 # Build outputs
 dist/
-build/
+/build/
 out/
 release/
+!desktop/build/
+!desktop/build/**
 
 # Electron
 desktop/release/

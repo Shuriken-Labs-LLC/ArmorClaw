@@ -42,3 +42,4 @@ What does this make easier? Harder? What follow-on work does it imply?
 ## Existing ADRs
 
 - [0001 — Stack: Electron + pnpm monorepo](0001-stack.md)
+- [0002 — Schema reconciliation: align 0001 with ARCHITECTURE](0002-schema-reconciliation.md)

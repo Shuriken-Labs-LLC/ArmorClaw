@@ -18,13 +18,14 @@ PRAGMA synchronous = NORMAL;
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS workspaces (
-  id          TEXT PRIMARY KEY,
-  name        TEXT NOT NULL,
-  icon        TEXT,
-  color       TEXT,
-  sort_order  INTEGER NOT NULL DEFAULT 0,
-  created_at  INTEGER NOT NULL,
-  updated_at  INTEGER NOT NULL
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,
+  icon            TEXT,
+  color           TEXT,
+  sort_order      INTEGER NOT NULL DEFAULT 0,
+  instructions_md TEXT,
+  created_at      INTEGER NOT NULL,
+  updated_at      INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_workspaces_sort ON workspaces (sort_order);
@@ -37,9 +38,10 @@ CREATE TABLE IF NOT EXISTS projects (
   icon          TEXT,
   color         TEXT,
   sort_order    INTEGER NOT NULL DEFAULT 0,
-  brain_mode    TEXT NOT NULL DEFAULT 'smart' CHECK (brain_mode IN ('smart', 'manual', 'full')),
-  created_at    INTEGER NOT NULL,
-  updated_at    INTEGER NOT NULL
+  brain_mode      TEXT NOT NULL DEFAULT 'smart' CHECK (brain_mode IN ('smart', 'manual', 'full')),
+  instructions_md TEXT,
+  created_at      INTEGER NOT NULL,
+  updated_at      INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_projects_workspace ON projects (workspace_id, sort_order);
@@ -197,6 +199,43 @@ CREATE TABLE IF NOT EXISTS attachments (
 CREATE INDEX IF NOT EXISTS idx_attachments_project ON attachments (project_id, created_at DESC);
 
 -- ============================================================================
+-- Commitments (intent memory + scheduler)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS commitments (
+  id                TEXT PRIMARY KEY,
+  workspace_id      TEXT NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+  project_id        TEXT NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
+  description       TEXT NOT NULL,
+  trigger_type      TEXT NOT NULL CHECK (trigger_type IN ('time', 'interval', 'manual')),
+  trigger_spec      TEXT NOT NULL,  -- JSON: cron-like rule or one-shot timestamp
+  next_fire_at      INTEGER,        -- denormalized for cheap scheduler queries
+  action_template   TEXT NOT NULL,
+  reversibility     TEXT NOT NULL DEFAULT 'reversible' CHECK (reversibility IN ('reversible', 'irreversible')),
+  autonomy          TEXT NOT NULL DEFAULT 'gated' CHECK (autonomy IN ('gated', 'autonomous')),
+  status            TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'done', 'failed')),
+  done_condition    TEXT,
+  missed_run_policy TEXT NOT NULL DEFAULT 'ask' CHECK (missed_run_policy IN ('ask', 'skip', 'next_wake')),
+  last_run_at       INTEGER,
+  created_at        INTEGER NOT NULL,
+  updated_at        INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_commitments_project ON commitments (project_id, status);
+CREATE INDEX IF NOT EXISTS idx_commitments_next_fire ON commitments (next_fire_at) WHERE status = 'active';
+
+CREATE TABLE IF NOT EXISTS commitment_runs (
+  id              TEXT PRIMARY KEY,
+  commitment_id   TEXT NOT NULL REFERENCES commitments (id) ON DELETE CASCADE,
+  started_at      INTEGER NOT NULL,
+  finished_at     INTEGER,
+  outcome         TEXT NOT NULL CHECK (outcome IN ('completed', 'awaiting_approval', 'failed', 'skipped')),
+  detail          TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_commitment_runs_commitment ON commitment_runs (commitment_id, started_at DESC);
+
+-- ============================================================================
 -- Integrations
 -- ============================================================================
 
@@ -239,6 +278,13 @@ CREATE TABLE IF NOT EXISTS app_state (
   last_validated_at               INTEGER,
   openclaw_version                TEXT,
   openclaw_path                   TEXT,
+  openclaw_latest_known           TEXT,
+  openclaw_advisory               TEXT,
+  model_provider                  TEXT DEFAULT 'anthropic' CHECK (model_provider IN ('openai', 'anthropic')),
+  model_api_key_keychain_ref      TEXT,
+  personality_mode                TEXT NOT NULL DEFAULT 'standard' CHECK (personality_mode IN ('standard', 'unhinged')),
+  autonomy_default                TEXT NOT NULL DEFAULT 'gated' CHECK (autonomy_default IN ('gated', 'autonomous')),
+  missed_run_default              TEXT NOT NULL DEFAULT 'ask' CHECK (missed_run_default IN ('ask', 'skip', 'next_wake')),
   telegram_bot_token_keychain_ref TEXT,
   active_workspace_id             TEXT,
   active_project_id               TEXT,

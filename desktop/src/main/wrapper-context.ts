@@ -14,7 +14,7 @@ export interface WrapperContextInputs {
 }
 
 export function buildWrapperContext(i: WrapperContextInputs): string {
-  return `You are running inside ArmorClaw, a desktop application that wraps the OpenClaw runtime. The user interacts with you through ArmorClaw's project-workspace UI on macOS or Windows, not through the OpenClaw CLI.
+  return `You are running inside ArmorClaw, a desktop application that wraps the OpenClaw runtime. The user interacts with you through ArmorClaw's project-workspace UI on macOS, not through the OpenClaw CLI.
 
 You are currently in workspace "${i.workspaceName}", project "${i.projectName}". Memories you propose will save to this project unless the user explicitly overrides.
 
