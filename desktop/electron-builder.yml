@@ -10,6 +10,11 @@ asarUnpack:
   - "**/node_modules/better-sqlite3/**"
   - "**/node_modules/keytar/**"
 
+protocols:
+  - name: ArmorClaw
+    schemes:
+      - armorclaw
+
 mac:
   category: public.app-category.productivity
   hardenedRuntime: true

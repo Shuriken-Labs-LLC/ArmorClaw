@@ -107,6 +107,8 @@ declare global {
       approveMemory: (id: string) => Promise<void>;
       rejectMemory: (id: string) => Promise<void>;
       listAuditEntries: (limit?: number, projectId?: string) => Promise<AuditEntry[]>;
+      onDeepLinkAuth: (callback: (data: { token: string }) => void) => () => void;
+      onDeepLinkBilling: (callback: (data: { sessionId: string }) => void) => () => void;
     };
   }
 }

@@ -6,10 +6,26 @@ import { initDatabase, closeDatabase } from "./db";
 import { spawnOpenClaw, setMessageHandler, killOpenClaw } from "./openclaw";
 import { registerIpcHandlers } from "./ipc-handlers";
 import { getAppState } from "./repositories";
+import { handleDeepLink } from "./deep-link";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
 app.setName("ArmorClaw");
+
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient("armorclaw", process.execPath, [
+      process.argv[1]!,
+    ]);
+  }
+} else {
+  app.setAsDefaultProtocolClient("armorclaw");
+}
+
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+}
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -63,6 +79,22 @@ app.whenReady().then(() => {
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    handleDeepLink(url, () => mainWindow);
+  });
+
+  app.on("second-instance", (_event, argv) => {
+    const deepLink = argv.find((arg) => arg.startsWith("armorclaw://"));
+    if (deepLink) {
+      handleDeepLink(deepLink, () => mainWindow);
+    }
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
   });
 });
 

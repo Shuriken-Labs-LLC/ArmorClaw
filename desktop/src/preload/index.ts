@@ -61,6 +61,20 @@ const api = {
   // Audit
   listAuditEntries: (limit?: number, projectId?: string) =>
     ipcRenderer.invoke("audit:list", limit, projectId),
+
+  // Deep link events
+  onDeepLinkAuth: (callback: (data: { token: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { token: string }) =>
+      callback(data);
+    ipcRenderer.on("deep-link:auth", handler);
+    return () => { ipcRenderer.removeListener("deep-link:auth", handler); };
+  },
+  onDeepLinkBilling: (callback: (data: { sessionId: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { sessionId: string }) =>
+      callback(data);
+    ipcRenderer.on("deep-link:billing", handler);
+    return () => { ipcRenderer.removeListener("deep-link:billing", handler); };
+  },
 } as const;
 
 export type ArmorClawAPI = typeof api;
