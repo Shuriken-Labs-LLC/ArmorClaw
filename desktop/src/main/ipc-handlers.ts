@@ -1,4 +1,4 @@
-import { ipcMain } from "electron";
+import { app, ipcMain } from "electron";
 import { exportWorkspace } from "./workspace-export";
 import {
   listWorkspaces,
@@ -29,6 +29,12 @@ import {
   updateCommitment,
   deleteCommitment,
   listCommitmentRuns,
+  listEntities,
+  getEntitiesForMemory,
+  getMemoriesForEntity,
+  listTopics,
+  getTopicForMemory,
+  getMemoriesForTopic,
   listAuditEntries,
   writeAuditEntry,
 } from "./repositories";
@@ -42,6 +48,8 @@ import type {
   Commitment,
   CommitmentRun,
   TriggerType,
+  Entity,
+  Topic,
   AuditEntry,
   MessageRole,
 } from "./repositories";
@@ -223,6 +231,43 @@ export function registerIpcHandlers(): void {
     "commitment:runs",
     (_e, commitmentId: string, limit?: number): CommitmentRun[] =>
       listCommitmentRuns(commitmentId, limit),
+  );
+
+  // ---- Login items ----
+  ipcMain.handle("app:getLoginItemSettings", () => app.getLoginItemSettings());
+  ipcMain.handle("app:setLoginItemSettings", (_e, openAtLogin: boolean) => {
+    app.setLoginItemSettings({ openAtLogin });
+  });
+
+  // ---- Entities & Topics ----
+  ipcMain.handle(
+    "entity:list",
+    (_e, workspaceId: string): Entity[] => listEntities(workspaceId),
+  );
+
+  ipcMain.handle(
+    "entity:memoriesFor",
+    (_e, entityId: string): Memory[] => getMemoriesForEntity(entityId),
+  );
+
+  ipcMain.handle(
+    "entity:forMemory",
+    (_e, memoryId: string): Entity[] => getEntitiesForMemory(memoryId),
+  );
+
+  ipcMain.handle(
+    "topic:list",
+    (_e, workspaceId: string): Topic[] => listTopics(workspaceId),
+  );
+
+  ipcMain.handle(
+    "topic:forMemory",
+    (_e, memoryId: string): Topic | undefined => getTopicForMemory(memoryId),
+  );
+
+  ipcMain.handle(
+    "topic:memoriesFor",
+    (_e, topicId: string): Memory[] => getMemoriesForTopic(topicId),
   );
 
   // ---- Workspace export ----

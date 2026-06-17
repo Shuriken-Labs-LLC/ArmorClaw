@@ -510,6 +510,192 @@ export function rejectMemory(id: string): void {
     .run(now, id);
 }
 
+// ---- Entities ----
+
+export type EntityType = "person" | "project" | "event" | "organization" | "place" | "thing";
+
+export interface Entity {
+  id: string;
+  workspaceId: string;
+  name: string;
+  type: EntityType;
+  aliases: string[] | null;
+  canonicalId: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface EntityRow {
+  id: string;
+  workspace_id: string;
+  name: string;
+  type: string;
+  aliases: string | null;
+  canonical_id: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+function mapEntity(row: EntityRow): Entity {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    name: row.name,
+    type: row.type as EntityType,
+    aliases: row.aliases ? JSON.parse(row.aliases) as string[] : null,
+    canonicalId: row.canonical_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function listEntities(workspaceId: string): Entity[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM entities WHERE workspace_id = ? ORDER BY name")
+    .all(workspaceId) as EntityRow[];
+  return rows.map(mapEntity);
+}
+
+export function getOrCreateEntity(
+  workspaceId: string,
+  name: string,
+  type: EntityType,
+): Entity {
+  const existing = getDb()
+    .prepare("SELECT * FROM entities WHERE workspace_id = ? AND type = ? AND name = ?")
+    .get(workspaceId, type, name) as EntityRow | undefined;
+  if (existing) return mapEntity(existing);
+
+  const id = randomUUID();
+  const now = Date.now();
+  getDb()
+    .prepare(
+      "INSERT INTO entities (id, workspace_id, name, type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .run(id, workspaceId, name, type, now, now);
+  return { id, workspaceId, name, type, aliases: null, canonicalId: null, createdAt: now, updatedAt: now };
+}
+
+export function linkMemoryEntity(memoryId: string, entityId: string): void {
+  getDb()
+    .prepare("INSERT OR IGNORE INTO memory_entities (memory_id, entity_id) VALUES (?, ?)")
+    .run(memoryId, entityId);
+}
+
+export function getEntitiesForMemory(memoryId: string): Entity[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT e.* FROM entities e
+       JOIN memory_entities me ON e.id = me.entity_id
+       WHERE me.memory_id = ?`,
+    )
+    .all(memoryId) as EntityRow[];
+  return rows.map(mapEntity);
+}
+
+export function getMemoriesForEntity(entityId: string): Memory[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT m.* FROM memories m
+       JOIN memory_entities me ON m.id = me.memory_id
+       WHERE me.entity_id = ?
+       ORDER BY m.updated_at DESC`,
+    )
+    .all(entityId) as MemoryRow[];
+  return rows.map(mapMemory);
+}
+
+// ---- Topics ----
+
+export interface Topic {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  useCount: number;
+  lastUsedAt: number | null;
+  createdAt: number;
+}
+
+interface TopicRow {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  use_count: number;
+  last_used_at: number | null;
+  created_at: number;
+}
+
+function mapTopic(row: TopicRow): Topic {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    name: row.name,
+    description: row.description,
+    useCount: row.use_count,
+    lastUsedAt: row.last_used_at,
+    createdAt: row.created_at,
+  };
+}
+
+export function listTopics(workspaceId: string): Topic[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM topics WHERE workspace_id = ? ORDER BY last_used_at DESC")
+    .all(workspaceId) as TopicRow[];
+  return rows.map(mapTopic);
+}
+
+export function getOrCreateTopic(workspaceId: string, name: string, description?: string): Topic {
+  const existing = getDb()
+    .prepare("SELECT * FROM topics WHERE workspace_id = ? AND name = ?")
+    .get(workspaceId, name) as TopicRow | undefined;
+  if (existing) {
+    getDb()
+      .prepare("UPDATE topics SET use_count = use_count + 1, last_used_at = ? WHERE id = ?")
+      .run(Date.now(), existing.id);
+    return mapTopic({ ...existing, use_count: existing.use_count + 1, last_used_at: Date.now() });
+  }
+
+  const id = randomUUID();
+  const now = Date.now();
+  getDb()
+    .prepare(
+      "INSERT INTO topics (id, workspace_id, name, description, use_count, last_used_at, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)",
+    )
+    .run(id, workspaceId, name, description ?? null, now, now);
+  return { id, workspaceId, name, description: description ?? null, useCount: 1, lastUsedAt: now, createdAt: now };
+}
+
+export function linkMemoryTopic(memoryId: string, topicId: string): void {
+  getDb()
+    .prepare("INSERT OR REPLACE INTO memory_topics (memory_id, topic_id) VALUES (?, ?)")
+    .run(memoryId, topicId);
+}
+
+export function getTopicForMemory(memoryId: string): Topic | undefined {
+  const row = getDb()
+    .prepare(
+      `SELECT t.* FROM topics t
+       JOIN memory_topics mt ON t.id = mt.topic_id
+       WHERE mt.memory_id = ?`,
+    )
+    .get(memoryId) as TopicRow | undefined;
+  return row ? mapTopic(row) : undefined;
+}
+
+export function getMemoriesForTopic(topicId: string): Memory[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT m.* FROM memories m
+       JOIN memory_topics mt ON m.id = mt.memory_id
+       WHERE mt.topic_id = ?
+       ORDER BY m.updated_at DESC`,
+    )
+    .all(topicId) as MemoryRow[];
+  return rows.map(mapMemory);
+}
+
 // ---- Audit ----
 
 export function writeAuditEntry(

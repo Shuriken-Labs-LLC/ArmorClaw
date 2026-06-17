@@ -131,6 +131,18 @@ function GeneralSettings(): React.JSX.Element {
         </p>
       </SettingsGroup>
 
+      <SettingsGroup label="Launch at Login">
+        <div className="flex items-center justify-between rounded-md border border-[#26262c] bg-[#16161a] p-3">
+          <div>
+            <p className="text-sm text-[#e8e8ea]">Open ArmorClaw when you log in</p>
+            <p className="text-xs text-[#8b8b92]">
+              Keeps the scheduler running so commitments fire on time.
+            </p>
+          </div>
+          <LaunchAtLoginToggle />
+        </div>
+      </SettingsGroup>
+
       <SettingsGroup label="OpenClaw Runtime">
         <div className="rounded-md border border-[#26262c] bg-[#16161a] p-3">
           <div className="flex items-center justify-between">
@@ -369,6 +381,41 @@ function SettingsGroup({
       </label>
       {children}
     </div>
+  );
+}
+
+function LaunchAtLoginToggle(): React.JSX.Element {
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void window.armorClaw.getLoginItemSettings().then((settings) => {
+      setEnabled(settings.openAtLogin);
+      setLoading(false);
+    });
+  }, []);
+
+  const toggle = async () => {
+    const next = !enabled;
+    await window.armorClaw.setLoginItemSettings(next);
+    setEnabled(next);
+  };
+
+  if (loading) return <span className="text-xs text-[#8b8b92]">...</span>;
+
+  return (
+    <button
+      className={`relative h-6 w-11 rounded-full transition-colors ${
+        enabled ? "bg-[#d97706]" : "bg-[#26262c]"
+      }`}
+      onClick={() => void toggle()}
+    >
+      <span
+        className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+          enabled ? "translate-x-5" : ""
+        }`}
+      />
+    </button>
   );
 }
 

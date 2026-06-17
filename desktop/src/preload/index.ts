@@ -58,6 +58,25 @@ const api = {
   approveMemory: (id: string) => ipcRenderer.invoke("memory:approve", id),
   rejectMemory: (id: string) => ipcRenderer.invoke("memory:reject", id),
 
+  // Login items
+  getLoginItemSettings: () => ipcRenderer.invoke("app:getLoginItemSettings"),
+  setLoginItemSettings: (openAtLogin: boolean) =>
+    ipcRenderer.invoke("app:setLoginItemSettings", openAtLogin),
+
+  // Entities & Topics
+  listEntities: (workspaceId: string) =>
+    ipcRenderer.invoke("entity:list", workspaceId),
+  getEntitiesForMemory: (memoryId: string) =>
+    ipcRenderer.invoke("entity:forMemory", memoryId),
+  getMemoriesForEntity: (entityId: string) =>
+    ipcRenderer.invoke("entity:memoriesFor", entityId),
+  listTopics: (workspaceId: string) =>
+    ipcRenderer.invoke("topic:list", workspaceId),
+  getTopicForMemory: (memoryId: string) =>
+    ipcRenderer.invoke("topic:forMemory", memoryId),
+  getMemoriesForTopic: (topicId: string) =>
+    ipcRenderer.invoke("topic:memoriesFor", topicId),
+
   // Workspace export
   exportWorkspace: (workspaceId: string) =>
     ipcRenderer.invoke("workspace:export", workspaceId),

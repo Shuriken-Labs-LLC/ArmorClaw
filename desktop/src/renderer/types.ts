@@ -98,6 +98,27 @@ export interface CommitmentRun {
   detail: string | null;
 }
 
+export interface Entity {
+  id: string;
+  workspaceId: string;
+  name: string;
+  type: "person" | "project" | "event" | "organization" | "place" | "thing";
+  aliases: string[] | null;
+  canonicalId: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Topic {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  useCount: number;
+  lastUsedAt: number | null;
+  createdAt: number;
+}
+
 export interface AuditEntry {
   id: number;
   workspaceId: string | null;
@@ -134,6 +155,14 @@ declare global {
       searchMemories: (projectId: string, query: string, limit?: number) => Promise<Memory[]>;
       approveMemory: (id: string) => Promise<void>;
       rejectMemory: (id: string) => Promise<void>;
+      getLoginItemSettings: () => Promise<{ openAtLogin: boolean }>;
+      setLoginItemSettings: (openAtLogin: boolean) => Promise<void>;
+      listEntities: (workspaceId: string) => Promise<Entity[]>;
+      getEntitiesForMemory: (memoryId: string) => Promise<Entity[]>;
+      getMemoriesForEntity: (entityId: string) => Promise<Memory[]>;
+      listTopics: (workspaceId: string) => Promise<Topic[]>;
+      getTopicForMemory: (memoryId: string) => Promise<Topic | undefined>;
+      getMemoriesForTopic: (topicId: string) => Promise<Memory[]>;
       exportWorkspace: (workspaceId: string) => Promise<string>;
       listCommitments: (projectId: string) => Promise<Commitment[]>;
       getCommitment: (id: string) => Promise<Commitment | undefined>;

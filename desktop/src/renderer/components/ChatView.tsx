@@ -13,6 +13,7 @@ export function ChatView(): React.JSX.Element {
 
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [showRaw, setShowRaw] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,6 +49,17 @@ export function ChatView(): React.JSX.Element {
         </span>
         <div className="flex-1" />
         <button
+          className={`rounded-md px-3 py-1 text-xs transition-colors ${
+            showRaw
+              ? "bg-[#26262c] text-white"
+              : "text-[#8b8b92] hover:bg-[#16161a] hover:text-white"
+          }`}
+          onClick={() => setShowRaw(!showRaw)}
+          title="Show raw OpenClaw output"
+        >
+          Raw
+        </button>
+        <button
           className="rounded-md px-3 py-1 text-xs text-[#8b8b92] transition-colors hover:bg-[#16161a] hover:text-white"
           onClick={() => void createChat()}
         >
@@ -55,31 +67,48 @@ export function ChatView(): React.JSX.Element {
         </button>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        {messages.length === 0 && openClawMessages.length === 0 && (
-          <EmptyState projectName={activeProject.name} />
+      {/* Messages + optional raw panel */}
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {messages.length === 0 && openClawMessages.length === 0 && (
+            <EmptyState projectName={activeProject.name} />
+          )}
+
+          {messages.map((msg) => (
+            <MessageBubble
+              key={msg.id}
+              role={msg.role}
+              content={msg.content}
+              timestamp={msg.createdAt}
+            />
+          ))}
+
+          {openClawMessages.map((msg, i) => (
+            <MessageBubble
+              key={`ocm-${i}`}
+              role="assistant"
+              content={msg}
+              timestamp={Date.now()}
+            />
+          ))}
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        {showRaw && (
+          <div className="w-80 overflow-y-auto border-l border-[#26262c] bg-[#0a0a0b] p-4">
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-[#8b8b92]">
+              Raw OpenClaw Output
+            </h3>
+            {openClawMessages.length === 0 ? (
+              <p className="text-xs text-[#8b8b92]">No output yet</p>
+            ) : (
+              <pre className="whitespace-pre-wrap font-mono text-xs text-[#8b8b92]">
+                {openClawMessages.join("\n")}
+              </pre>
+            )}
+          </div>
         )}
-
-        {messages.map((msg) => (
-          <MessageBubble
-            key={msg.id}
-            role={msg.role}
-            content={msg.content}
-            timestamp={msg.createdAt}
-          />
-        ))}
-
-        {openClawMessages.map((msg, i) => (
-          <MessageBubble
-            key={`ocm-${i}`}
-            role="assistant"
-            content={msg}
-            timestamp={Date.now()}
-          />
-        ))}
-
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
