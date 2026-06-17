@@ -57,6 +57,11 @@ const api = {
     ipcRenderer.invoke("memory:search", projectId, query, limit),
   approveMemory: (id: string) => ipcRenderer.invoke("memory:approve", id),
   rejectMemory: (id: string) => ipcRenderer.invoke("memory:reject", id),
+  updateMemory: (id: string, updates: Record<string, unknown>) =>
+    ipcRenderer.invoke("memory:update", id, updates),
+  deleteMemory: (id: string) => ipcRenderer.invoke("memory:delete", id),
+  getMemoryCountForProject: (projectId: string) =>
+    ipcRenderer.invoke("memory:countForProject", projectId),
 
   // Login items
   getLoginItemSettings: () => ipcRenderer.invoke("app:getLoginItemSettings"),
@@ -76,6 +81,20 @@ const api = {
     ipcRenderer.invoke("topic:forMemory", memoryId),
   getMemoriesForTopic: (topicId: string) =>
     ipcRenderer.invoke("topic:memoriesFor", topicId),
+  getTopicsForProject: (projectId: string) =>
+    ipcRenderer.invoke("topic:forProject", projectId),
+  searchEntitiesAcross: (name: string) =>
+    ipcRenderer.invoke("entity:searchAcross", name),
+
+  // Dossier pins
+  listDossierPins: (topicId: string) =>
+    ipcRenderer.invoke("dossier:list", topicId),
+  generateDossier: (topicId: string) =>
+    ipcRenderer.invoke("dossier:generate", topicId),
+  createDossierPin: (topicId: string, contentMd: string) =>
+    ipcRenderer.invoke("dossier:create", topicId, contentMd),
+  archiveDossierPin: (id: string) =>
+    ipcRenderer.invoke("dossier:archive", id),
 
   // Workspace export
   exportWorkspace: (workspaceId: string) =>

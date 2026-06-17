@@ -119,6 +119,14 @@ export interface Topic {
   createdAt: number;
 }
 
+export interface DossierPin {
+  id: string;
+  topicId: string;
+  contentMd: string;
+  generatedAt: number;
+  isArchived: boolean;
+}
+
 export interface AuditEntry {
   id: number;
   workspaceId: string | null;
@@ -155,6 +163,9 @@ declare global {
       searchMemories: (projectId: string, query: string, limit?: number) => Promise<Memory[]>;
       approveMemory: (id: string) => Promise<void>;
       rejectMemory: (id: string) => Promise<void>;
+      updateMemory: (id: string, updates: Partial<Pick<Memory, "subject" | "value" | "userNotes">>) => Promise<void>;
+      deleteMemory: (id: string) => Promise<void>;
+      getMemoryCountForProject: (projectId: string) => Promise<number>;
       getLoginItemSettings: () => Promise<{ openAtLogin: boolean }>;
       setLoginItemSettings: (openAtLogin: boolean) => Promise<void>;
       listEntities: (workspaceId: string) => Promise<Entity[]>;
@@ -163,6 +174,12 @@ declare global {
       listTopics: (workspaceId: string) => Promise<Topic[]>;
       getTopicForMemory: (memoryId: string) => Promise<Topic | undefined>;
       getMemoriesForTopic: (topicId: string) => Promise<Memory[]>;
+      getTopicsForProject: (projectId: string) => Promise<Topic[]>;
+      searchEntitiesAcross: (name: string) => Promise<Array<Entity & { workspaceName: string }>>;
+      listDossierPins: (topicId: string) => Promise<DossierPin[]>;
+      generateDossier: (topicId: string) => Promise<string>;
+      createDossierPin: (topicId: string, contentMd: string) => Promise<DossierPin>;
+      archiveDossierPin: (id: string) => Promise<void>;
       exportWorkspace: (workspaceId: string) => Promise<string>;
       listCommitments: (projectId: string) => Promise<Commitment[]>;
       getCommitment: (id: string) => Promise<Commitment | undefined>;

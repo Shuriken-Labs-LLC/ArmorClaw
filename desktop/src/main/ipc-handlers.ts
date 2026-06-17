@@ -35,6 +35,14 @@ import {
   listTopics,
   getTopicForMemory,
   getMemoriesForTopic,
+  getTopicsForProject,
+  searchEntitiesAcrossWorkspaces,
+  updateMemory,
+  deleteMemory,
+  getMemoryCountForProject,
+  listDossierPins,
+  createDossierPin,
+  archiveDossierPin,
   listAuditEntries,
   writeAuditEntry,
 } from "./repositories";
@@ -185,6 +193,23 @@ export function registerIpcHandlers(): void {
     writeAuditEntry("memory.rejected", { id });
   });
 
+  ipcMain.handle(
+    "memory:update",
+    (_e, id: string, updates: Partial<Pick<Memory, "subject" | "value" | "userNotes">>): void => {
+      updateMemory(id, updates);
+    },
+  );
+
+  ipcMain.handle("memory:delete", (_e, id: string): void => {
+    writeAuditEntry("memory.deleted", { id });
+    deleteMemory(id);
+  });
+
+  ipcMain.handle(
+    "memory:countForProject",
+    (_e, projectId: string): number => getMemoryCountForProject(projectId),
+  );
+
   // ---- Commitments ----
   ipcMain.handle(
     "commitment:list",
@@ -268,6 +293,48 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     "topic:memoriesFor",
     (_e, topicId: string): Memory[] => getMemoriesForTopic(topicId),
+  );
+
+  ipcMain.handle(
+    "topic:forProject",
+    (_e, projectId: string): Topic[] => getTopicsForProject(projectId),
+  );
+
+  ipcMain.handle(
+    "entity:searchAcross",
+    (_e, name: string) => searchEntitiesAcrossWorkspaces(name),
+  );
+
+  // ---- Dossier Pins ----
+  ipcMain.handle(
+    "dossier:list",
+    (_e, topicId: string) => listDossierPins(topicId),
+  );
+
+  ipcMain.handle(
+    "dossier:create",
+    (_e, topicId: string, contentMd: string) => {
+      const pin = createDossierPin(topicId, contentMd);
+      writeAuditEntry("dossier.created", { id: pin.id, topicId });
+      return pin;
+    },
+  );
+
+  ipcMain.handle(
+    "dossier:archive",
+    (_e, id: string): void => { archiveDossierPin(id); },
+  );
+
+  ipcMain.handle(
+    "dossier:generate",
+    async (_e, topicId: string): Promise<string> => {
+      const memories = getMemoriesForTopic(topicId);
+      if (memories.length === 0) return "No memories available for this topic.";
+      const lines = memories.map((m) =>
+        `## ${m.subject}\n${m.value}${m.summary ? `\n\n*Summary: ${m.summary}*` : ""}`,
+      );
+      return `# Topic Dossier\n\nGenerated ${new Date().toLocaleDateString()}\n\n${lines.join("\n\n---\n\n")}`;
+    },
   );
 
   // ---- Workspace export ----

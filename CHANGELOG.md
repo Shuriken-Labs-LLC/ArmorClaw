@@ -41,6 +41,17 @@ All notable changes to ArmorClaw are documented here. Format follows Keep a Chan
 - In-app notification system: Zustand notification store, NotificationBell with unread badge, NotificationPanel dropdown, commitment events auto-create notifications.
 - Workspace markdown export: dumps entire workspace tree (projects, chats, messages, memories, commitments) to `~/Documents/ArmorClaw Exports/`.
 - Pre-seeded morning briefing: recurring commitment created after onboarding (autonomous, next_wake missed-run policy, 8 AM daily).
+- Brain MCP server: JSON-RPC stdio process with brain.search, brain.propose, commit.propose, commit.list tools; save-time LLM classification for entities/topics/summaries.
+- Entity/topic CRUD: auto-extraction on memory propose, entity detail page, topic detail view, cross-workspace entity search.
+- Brain panel layers 2-4: topic view with filtered memories and related topics, memory detail drawer with edit/delete/entity display, entity detail page showing all related memories, cross-walk search across all workspaces.
+- Topic chips and entity sidebar in project brain view.
+- Dossier generation: "Generate dossier" on topic view, pin/archive support via dossier_pins table, copy-as-markdown.
+- Brain mode token cost indicator: live estimated tokens/chat displayed on each mode option, approved memory count in brain settings.
+- "Show raw" toggle in chat top bar: side panel showing OpenClaw raw stdout output.
+- Launch-at-login toggle in General settings.
+- Tray icon with Show/Quit menu, click-to-focus.
+- Memory update/delete: edit subject/value in memory detail, delete with cascade cleanup of entity/topic links.
+- Empty states: commitments view with CTA, sidebar project list with create prompt.
 
 ### Fixed
 - electron-vite renderer build: removed explicit rollupOptions.input that broke path resolution with root config.

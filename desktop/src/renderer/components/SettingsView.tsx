@@ -239,6 +239,13 @@ function AccountSettings(): React.JSX.Element {
 
 function BrainSettings(): React.JSX.Element {
   const activeProject = useAppStore((s) => s.activeProject);
+  const [memoryCount, setMemoryCount] = useState(0);
+
+  useEffect(() => {
+    if (activeProject) {
+      void window.armorClaw.getMemoryCountForProject(activeProject.id).then(setMemoryCount);
+    }
+  }, [activeProject?.id]);
 
   if (!activeProject) {
     return <p className="text-[#8b8b92]">Select a project to configure brain settings.</p>;
@@ -252,29 +259,46 @@ function BrainSettings(): React.JSX.Element {
     }
   };
 
+  const avgTokensPerMemory = 150;
+  const tokenEstimates = {
+    smart: `~${Math.round(memoryCount * avgTokensPerMemory * 0.15)} tokens/chat`,
+    manual: "~0 tokens/chat",
+    full: `~${(memoryCount * avgTokensPerMemory).toLocaleString()} tokens/chat`,
+  };
+
   return (
     <div className="max-w-lg space-y-6">
       <h3 className="text-lg font-medium text-white">
         Brain &mdash; {activeProject.name}
       </h3>
 
+      <div className="rounded-md border border-[#26262c] bg-[#16161a] p-3">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-[#8b8b92]">Approved memories</span>
+          <span className="font-medium text-white">{memoryCount}</span>
+        </div>
+      </div>
+
       <SettingsGroup label="Access Mode">
         <div className="space-y-2">
           <BrainModeOption
             label="Smart"
             description="Agent searches memory when relevant. Low token cost."
+            tokenEstimate={tokenEstimates.smart}
             active={activeProject.brainMode === "smart"}
             onClick={() => void handleBrainModeChange("smart")}
           />
           <BrainModeOption
             label="Manual"
             description="Agent only searches when you explicitly ask. Near-zero token cost."
+            tokenEstimate={tokenEstimates.manual}
             active={activeProject.brainMode === "manual"}
             onClick={() => void handleBrainModeChange("manual")}
           />
           <BrainModeOption
             label="Full"
             description="All memories loaded into every chat. Token cost scales with memory count."
+            tokenEstimate={tokenEstimates.full}
             active={activeProject.brainMode === "full"}
             onClick={() => void handleBrainModeChange("full")}
           />
@@ -287,11 +311,13 @@ function BrainSettings(): React.JSX.Element {
 function BrainModeOption({
   label,
   description,
+  tokenEstimate,
   active,
   onClick,
 }: {
   label: string;
   description: string;
+  tokenEstimate: string;
   active: boolean;
   onClick: () => void;
 }): React.JSX.Element {
@@ -304,7 +330,12 @@ function BrainModeOption({
       }`}
       onClick={onClick}
     >
-      <span className="text-sm font-medium text-white">{label}</span>
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-white">{label}</span>
+        <span className="rounded-full bg-[#26262c] px-2 py-0.5 text-xs text-[#8b8b92]">
+          {tokenEstimate}
+        </span>
+      </div>
       <p className="mt-0.5 text-xs text-[#8b8b92]">{description}</p>
     </button>
   );

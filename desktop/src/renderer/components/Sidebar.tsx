@@ -93,6 +93,14 @@ export function Sidebar(): React.JSX.Element {
             onClick={() => selectProject(p)}
           />
         ))}
+        {projects.length === 0 && !showNewProj && (
+          <button
+            className="w-full rounded-md border border-dashed border-[#26262c] px-3 py-2 text-xs text-[#8b8b92] transition-colors hover:border-[#d97706] hover:text-white"
+            onClick={() => setShowNewProj(true)}
+          >
+            + Create your first project
+          </button>
+        )}
         {showNewProj && (
           <div className="mt-1 flex gap-1">
             <input

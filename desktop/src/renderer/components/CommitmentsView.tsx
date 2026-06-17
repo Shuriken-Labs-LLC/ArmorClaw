@@ -69,11 +69,20 @@ export function CommitmentsView(): React.JSX.Element {
           )}
 
           {commitments.length === 0 && !showCreate && (
-            <div className="rounded-lg border border-dashed border-[#26262c] p-8 text-center">
-              <p className="text-sm text-[#8b8b92]">
-                No commitments yet. Ask Emerson to set one up, or create one
-                manually.
+            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-[#26262c] p-8 text-center">
+              <span className="text-4xl">📋</span>
+              <h3 className="text-sm font-medium text-white">No commitments yet</h3>
+              <p className="max-w-sm text-xs text-[#8b8b92]">
+                Commitments are recurring or one-time tasks that Emerson runs
+                for you automatically. Try &ldquo;Set up a daily briefing&rdquo;
+                in chat, or create one manually.
               </p>
+              <button
+                className="mt-2 rounded-md bg-[#d97706] px-4 py-2 text-sm font-medium text-white hover:bg-[#b45309]"
+                onClick={() => setShowCreate(true)}
+              >
+                Create your first commitment
+              </button>
             </div>
           )}
         </div>

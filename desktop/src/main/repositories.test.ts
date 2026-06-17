@@ -240,4 +240,63 @@ describe("database schema", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]!["event_type"]).toBe("test.event");
   });
+
+  it("memory update and delete work", () => {
+    const now = Date.now();
+    db.prepare("INSERT INTO workspaces (id, name, sort_order, created_at, updated_at) VALUES ('ws1', 'Test', 0, ?, ?)").run(now, now);
+    db.prepare("INSERT INTO projects (id, workspace_id, name, sort_order, brain_mode, created_at, updated_at) VALUES ('p1', 'ws1', 'Proj', 0, 'smart', ?, ?)").run(now, now);
+    db.prepare(
+      `INSERT INTO memories (id, project_id, subject, value, confidence, status, created_at, updated_at)
+       VALUES ('mem1', 'p1', 'Original', 'Original value', 0.8, 'approved', ?, ?)`,
+    ).run(now, now);
+
+    db.prepare("UPDATE memories SET subject = 'Updated', updated_at = ? WHERE id = 'mem1'").run(now + 1);
+    const updated = db.prepare("SELECT * FROM memories WHERE id = 'mem1'").get() as Record<string, unknown>;
+    expect(updated["subject"]).toBe("Updated");
+
+    db.prepare("DELETE FROM memories WHERE id = 'mem1'").run();
+    const deleted = db.prepare("SELECT * FROM memories WHERE id = 'mem1'").get();
+    expect(deleted).toBeUndefined();
+  });
+
+  it("topics for project query works", () => {
+    const now = Date.now();
+    db.prepare("INSERT INTO workspaces (id, name, sort_order, created_at, updated_at) VALUES ('ws1', 'Test', 0, ?, ?)").run(now, now);
+    db.prepare("INSERT INTO projects (id, workspace_id, name, sort_order, brain_mode, created_at, updated_at) VALUES ('p1', 'ws1', 'Proj', 0, 'smart', ?, ?)").run(now, now);
+    db.prepare(
+      `INSERT INTO memories (id, project_id, subject, value, confidence, status, created_at, updated_at)
+       VALUES ('mem1', 'p1', 'Test memory', 'Value', 0.8, 'approved', ?, ?)`,
+    ).run(now, now);
+    db.prepare("INSERT INTO topics (id, workspace_id, name, use_count, last_used_at, created_at) VALUES ('t1', 'ws1', 'Finance', 1, ?, ?)").run(now, now);
+    db.prepare("INSERT INTO memory_topics (memory_id, topic_id) VALUES ('mem1', 't1')").run();
+
+    const topics = db.prepare(
+      `SELECT DISTINCT t.* FROM topics t
+       JOIN memory_topics mt ON t.id = mt.topic_id
+       JOIN memories m ON m.id = mt.memory_id
+       WHERE m.project_id = 'p1'`,
+    ).all() as Array<Record<string, unknown>>;
+    expect(topics).toHaveLength(1);
+    expect(topics[0]!["name"]).toBe("Finance");
+  });
+
+  it("entity cross-walk search works", () => {
+    const now = Date.now();
+    db.prepare("INSERT INTO workspaces (id, name, sort_order, created_at, updated_at) VALUES ('ws1', 'Work', 0, ?, ?)").run(now, now);
+    db.prepare("INSERT INTO workspaces (id, name, sort_order, created_at, updated_at) VALUES ('ws2', 'Personal', 1, ?, ?)").run(now, now);
+    db.prepare("INSERT INTO entities (id, workspace_id, name, type, created_at, updated_at) VALUES ('e1', 'ws1', 'Alice', 'person', ?, ?)").run(now, now);
+    db.prepare("INSERT INTO entities (id, workspace_id, name, type, created_at, updated_at) VALUES ('e2', 'ws2', 'Alice Smith', 'person', ?, ?)").run(now, now);
+    db.prepare("INSERT INTO entities (id, workspace_id, name, type, created_at, updated_at) VALUES ('e3', 'ws1', 'Bob', 'person', ?, ?)").run(now, now);
+
+    const results = db.prepare(
+      `SELECT e.*, w.name AS ws_name FROM entities e
+       JOIN workspaces w ON w.id = e.workspace_id
+       WHERE e.name LIKE '%Alice%' COLLATE NOCASE
+       ORDER BY e.name`,
+    ).all() as Array<Record<string, unknown>>;
+    expect(results).toHaveLength(2);
+    expect(results[0]!["name"]).toBe("Alice");
+    expect(results[0]!["ws_name"]).toBe("Work");
+    expect(results[1]!["name"]).toBe("Alice Smith");
+  });
 });

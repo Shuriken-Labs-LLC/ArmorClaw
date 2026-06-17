@@ -510,6 +510,36 @@ export function rejectMemory(id: string): void {
     .run(now, id);
 }
 
+export function updateMemory(
+  id: string,
+  updates: Partial<Pick<Memory, "subject" | "value" | "userNotes">>,
+): void {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  if (updates.subject !== undefined) { sets.push("subject = ?"); params.push(updates.subject); }
+  if (updates.value !== undefined) { sets.push("value = ?"); params.push(updates.value); }
+  if (updates.userNotes !== undefined) { sets.push("user_notes = ?"); params.push(updates.userNotes); }
+  if (sets.length === 0) return;
+  sets.push("updated_at = ?");
+  params.push(Date.now());
+  params.push(id);
+  getDb().prepare(`UPDATE memories SET ${sets.join(", ")} WHERE id = ?`).run(...params);
+}
+
+export function deleteMemory(id: string): void {
+  const db = getDb();
+  db.prepare("DELETE FROM memory_entities WHERE memory_id = ?").run(id);
+  db.prepare("DELETE FROM memory_topics WHERE memory_id = ?").run(id);
+  db.prepare("DELETE FROM memories WHERE id = ?").run(id);
+}
+
+export function getMemoryCountForProject(projectId: string): number {
+  const row = getDb()
+    .prepare("SELECT COUNT(*) AS cnt FROM memories WHERE project_id = ? AND status = 'approved'")
+    .get(projectId) as { cnt: number };
+  return row.cnt;
+}
+
 // ---- Entities ----
 
 export type EntityType = "person" | "project" | "event" | "organization" | "place" | "thing";
@@ -696,6 +726,39 @@ export function getMemoriesForTopic(topicId: string): Memory[] {
   return rows.map(mapMemory);
 }
 
+export function getTopicsForProject(projectId: string): Topic[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT DISTINCT t.* FROM topics t
+       JOIN memory_topics mt ON t.id = mt.topic_id
+       JOIN memories m ON m.id = mt.memory_id
+       WHERE m.project_id = ?
+       ORDER BY t.use_count DESC`,
+    )
+    .all(projectId) as TopicRow[];
+  return rows.map(mapTopic);
+}
+
+export function getTopicById(id: string): Topic | undefined {
+  const row = getDb()
+    .prepare("SELECT * FROM topics WHERE id = ?")
+    .get(id) as TopicRow | undefined;
+  return row ? mapTopic(row) : undefined;
+}
+
+export function searchEntitiesAcrossWorkspaces(name: string): Array<Entity & { workspaceName: string }> {
+  const rows = getDb()
+    .prepare(
+      `SELECT e.*, w.name AS ws_name FROM entities e
+       JOIN workspaces w ON w.id = e.workspace_id
+       WHERE e.name LIKE ? COLLATE NOCASE
+       ORDER BY e.name
+       LIMIT 50`,
+    )
+    .all(`%${name}%`) as Array<EntityRow & { ws_name: string }>;
+  return rows.map((r) => ({ ...mapEntity(r), workspaceName: r.ws_name }));
+}
+
 // ---- Audit ----
 
 export function writeAuditEntry(
@@ -719,6 +782,54 @@ export interface AuditEntry {
   eventType: string;
   payloadJson: string;
   createdAt: number;
+}
+
+// ---- Dossier Pins ----
+
+export interface DossierPin {
+  id: string;
+  topicId: string;
+  contentMd: string;
+  generatedAt: number;
+  isArchived: boolean;
+}
+
+interface DossierPinRow {
+  id: string;
+  topic_id: string;
+  content_md: string;
+  generated_at: number;
+  is_archived: number;
+}
+
+function mapDossierPin(row: DossierPinRow): DossierPin {
+  return {
+    id: row.id,
+    topicId: row.topic_id,
+    contentMd: row.content_md,
+    generatedAt: row.generated_at,
+    isArchived: row.is_archived === 1,
+  };
+}
+
+export function listDossierPins(topicId: string): DossierPin[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM dossier_pins WHERE topic_id = ? AND is_archived = 0 ORDER BY generated_at DESC")
+    .all(topicId) as DossierPinRow[];
+  return rows.map(mapDossierPin);
+}
+
+export function createDossierPin(topicId: string, contentMd: string): DossierPin {
+  const id = randomUUID();
+  const now = Date.now();
+  getDb()
+    .prepare("INSERT INTO dossier_pins (id, topic_id, content_md, generated_at) VALUES (?, ?, ?, ?)")
+    .run(id, topicId, contentMd, now);
+  return { id, topicId, contentMd, generatedAt: now, isArchived: false };
+}
+
+export function archiveDossierPin(id: string): void {
+  getDb().prepare("UPDATE dossier_pins SET is_archived = 1 WHERE id = ?").run(id);
 }
 
 // ---- Commitments ----
