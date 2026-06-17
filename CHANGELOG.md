@@ -52,6 +52,11 @@ All notable changes to ArmorClaw are documented here. Format follows Keep a Chan
 - Tray icon with Show/Quit menu, click-to-focus.
 - Memory update/delete: edit subject/value in memory detail, delete with cascade cleanup of entity/topic links.
 - Empty states: commitments view with CTA, sidebar project list with create prompt.
+- Notification preferences: per-event-type toggles (commitment fired/missed/failed, memory proposed, integration error, task completed) stored in localStorage, respected by notification store.
+- Notifications settings tab with toggle UI for each event type.
+- Integrations settings tab: Gmail and Google Calendar cards with connect/disconnect state, v1.1 integrations teaser.
+- Memory proposal cards in chat: inline rendering of brain.propose tool calls with approve/reject buttons.
+- Marketing site scaffold (site package): Astro with Home (hero, features, how-it-works, pricing), Trust & Safety, and Changelog pages.
 
 ### Fixed
 - electron-vite renderer build: removed explicit rollupOptions.input that broke path resolution with root config.
