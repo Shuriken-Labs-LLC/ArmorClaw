@@ -33,6 +33,15 @@ All notable changes to ArmorClaw are documented here. Format follows Keep a Chan
 - KV binding and nodejs_compat flag in license-worker wrangler.toml.
 - ADR 0002: schema reconciliation.
 
+- Onboarding state machine: full 9-step flow (welcome → email → verify → trial → OpenClaw → model key → safety → workspace → integrations → done) with progress bar, dev bypass, and re-initialization on completion.
+- Onboarding wired into App shell with conditional rendering based on onboardingState.
+- Deep-link protocol handler: `armorclaw://` scheme registered via electron-builder, `app.on('open-url')` routing for `auth?token=...` and `billing/return?session_id=...` callbacks, single-instance lock.
+- Commitments scheduler: 30-second poll loop in main process, missed-run policy (ask/skip/next_wake), commitment CRUD repository, commitment_runs tracking.
+- Commitments UI: expandable cards with status/next-fire/run-history, create form with interval/time/manual triggers, pause/resume/delete.
+- In-app notification system: Zustand notification store, NotificationBell with unread badge, NotificationPanel dropdown, commitment events auto-create notifications.
+- Workspace markdown export: dumps entire workspace tree (projects, chats, messages, memories, commitments) to `~/Documents/ArmorClaw Exports/`.
+- Pre-seeded morning briefing: recurring commitment created after onboarding (autonomous, next_wake missed-run policy, 8 AM daily).
+
 ### Fixed
 - electron-vite renderer build: removed explicit rollupOptions.input that broke path resolution with root config.
 - .gitignore anchored build/ to repo root; desktop/build/entitlements.mac.plist is now tracked.
