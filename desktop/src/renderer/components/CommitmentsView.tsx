@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAppStore } from "../stores/app-store";
 import type { Commitment, CommitmentRun } from "../types";
 
@@ -9,21 +9,21 @@ export function CommitmentsView(): React.JSX.Element {
   const [showCreate, setShowCreate] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!activeProject) return;
     const list = await window.armorClaw.listCommitments(activeProject.id);
     setCommitments(list);
-  };
+  }, [activeProject]);
 
   useEffect(() => {
     void load();
-  }, [activeProject?.id]);
+  }, [load]);
 
   useEffect(() => {
     const unsub1 = window.armorClaw.onCommitmentFired(() => void load());
     const unsub2 = window.armorClaw.onCommitmentMissed(() => void load());
     return () => { unsub1(); unsub2(); };
-  }, [activeProject?.id]);
+  }, [load]);
 
   if (!activeProject || !activeWorkspace) {
     return (

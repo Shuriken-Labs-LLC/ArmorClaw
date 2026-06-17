@@ -214,7 +214,10 @@ function AccountSettings(): React.JSX.Element {
           ) : (
             <div className="space-y-2">
               <p className="text-sm text-[#8b8b92]">No active subscription</p>
-              <button className="rounded-md bg-[#d97706] px-4 py-2 text-sm font-medium text-white hover:bg-[#b45309]">
+              <button
+                className="rounded-md bg-[#d97706] px-4 py-2 text-sm font-medium text-white hover:bg-[#b45309]"
+                onClick={() => void window.armorClaw.openExternal("https://armorclaw.app/pricing")}
+              >
                 Start trial
               </button>
             </div>

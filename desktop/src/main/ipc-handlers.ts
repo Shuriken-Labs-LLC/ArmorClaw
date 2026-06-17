@@ -1,4 +1,4 @@
-import { app, ipcMain } from "electron";
+import { app, ipcMain, shell } from "electron";
 import { exportWorkspace } from "./workspace-export";
 import {
   listWorkspaces,
@@ -349,5 +349,10 @@ export function registerIpcHandlers(): void {
     "audit:list",
     (_e, limit?: number, projectId?: string): AuditEntry[] =>
       listAuditEntries(limit, projectId),
+  );
+
+  // ---- Shell ----
+  ipcMain.handle("shell:openExternal", (_e, url: string): Promise<void> =>
+    shell.openExternal(url),
   );
 }

@@ -198,6 +198,7 @@ declare global {
       listCommitmentRuns: (commitmentId: string, limit?: number) => Promise<CommitmentRun[]>;
       onCommitmentFired: (callback: (data: Record<string, unknown>) => void) => () => void;
       onCommitmentMissed: (callback: (data: Record<string, unknown>) => void) => () => void;
+      openExternal: (url: string) => Promise<void>;
       listAuditEntries: (limit?: number, projectId?: string) => Promise<AuditEntry[]>;
       onDeepLinkAuth: (callback: (data: { token: string }) => void) => () => void;
       onDeepLinkBilling: (callback: (data: { sessionId: string }) => void) => () => void;

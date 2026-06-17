@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useAppStore } from "./stores/app-store";
 import { useNotificationStore } from "./stores/notification-store";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Sidebar } from "./components/Sidebar";
 import { ChatView } from "./components/ChatView";
 import { BrainPanel } from "./components/BrainPanel";
@@ -74,23 +75,24 @@ export function App(): React.JSX.Element {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#0f0f10]">
-      <Sidebar />
-      <main className="flex flex-1 overflow-hidden">
-        <div className="flex-1 overflow-hidden">
-          {view === "chat" && <ChatView />}
-          {view === "brain" && <BrainPanel />}
-          {view === "settings" && <SettingsView />}
-          {view === "commitments" && <CommitmentsView />}
-        </div>
-
-        {/* Brain side panel (overlay on chat) */}
-        {brainPanelOpen && view === "chat" && (
-          <div className="w-[480px] border-l border-[#26262c] bg-[#0e0e0f]">
-            <BrainPanel />
+    <ErrorBoundary>
+      <div className="flex h-screen overflow-hidden bg-[#0f0f10]">
+        <Sidebar />
+        <main className="flex flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden">
+            {view === "chat" && <ChatView />}
+            {view === "brain" && <BrainPanel />}
+            {view === "settings" && <SettingsView />}
+            {view === "commitments" && <CommitmentsView />}
           </div>
-        )}
-      </main>
-    </div>
+
+          {brainPanelOpen && view === "chat" && (
+            <div className="w-[480px] border-l border-[#26262c] bg-[#0e0e0f]">
+              <BrainPanel />
+            </div>
+          )}
+        </main>
+      </div>
+    </ErrorBoundary>
   );
 }

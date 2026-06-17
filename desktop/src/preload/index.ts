@@ -136,6 +136,9 @@ const api = {
     return () => { ipcRenderer.removeListener("commitment:missed", handler); };
   },
 
+  // Shell
+  openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
+
   // Audit
   listAuditEntries: (limit?: number, projectId?: string) =>
     ipcRenderer.invoke("audit:list", limit, projectId),
