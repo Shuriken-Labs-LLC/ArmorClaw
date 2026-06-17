@@ -134,6 +134,7 @@ declare global {
       searchMemories: (projectId: string, query: string, limit?: number) => Promise<Memory[]>;
       approveMemory: (id: string) => Promise<void>;
       rejectMemory: (id: string) => Promise<void>;
+      exportWorkspace: (workspaceId: string) => Promise<string>;
       listCommitments: (projectId: string) => Promise<Commitment[]>;
       getCommitment: (id: string) => Promise<Commitment | undefined>;
       createCommitment: (

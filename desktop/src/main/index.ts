@@ -8,6 +8,7 @@ import { registerIpcHandlers } from "./ipc-handlers";
 import { getAppState } from "./repositories";
 import { handleDeepLink } from "./deep-link";
 import { startScheduler, stopScheduler } from "./scheduler";
+import { seedMorningBriefing } from "./seed-briefing";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -79,6 +80,9 @@ app.whenReady().then(() => {
   spawnOpenClaw(wsName, projName);
 
   if (state.onboardingState === "done") {
+    if (state.activeWorkspaceId && state.activeProjectId) {
+      seedMorningBriefing(state.activeWorkspaceId, state.activeProjectId);
+    }
     startScheduler(() => mainWindow);
   }
 

@@ -58,6 +58,10 @@ const api = {
   approveMemory: (id: string) => ipcRenderer.invoke("memory:approve", id),
   rejectMemory: (id: string) => ipcRenderer.invoke("memory:reject", id),
 
+  // Workspace export
+  exportWorkspace: (workspaceId: string) =>
+    ipcRenderer.invoke("workspace:export", workspaceId),
+
   // Commitments
   listCommitments: (projectId: string) =>
     ipcRenderer.invoke("commitment:list", projectId),

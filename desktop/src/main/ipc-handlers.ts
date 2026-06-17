@@ -1,4 +1,5 @@
 import { ipcMain } from "electron";
+import { exportWorkspace } from "./workspace-export";
 import {
   listWorkspaces,
   createWorkspace,
@@ -223,6 +224,13 @@ export function registerIpcHandlers(): void {
     (_e, commitmentId: string, limit?: number): CommitmentRun[] =>
       listCommitmentRuns(commitmentId, limit),
   );
+
+  // ---- Workspace export ----
+  ipcMain.handle("workspace:export", (_e, workspaceId: string): string => {
+    const ws = listWorkspaces().find((w) => w.id === workspaceId);
+    if (!ws) throw new Error(`Workspace ${workspaceId} not found`);
+    return exportWorkspace(ws);
+  });
 
   // ---- Audit ----
   ipcMain.handle(
