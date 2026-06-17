@@ -58,6 +58,42 @@ const api = {
   approveMemory: (id: string) => ipcRenderer.invoke("memory:approve", id),
   rejectMemory: (id: string) => ipcRenderer.invoke("memory:reject", id),
 
+  // Commitments
+  listCommitments: (projectId: string) =>
+    ipcRenderer.invoke("commitment:list", projectId),
+  getCommitment: (id: string) => ipcRenderer.invoke("commitment:get", id),
+  createCommitment: (
+    workspaceId: string,
+    projectId: string,
+    description: string,
+    triggerType: string,
+    triggerSpec: string,
+    actionTemplate: string,
+    nextFireAt?: number,
+    opts?: Record<string, unknown>,
+  ) =>
+    ipcRenderer.invoke(
+      "commitment:create",
+      workspaceId, projectId, description, triggerType, triggerSpec, actionTemplate, nextFireAt, opts,
+    ),
+  updateCommitment: (id: string, updates: Record<string, unknown>) =>
+    ipcRenderer.invoke("commitment:update", id, updates),
+  deleteCommitment: (id: string) => ipcRenderer.invoke("commitment:delete", id),
+  listCommitmentRuns: (commitmentId: string, limit?: number) =>
+    ipcRenderer.invoke("commitment:runs", commitmentId, limit),
+  onCommitmentFired: (callback: (data: Record<string, unknown>) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: Record<string, unknown>) =>
+      callback(data);
+    ipcRenderer.on("commitment:fired", handler);
+    return () => { ipcRenderer.removeListener("commitment:fired", handler); };
+  },
+  onCommitmentMissed: (callback: (data: Record<string, unknown>) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: Record<string, unknown>) =>
+      callback(data);
+    ipcRenderer.on("commitment:missed", handler);
+    return () => { ipcRenderer.removeListener("commitment:missed", handler); };
+  },
+
   // Audit
   listAuditEntries: (limit?: number, projectId?: string) =>
     ipcRenderer.invoke("audit:list", limit, projectId),

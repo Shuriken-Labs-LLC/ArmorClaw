@@ -535,6 +535,210 @@ export interface AuditEntry {
   createdAt: number;
 }
 
+// ---- Commitments ----
+
+export type TriggerType = "time" | "interval" | "manual";
+export type CommitmentStatus = "active" | "paused" | "done" | "failed";
+export type RunOutcome = "completed" | "awaiting_approval" | "failed" | "skipped";
+
+export interface Commitment {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  description: string;
+  triggerType: TriggerType;
+  triggerSpec: string;
+  nextFireAt: number | null;
+  actionTemplate: string;
+  reversibility: "reversible" | "irreversible";
+  autonomy: "gated" | "autonomous";
+  status: CommitmentStatus;
+  doneCondition: string | null;
+  missedRunPolicy: "ask" | "skip" | "next_wake";
+  lastRunAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface CommitmentRow {
+  id: string;
+  workspace_id: string;
+  project_id: string;
+  description: string;
+  trigger_type: string;
+  trigger_spec: string;
+  next_fire_at: number | null;
+  action_template: string;
+  reversibility: string;
+  autonomy: string;
+  status: string;
+  done_condition: string | null;
+  missed_run_policy: string;
+  last_run_at: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+function mapCommitment(row: CommitmentRow): Commitment {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    projectId: row.project_id,
+    description: row.description,
+    triggerType: row.trigger_type as TriggerType,
+    triggerSpec: row.trigger_spec,
+    nextFireAt: row.next_fire_at,
+    actionTemplate: row.action_template,
+    reversibility: row.reversibility as "reversible" | "irreversible",
+    autonomy: row.autonomy as "gated" | "autonomous",
+    status: row.status as CommitmentStatus,
+    doneCondition: row.done_condition,
+    missedRunPolicy: row.missed_run_policy as "ask" | "skip" | "next_wake",
+    lastRunAt: row.last_run_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function listCommitments(projectId: string): Commitment[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM commitments WHERE project_id = ? ORDER BY next_fire_at, created_at")
+    .all(projectId) as CommitmentRow[];
+  return rows.map(mapCommitment);
+}
+
+export function getCommitment(id: string): Commitment | undefined {
+  const row = getDb()
+    .prepare("SELECT * FROM commitments WHERE id = ?")
+    .get(id) as CommitmentRow | undefined;
+  return row ? mapCommitment(row) : undefined;
+}
+
+export function createCommitment(
+  workspaceId: string,
+  projectId: string,
+  description: string,
+  triggerType: TriggerType,
+  triggerSpec: string,
+  actionTemplate: string,
+  nextFireAt?: number,
+  opts?: Partial<Pick<Commitment, "reversibility" | "autonomy" | "missedRunPolicy">>,
+): Commitment {
+  const id = randomUUID();
+  const now = Date.now();
+  getDb()
+    .prepare(
+      `INSERT INTO commitments (id, workspace_id, project_id, description, trigger_type, trigger_spec, next_fire_at, action_template, reversibility, autonomy, status, missed_run_policy, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
+    )
+    .run(
+      id, workspaceId, projectId, description, triggerType, triggerSpec,
+      nextFireAt ?? null, actionTemplate,
+      opts?.reversibility ?? "reversible",
+      opts?.autonomy ?? "gated",
+      opts?.missedRunPolicy ?? "ask",
+      now, now,
+    );
+  return {
+    id, workspaceId, projectId, description, triggerType, triggerSpec,
+    nextFireAt: nextFireAt ?? null, actionTemplate,
+    reversibility: opts?.reversibility ?? "reversible",
+    autonomy: opts?.autonomy ?? "gated",
+    status: "active",
+    doneCondition: null,
+    missedRunPolicy: opts?.missedRunPolicy ?? "ask",
+    lastRunAt: null, createdAt: now, updatedAt: now,
+  };
+}
+
+export function updateCommitment(
+  id: string,
+  updates: Partial<Pick<Commitment, "description" | "triggerSpec" | "nextFireAt" | "actionTemplate" | "autonomy" | "status" | "missedRunPolicy" | "lastRunAt">>,
+): void {
+  const now = Date.now();
+  const sets: string[] = ["updated_at = ?"];
+  const params: unknown[] = [now];
+  if (updates.description !== undefined) { sets.push("description = ?"); params.push(updates.description); }
+  if (updates.triggerSpec !== undefined) { sets.push("trigger_spec = ?"); params.push(updates.triggerSpec); }
+  if (updates.nextFireAt !== undefined) { sets.push("next_fire_at = ?"); params.push(updates.nextFireAt); }
+  if (updates.actionTemplate !== undefined) { sets.push("action_template = ?"); params.push(updates.actionTemplate); }
+  if (updates.autonomy !== undefined) { sets.push("autonomy = ?"); params.push(updates.autonomy); }
+  if (updates.status !== undefined) { sets.push("status = ?"); params.push(updates.status); }
+  if (updates.missedRunPolicy !== undefined) { sets.push("missed_run_policy = ?"); params.push(updates.missedRunPolicy); }
+  if (updates.lastRunAt !== undefined) { sets.push("last_run_at = ?"); params.push(updates.lastRunAt); }
+  params.push(id);
+  getDb().prepare(`UPDATE commitments SET ${sets.join(", ")} WHERE id = ?`).run(...params);
+}
+
+export function deleteCommitment(id: string): void {
+  getDb().prepare("DELETE FROM commitments WHERE id = ?").run(id);
+}
+
+export function getDueCommitments(now: number): Commitment[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM commitments WHERE status = 'active' AND next_fire_at IS NOT NULL AND next_fire_at <= ? ORDER BY next_fire_at")
+    .all(now) as CommitmentRow[];
+  return rows.map(mapCommitment);
+}
+
+export interface CommitmentRun {
+  id: string;
+  commitmentId: string;
+  startedAt: number;
+  finishedAt: number | null;
+  outcome: RunOutcome;
+  detail: string | null;
+}
+
+interface CommitmentRunRow {
+  id: string;
+  commitment_id: string;
+  started_at: number;
+  finished_at: number | null;
+  outcome: string;
+  detail: string | null;
+}
+
+function mapCommitmentRun(row: CommitmentRunRow): CommitmentRun {
+  return {
+    id: row.id,
+    commitmentId: row.commitment_id,
+    startedAt: row.started_at,
+    finishedAt: row.finished_at,
+    outcome: row.outcome as RunOutcome,
+    detail: row.detail,
+  };
+}
+
+export function createCommitmentRun(
+  commitmentId: string,
+  outcome: RunOutcome,
+  detail?: string,
+): CommitmentRun {
+  const id = randomUUID();
+  const now = Date.now();
+  getDb()
+    .prepare(
+      "INSERT INTO commitment_runs (id, commitment_id, started_at, outcome, detail) VALUES (?, ?, ?, ?, ?)",
+    )
+    .run(id, commitmentId, now, outcome, detail ?? null);
+  return { id, commitmentId, startedAt: now, finishedAt: null, outcome, detail: detail ?? null };
+}
+
+export function finishCommitmentRun(id: string, outcome: RunOutcome, detail?: string): void {
+  const now = Date.now();
+  getDb()
+    .prepare("UPDATE commitment_runs SET finished_at = ?, outcome = ?, detail = ? WHERE id = ?")
+    .run(now, outcome, detail ?? null, id);
+}
+
+export function listCommitmentRuns(commitmentId: string, limit = 20): CommitmentRun[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM commitment_runs WHERE commitment_id = ? ORDER BY started_at DESC LIMIT ?")
+    .all(commitmentId, limit) as CommitmentRunRow[];
+  return rows.map(mapCommitmentRun);
+}
+
 export function listAuditEntries(limit = 100, projectId?: string): AuditEntry[] {
   const where = projectId ? "WHERE project_id = ?" : "";
   const params = projectId ? [projectId, limit] : [limit];

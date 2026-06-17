@@ -22,6 +22,12 @@ import {
   searchMemories,
   approveMemory,
   rejectMemory,
+  listCommitments,
+  getCommitment,
+  createCommitment,
+  updateCommitment,
+  deleteCommitment,
+  listCommitmentRuns,
   listAuditEntries,
   writeAuditEntry,
 } from "./repositories";
@@ -32,6 +38,9 @@ import type {
   Chat,
   Message,
   Memory,
+  Commitment,
+  CommitmentRun,
+  TriggerType,
   AuditEntry,
   MessageRole,
 } from "./repositories";
@@ -166,6 +175,54 @@ export function registerIpcHandlers(): void {
     rejectMemory(id);
     writeAuditEntry("memory.rejected", { id });
   });
+
+  // ---- Commitments ----
+  ipcMain.handle(
+    "commitment:list",
+    (_e, projectId: string): Commitment[] => listCommitments(projectId),
+  );
+
+  ipcMain.handle(
+    "commitment:get",
+    (_e, id: string): Commitment | undefined => getCommitment(id),
+  );
+
+  ipcMain.handle(
+    "commitment:create",
+    (
+      _e,
+      workspaceId: string,
+      projectId: string,
+      description: string,
+      triggerType: TriggerType,
+      triggerSpec: string,
+      actionTemplate: string,
+      nextFireAt?: number,
+      opts?: Partial<Pick<Commitment, "reversibility" | "autonomy" | "missedRunPolicy">>,
+    ): Commitment => {
+      const c = createCommitment(workspaceId, projectId, description, triggerType, triggerSpec, actionTemplate, nextFireAt, opts);
+      writeAuditEntry("commitment.created", { id: c.id, description }, workspaceId, projectId);
+      return c;
+    },
+  );
+
+  ipcMain.handle(
+    "commitment:update",
+    (_e, id: string, updates: Partial<Pick<Commitment, "description" | "triggerSpec" | "nextFireAt" | "actionTemplate" | "autonomy" | "status" | "missedRunPolicy">>): void => {
+      updateCommitment(id, updates);
+    },
+  );
+
+  ipcMain.handle("commitment:delete", (_e, id: string): void => {
+    writeAuditEntry("commitment.deleted", { id });
+    deleteCommitment(id);
+  });
+
+  ipcMain.handle(
+    "commitment:runs",
+    (_e, commitmentId: string, limit?: number): CommitmentRun[] =>
+      listCommitmentRuns(commitmentId, limit),
+  );
 
   // ---- Audit ----
   ipcMain.handle(

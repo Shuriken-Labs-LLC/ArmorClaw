@@ -70,6 +70,34 @@ export interface AppState {
   onboardingState: string;
 }
 
+export interface Commitment {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  description: string;
+  triggerType: "time" | "interval" | "manual";
+  triggerSpec: string;
+  nextFireAt: number | null;
+  actionTemplate: string;
+  reversibility: "reversible" | "irreversible";
+  autonomy: "gated" | "autonomous";
+  status: "active" | "paused" | "done" | "failed";
+  doneCondition: string | null;
+  missedRunPolicy: "ask" | "skip" | "next_wake";
+  lastRunAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CommitmentRun {
+  id: string;
+  commitmentId: string;
+  startedAt: number;
+  finishedAt: number | null;
+  outcome: "completed" | "awaiting_approval" | "failed" | "skipped";
+  detail: string | null;
+}
+
 export interface AuditEntry {
   id: number;
   workspaceId: string | null;
@@ -106,6 +134,23 @@ declare global {
       searchMemories: (projectId: string, query: string, limit?: number) => Promise<Memory[]>;
       approveMemory: (id: string) => Promise<void>;
       rejectMemory: (id: string) => Promise<void>;
+      listCommitments: (projectId: string) => Promise<Commitment[]>;
+      getCommitment: (id: string) => Promise<Commitment | undefined>;
+      createCommitment: (
+        workspaceId: string,
+        projectId: string,
+        description: string,
+        triggerType: string,
+        triggerSpec: string,
+        actionTemplate: string,
+        nextFireAt?: number,
+        opts?: Record<string, unknown>,
+      ) => Promise<Commitment>;
+      updateCommitment: (id: string, updates: Partial<Commitment>) => Promise<void>;
+      deleteCommitment: (id: string) => Promise<void>;
+      listCommitmentRuns: (commitmentId: string, limit?: number) => Promise<CommitmentRun[]>;
+      onCommitmentFired: (callback: (data: Record<string, unknown>) => void) => () => void;
+      onCommitmentMissed: (callback: (data: Record<string, unknown>) => void) => () => void;
       listAuditEntries: (limit?: number, projectId?: string) => Promise<AuditEntry[]>;
       onDeepLinkAuth: (callback: (data: { token: string }) => void) => () => void;
       onDeepLinkBilling: (callback: (data: { sessionId: string }) => void) => () => void;

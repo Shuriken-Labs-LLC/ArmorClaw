@@ -7,6 +7,7 @@ import { spawnOpenClaw, setMessageHandler, killOpenClaw } from "./openclaw";
 import { registerIpcHandlers } from "./ipc-handlers";
 import { getAppState } from "./repositories";
 import { handleDeepLink } from "./deep-link";
+import { startScheduler, stopScheduler } from "./scheduler";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -77,6 +78,10 @@ app.whenReady().then(() => {
   const projName = state.activeProjectId ?? "Default Project";
   spawnOpenClaw(wsName, projName);
 
+  if (state.onboardingState === "done") {
+    startScheduler(() => mainWindow);
+  }
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -103,6 +108,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  stopScheduler();
   killOpenClaw();
   closeDatabase();
   logger.info("ArmorClaw shutdown complete");
