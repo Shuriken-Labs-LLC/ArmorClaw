@@ -280,6 +280,33 @@ describe("database schema", () => {
     expect(topics[0]!["name"]).toBe("Finance");
   });
 
+  it("getWorkspace returns workspace by ID", () => {
+    const now = Date.now();
+    db.prepare("INSERT INTO workspaces (id, name, sort_order, created_at, updated_at) VALUES ('ws-get', 'Test WS', 0, ?, ?)").run(now, now);
+
+    const row = db.prepare("SELECT * FROM workspaces WHERE id = ?").get("ws-get") as Record<string, unknown> | undefined;
+    expect(row).toBeDefined();
+    expect(row!["name"]).toBe("Test WS");
+
+    const missing = db.prepare("SELECT * FROM workspaces WHERE id = ?").get("nonexistent") as Record<string, unknown> | undefined;
+    expect(missing).toBeUndefined();
+  });
+
+  it("dossier pins CRUD", () => {
+    const now = Date.now();
+    db.prepare("INSERT INTO workspaces (id, name, sort_order, created_at, updated_at) VALUES ('ws-dp', 'WS', 0, ?, ?)").run(now, now);
+    db.prepare("INSERT INTO topics (id, workspace_id, name, use_count, created_at) VALUES ('t-dp', 'ws-dp', 'Topic', 0, ?)").run(now);
+    db.prepare("INSERT INTO dossier_pins (id, topic_id, content_md, generated_at, is_archived) VALUES ('dp1', 't-dp', '# Dossier', ?, 0)").run(now);
+
+    const pins = db.prepare("SELECT * FROM dossier_pins WHERE topic_id = ? AND is_archived = 0").all("t-dp") as Array<Record<string, unknown>>;
+    expect(pins).toHaveLength(1);
+    expect(pins[0]!["content_md"]).toBe("# Dossier");
+
+    db.prepare("UPDATE dossier_pins SET is_archived = 1 WHERE id = ?").run("dp1");
+    const active = db.prepare("SELECT * FROM dossier_pins WHERE topic_id = ? AND is_archived = 0").all("t-dp") as Array<Record<string, unknown>>;
+    expect(active).toHaveLength(0);
+  });
+
   it("entity cross-walk search works", () => {
     const now = Date.now();
     db.prepare("INSERT INTO workspaces (id, name, sort_order, created_at, updated_at) VALUES ('ws1', 'Work', 0, ?, ?)").run(now, now);
