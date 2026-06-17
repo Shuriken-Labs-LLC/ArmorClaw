@@ -57,6 +57,12 @@ All notable changes to ArmorClaw are documented here. Format follows Keep a Chan
 - Integrations settings tab: Gmail and Google Calendar cards with connect/disconnect state, v1.1 integrations teaser.
 - Memory proposal cards in chat: inline rendering of brain.propose tool calls with approve/reject buttons.
 - Marketing site scaffold (site package): Astro with Home (hero, features, how-it-works, pricing), Trust & Safety, and Changelog pages.
+- React ErrorBoundary wrapping main layout with crash recovery UI (desktop/src/renderer/components/ErrorBoundary.tsx).
+- OpenClaw chat integration: sendMessage pipes user input to subprocess via IPC, streams responses back to renderer.
+- OpenClaw IPC handlers: openclaw:send and openclaw:status for process management.
+- shell:openExternal IPC handler for opening URLs in system browser.
+- getWorkspace repository function for single workspace lookup by ID.
+- App icon placeholder (.icns) and electron-builder.yml `icon` key under `mac:`.
 
 ### Fixed
 - electron-vite renderer build: removed explicit rollupOptions.input that broke path resolution with root config.
@@ -66,3 +72,7 @@ All notable changes to ArmorClaw are documented here. Format follows Keep a Chan
 - pnpm-workspace.yaml removed non-existent site package.
 - License-worker: removed hand-rolled KVNamespace stub (covered by @cloudflare/workers-types).
 - Stripe API version updated to 2025-02-24.acacia.
+- CommitmentsView useEffect dependency arrays: load function wrapped in useCallback.
+- AuditLog useEffect dependency: loadEntries wrapped in useCallback.
+- "Start trial" button in AccountSettings wired to open pricing page.
+- Scheduler executeCommitment: now spawns OpenClaw subprocess and sends action template instead of stubbing.
