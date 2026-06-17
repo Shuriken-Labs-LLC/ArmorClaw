@@ -51,6 +51,24 @@ interface AppStore {
   addOpenClawMessage: (message: string) => void;
 }
 
+async function flushOpenClawMessages(
+  get: () => AppStore,
+  set: (partial: Partial<AppStore> | ((s: AppStore) => Partial<AppStore>)) => void,
+): Promise<void> {
+  const { openClawMessages, activeChat } = get();
+  if (openClawMessages.length === 0 || !activeChat) return;
+  const combined = openClawMessages.join("\n");
+  const assistantMsg = await window.armorClaw.createMessage(
+    activeChat.id,
+    "assistant",
+    combined,
+  );
+  set((s) => ({
+    messages: [...s.messages, assistantMsg],
+    openClawMessages: [],
+  }));
+}
+
 export const useAppStore = create<AppStore>((set, get) => ({
   appState: null,
   version: "",
@@ -164,12 +182,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   selectProject: async (project) => {
+    await flushOpenClawMessages(get, set);
     const ws = get().activeWorkspace;
     if (ws) {
       await window.armorClaw.setActiveContext(ws.id, project.id);
     }
     const chats = await window.armorClaw.listChats(project.id);
-    set({ activeProject: project, chats, activeChat: null, messages: [] });
+    set({ activeProject: project, chats, activeChat: null, messages: [], openClawMessages: [] });
   },
 
   createProject: async (name, description) => {
@@ -200,8 +219,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   selectChat: async (chat) => {
+    await flushOpenClawMessages(get, set);
     const messages = await window.armorClaw.listMessages(chat.id);
-    set({ activeChat: chat, messages });
+    set({ activeChat: chat, messages, openClawMessages: [] });
   },
 
   createChat: async (title) => {
@@ -226,6 +246,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (!chat) {
       chat = await get().createChat();
     }
+
+    await flushOpenClawMessages(get, set);
+
     const userMsg = await window.armorClaw.createMessage(
       chat.id,
       "user",

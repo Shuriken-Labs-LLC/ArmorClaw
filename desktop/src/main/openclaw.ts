@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { app } from "electron";
 import { logger } from "./logger";
 import { buildWrapperContext } from "./wrapper-context";
+import { writeMcpConfig, writeActiveContext } from "./brain-mcp-config";
 
 const COMMON_INSTALL_PATHS = [
   "/usr/local/bin/openclaw",
@@ -91,6 +92,8 @@ export function detectOpenClaw(): OpenClawStatus {
 export function spawnOpenClaw(
   workspaceName: string,
   projectName: string,
+  workspaceId?: string,
+  projectId?: string,
 ): ChildProcess | undefined {
   const status = detectOpenClaw();
 
@@ -120,9 +123,20 @@ export function spawnOpenClaw(
     brainDirectoryPath,
   });
 
+  let mcpConfigPath: string | undefined;
+  if (projectId && workspaceId) {
+    mcpConfigPath = writeMcpConfig(projectId, workspaceId);
+    writeActiveContext(projectId, workspaceId);
+  }
+
   logger.info("Spawning OpenClaw subprocess");
 
-  const child = spawn(status.path, ["--system-prompt", wrapperContext], {
+  const args = ["--system-prompt", wrapperContext];
+  if (mcpConfigPath) {
+    args.push("--mcp-config", mcpConfigPath);
+  }
+
+  const child = spawn(status.path, args, {
     stdio: ["pipe", "pipe", "pipe"],
     env: {
       ...process.env,

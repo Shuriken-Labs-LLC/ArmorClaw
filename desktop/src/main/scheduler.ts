@@ -109,7 +109,12 @@ function executeCommitment(commitment: Commitment, now: number): void {
   if (!isOpenClawRunning()) {
     const ws = getWorkspace(commitment.workspaceId);
     const proj = getProject(commitment.projectId);
-    spawnOpenClaw(ws?.name ?? "Workspace", proj?.name ?? "Project");
+    spawnOpenClaw(
+      ws?.name ?? "Workspace",
+      proj?.name ?? "Project",
+      commitment.workspaceId,
+      commitment.projectId,
+    );
   }
 
   const sent = sendToOpenClaw(commitment.actionTemplate);

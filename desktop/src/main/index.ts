@@ -5,7 +5,7 @@ import { logger } from "./logger";
 import { initDatabase, closeDatabase } from "./db";
 import { spawnOpenClaw, setMessageHandler, killOpenClaw } from "./openclaw";
 import { registerIpcHandlers } from "./ipc-handlers";
-import { getAppState } from "./repositories";
+import { getAppState, getWorkspace, getProject } from "./repositories";
 import { handleDeepLink } from "./deep-link";
 import { startScheduler, stopScheduler } from "./scheduler";
 import { seedMorningBriefing } from "./seed-briefing";
@@ -77,9 +77,14 @@ app.whenReady().then(() => {
   createTray(() => mainWindow);
 
   const state = getAppState();
-  const wsName = state.activeWorkspaceId ?? "Default Workspace";
-  const projName = state.activeProjectId ?? "Default Project";
-  spawnOpenClaw(wsName, projName);
+  const ws = state.activeWorkspaceId ? getWorkspace(state.activeWorkspaceId) : undefined;
+  const proj = state.activeProjectId ? getProject(state.activeProjectId) : undefined;
+  spawnOpenClaw(
+    ws?.name ?? "Default Workspace",
+    proj?.name ?? "Default Project",
+    state.activeWorkspaceId ?? undefined,
+    state.activeProjectId ?? undefined,
+  );
 
   if (state.onboardingState === "done") {
     if (state.activeWorkspaceId && state.activeProjectId) {

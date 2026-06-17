@@ -1,8 +1,10 @@
 import { app, ipcMain, shell } from "electron";
 import { sendToOpenClaw, isOpenClawRunning, spawnOpenClaw } from "./openclaw";
+import { writeActiveContext } from "./brain-mcp-config";
 import { exportWorkspace } from "./workspace-export";
 import {
   listWorkspaces,
+  getWorkspace,
   createWorkspace,
   updateWorkspace,
   deleteWorkspace,
@@ -127,6 +129,7 @@ export function registerIpcHandlers(): void {
     "app:setActiveContext",
     (_e, workspaceId: string, projectId: string): void => {
       setActiveContext(workspaceId, projectId);
+      writeActiveContext(projectId, workspaceId);
     },
   );
 
@@ -361,9 +364,13 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("openclaw:send", (_e, text: string): boolean => {
     if (!isOpenClawRunning()) {
       const state = getAppState();
+      const ws = state.activeWorkspaceId ? getWorkspace(state.activeWorkspaceId) : undefined;
+      const proj = state.activeProjectId ? getProject(state.activeProjectId) : undefined;
       spawnOpenClaw(
-        state.activeWorkspaceId ?? "Default Workspace",
-        state.activeProjectId ?? "Default Project",
+        ws?.name ?? "Default Workspace",
+        proj?.name ?? "Default Project",
+        state.activeWorkspaceId ?? undefined,
+        state.activeProjectId ?? undefined,
       );
     }
     return sendToOpenClaw(text);
