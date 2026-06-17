@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useAppStore } from "./stores/app-store";
+import { useNotificationStore } from "./stores/notification-store";
 import { Sidebar } from "./components/Sidebar";
 import { ChatView } from "./components/ChatView";
 import { BrainPanel } from "./components/BrainPanel";
@@ -22,6 +23,27 @@ export function App(): React.JSX.Element {
     });
     return unsubscribe;
   }, [addOpenClawMessage]);
+
+  useEffect(() => {
+    const addNotif = useNotificationStore.getState().add;
+    const unsub1 = window.armorClaw.onCommitmentFired((data) => {
+      addNotif({
+        type: "success",
+        title: "Commitment fired",
+        body: (data["description"] as string) ?? "A scheduled commitment ran.",
+        commitmentId: data["commitmentId"] as string,
+      });
+    });
+    const unsub2 = window.armorClaw.onCommitmentMissed((data) => {
+      addNotif({
+        type: "warning",
+        title: "Missed commitment",
+        body: `"${(data["description"] as string) ?? "A commitment"}" was due while the app was off.`,
+        commitmentId: data["commitmentId"] as string,
+      });
+    });
+    return () => { unsub1(); unsub2(); };
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

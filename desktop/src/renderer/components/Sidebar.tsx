@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAppStore } from "../stores/app-store";
+import { NotificationBell, NotificationPanel } from "./NotificationPanel";
 import type { Workspace, Project } from "../types";
 
 const WORKSPACE_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#06b6d4"];
@@ -172,9 +173,13 @@ export function Sidebar(): React.JSX.Element {
         </div>
       )}
 
-      {/* Version footer */}
-      <div className="border-t border-[#26262c] p-3">
+      {/* Version footer + notifications */}
+      <div className="flex items-center justify-between border-t border-[#26262c] p-3">
         <VersionFooter />
+        <div className="relative">
+          <NotificationBell />
+          <NotificationPanel />
+        </div>
       </div>
     </aside>
   );
