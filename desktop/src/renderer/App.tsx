@@ -5,10 +5,11 @@ import { ChatView } from "./components/ChatView";
 import { BrainPanel } from "./components/BrainPanel";
 import { SettingsView } from "./components/SettingsView";
 import { CommitmentsView } from "./components/CommitmentsView";
+import { Onboarding } from "./components/Onboarding";
 import "./types";
 
 export function App(): React.JSX.Element {
-  const { initialize, initializing, view, brainPanelOpen, addOpenClawMessage, toggleBrainPanel } =
+  const { initialize, initializing, appState, view, brainPanelOpen, addOpenClawMessage, toggleBrainPanel } =
     useAppStore();
 
   useEffect(() => {
@@ -42,6 +43,10 @@ export function App(): React.JSX.Element {
         </div>
       </div>
     );
+  }
+
+  if (appState?.onboardingState !== "done") {
+    return <Onboarding />;
   }
 
   return (

@@ -73,6 +73,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
       window.armorClaw.listWorkspaces(),
     ]);
 
+    if (appState.onboardingState !== "done") {
+      set({ version, appState, workspaces, initializing: false });
+      return;
+    }
+
     let activeWorkspace: Workspace | null = null;
     let activeProject: Project | null = null;
     let projects: Project[] = [];
