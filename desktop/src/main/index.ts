@@ -9,6 +9,7 @@ import { getAppState } from "./repositories";
 import { handleDeepLink } from "./deep-link";
 import { startScheduler, stopScheduler } from "./scheduler";
 import { seedMorningBriefing } from "./seed-briefing";
+import { createTray, destroyTray } from "./tray";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -73,6 +74,7 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+  createTray(() => mainWindow);
 
   const state = getAppState();
   const wsName = state.activeWorkspaceId ?? "Default Workspace";
@@ -112,6 +114,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  destroyTray();
   stopScheduler();
   killOpenClaw();
   closeDatabase();

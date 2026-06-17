@@ -151,8 +151,22 @@ function GeneralSettings(): React.JSX.Element {
 
 function AccountSettings(): React.JSX.Element {
   const appState = useAppStore((s) => s.appState);
+  const activeWorkspace = useAppStore((s) => s.activeWorkspace);
+  const [exportPath, setExportPath] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   if (!appState) return <p className="text-[#8b8b92]">Loading...</p>;
+
+  const handleExport = async () => {
+    if (!activeWorkspace) return;
+    setExporting(true);
+    try {
+      const path = await window.armorClaw.exportWorkspace(activeWorkspace.id);
+      setExportPath(path);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="max-w-lg space-y-6">
@@ -186,6 +200,24 @@ function AccountSettings(): React.JSX.Element {
                 Start trial
               </button>
             </div>
+          )}
+        </div>
+      </SettingsGroup>
+
+      <SettingsGroup label="Export Workspace">
+        <div className="space-y-2">
+          <p className="text-xs text-[#8b8b92]">
+            Export the current workspace as markdown: all projects, chats, memories, and commitments.
+          </p>
+          <button
+            className="rounded-md bg-[#26262c] px-4 py-2 text-sm text-white hover:bg-[#3a3a42] disabled:opacity-50"
+            onClick={() => void handleExport()}
+            disabled={!activeWorkspace || exporting}
+          >
+            {exporting ? "Exporting..." : `Export "${activeWorkspace?.name ?? "workspace"}"`}
+          </button>
+          {exportPath && (
+            <p className="text-xs text-[#65a30d]">Saved to {exportPath}</p>
           )}
         </div>
       </SettingsGroup>

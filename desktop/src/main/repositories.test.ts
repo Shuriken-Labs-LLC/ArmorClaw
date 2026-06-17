@@ -160,6 +160,76 @@ describe("database schema", () => {
     expect(commitment["autonomy"]).toBe("gated");
   });
 
+  it("commitment runs cascade on commitment delete", () => {
+    const now = Date.now();
+    db.prepare(
+      "INSERT INTO workspaces (id, name, sort_order, created_at, updated_at) VALUES ('ws1', 'Test', 0, ?, ?)",
+    ).run(now, now);
+    db.prepare(
+      "INSERT INTO projects (id, workspace_id, name, sort_order, brain_mode, created_at, updated_at) VALUES ('p1', 'ws1', 'Proj', 0, 'smart', ?, ?)",
+    ).run(now, now);
+    db.prepare(
+      `INSERT INTO commitments (id, workspace_id, project_id, description, trigger_type, trigger_spec, action_template, created_at, updated_at)
+       VALUES ('com1', 'ws1', 'p1', 'Test', 'interval', '{}', 'Do stuff', ?, ?)`,
+    ).run(now, now);
+    db.prepare(
+      "INSERT INTO commitment_runs (id, commitment_id, started_at, outcome) VALUES ('run1', 'com1', ?, 'completed')",
+    ).run(now);
+
+    const runsBefore = db.prepare("SELECT * FROM commitment_runs WHERE commitment_id = 'com1'").all();
+    expect(runsBefore).toHaveLength(1);
+
+    db.prepare("DELETE FROM commitments WHERE id = 'com1'").run();
+
+    const runsAfter = db.prepare("SELECT * FROM commitment_runs WHERE commitment_id = 'com1'").all();
+    expect(runsAfter).toHaveLength(0);
+  });
+
+  it("due commitments query uses next_fire_at index", () => {
+    const now = Date.now();
+    db.prepare(
+      "INSERT INTO workspaces (id, name, sort_order, created_at, updated_at) VALUES ('ws1', 'Test', 0, ?, ?)",
+    ).run(now, now);
+    db.prepare(
+      "INSERT INTO projects (id, workspace_id, name, sort_order, brain_mode, created_at, updated_at) VALUES ('p1', 'ws1', 'Proj', 0, 'smart', ?, ?)",
+    ).run(now, now);
+
+    // Past due
+    db.prepare(
+      `INSERT INTO commitments (id, workspace_id, project_id, description, trigger_type, trigger_spec, next_fire_at, action_template, created_at, updated_at)
+       VALUES ('com1', 'ws1', 'p1', 'Past due', 'interval', '{}', ?, 'Do stuff', ?, ?)`,
+    ).run(now - 60000, now, now);
+
+    // Future
+    db.prepare(
+      `INSERT INTO commitments (id, workspace_id, project_id, description, trigger_type, trigger_spec, next_fire_at, action_template, created_at, updated_at)
+       VALUES ('com2', 'ws1', 'p1', 'Future', 'interval', '{}', ?, 'Do stuff', ?, ?)`,
+    ).run(now + 3600000, now, now);
+
+    // Paused (should not appear)
+    db.prepare(
+      `INSERT INTO commitments (id, workspace_id, project_id, description, trigger_type, trigger_spec, next_fire_at, action_template, status, created_at, updated_at)
+       VALUES ('com3', 'ws1', 'p1', 'Paused', 'interval', '{}', ?, 'Do stuff', 'paused', ?, ?)`,
+    ).run(now - 30000, now, now);
+
+    const due = db.prepare(
+      "SELECT * FROM commitments WHERE status = 'active' AND next_fire_at IS NOT NULL AND next_fire_at <= ? ORDER BY next_fire_at",
+    ).all(now) as Array<Record<string, unknown>>;
+
+    expect(due).toHaveLength(1);
+    expect(due[0]!["id"]).toBe("com1");
+  });
+
+  it("onboarding state updates correctly", () => {
+    const row = db.prepare("SELECT onboarding_state FROM app_state WHERE id = 1").get() as Record<string, unknown>;
+    expect(row["onboarding_state"]).toBe("welcome");
+
+    db.prepare("UPDATE app_state SET onboarding_state = 'done' WHERE id = 1").run();
+
+    const updated = db.prepare("SELECT onboarding_state FROM app_state WHERE id = 1").get() as Record<string, unknown>;
+    expect(updated["onboarding_state"]).toBe("done");
+  });
+
   it("audit entries work", () => {
     const now = Date.now();
     db.prepare(
