@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useAppStore } from "../stores/app-store";
+import { useNotificationStore } from "../stores/notification-store";
+import type { NotificationEventType } from "../stores/notification-store";
 import type { AppState, AuditEntry } from "../types";
 
-type SettingsTab = "account" | "general" | "brain" | "audit";
+type SettingsTab = "account" | "general" | "brain" | "notifications" | "audit";
 
 export function SettingsView(): React.JSX.Element {
   const [tab, setTab] = useState<SettingsTab>("general");
@@ -16,6 +18,7 @@ export function SettingsView(): React.JSX.Element {
           <SettingsNavItem label="General" active={tab === "general"} onClick={() => setTab("general")} />
           <SettingsNavItem label="Account" active={tab === "account"} onClick={() => setTab("account")} />
           <SettingsNavItem label="Brain" active={tab === "brain"} onClick={() => setTab("brain")} />
+          <SettingsNavItem label="Notifications" active={tab === "notifications"} onClick={() => setTab("notifications")} />
           <SettingsNavItem label="Audit Log" active={tab === "audit"} onClick={() => setTab("audit")} />
         </nav>
       </div>
@@ -25,6 +28,7 @@ export function SettingsView(): React.JSX.Element {
         {tab === "general" && <GeneralSettings />}
         {tab === "account" && <AccountSettings />}
         {tab === "brain" && <BrainSettings />}
+        {tab === "notifications" && <NotificationSettings />}
         {tab === "audit" && <AuditLog />}
       </div>
     </div>
@@ -338,6 +342,61 @@ function BrainModeOption({
       </div>
       <p className="mt-0.5 text-xs text-[#8b8b92]">{description}</p>
     </button>
+  );
+}
+
+const EVENT_TYPE_LABELS: Record<NotificationEventType, { label: string; description: string }> = {
+  "commitment.fired": { label: "Commitment fired", description: "When a scheduled commitment runs" },
+  "commitment.missed": { label: "Commitment missed", description: "When a commitment fires while the device was off" },
+  "commitment.failed": { label: "Commitment failed", description: "When a commitment run encounters an error" },
+  "memory.proposed": { label: "Memory proposed", description: "When Emerson proposes a new memory for approval" },
+  "integration.error": { label: "Integration error", description: "When a connected integration encounters a problem" },
+  "task.completed": { label: "Task completed", description: "When a long-running agent task finishes" },
+};
+
+function NotificationSettings(): React.JSX.Element {
+  const prefs = useNotificationStore((s) => s.prefs);
+  const setEventPref = useNotificationStore((s) => s.setEventPref);
+
+  return (
+    <div className="max-w-lg space-y-6">
+      <h3 className="text-lg font-medium text-white">Notifications</h3>
+
+      <SettingsGroup label="In-App Notifications">
+        <p className="mb-3 text-xs text-[#8b8b92]">
+          Choose which events show up in the notification bell. Disabled events are silently ignored.
+        </p>
+        <div className="space-y-1">
+          {(Object.keys(EVENT_TYPE_LABELS) as NotificationEventType[]).map((eventType) => {
+            const { label, description } = EVENT_TYPE_LABELS[eventType];
+            const enabled = prefs.inApp[eventType];
+            return (
+              <div
+                key={eventType}
+                className="flex items-center justify-between rounded-md border border-[#26262c] bg-[#16161a] p-3"
+              >
+                <div>
+                  <p className="text-sm text-[#e8e8ea]">{label}</p>
+                  <p className="text-xs text-[#8b8b92]">{description}</p>
+                </div>
+                <button
+                  className={`relative h-6 w-11 rounded-full transition-colors ${
+                    enabled ? "bg-[#d97706]" : "bg-[#26262c]"
+                  }`}
+                  onClick={() => setEventPref(eventType, !enabled)}
+                >
+                  <span
+                    className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                      enabled ? "translate-x-5" : ""
+                    }`}
+                  />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </SettingsGroup>
+    </div>
   );
 }
 

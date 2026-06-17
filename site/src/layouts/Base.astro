@@ -1,0 +1,50 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+}
+const { title, description = "ArmorClaw — Your AI agent, your rules" } = Astro.props;
+---
+<!doctype html>
+<html lang="en" class="bg-[#0e0e0f] text-[#e8e8ea]">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content={description} />
+  <title>{title}</title>
+  <style is:global>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+    a { color: inherit; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <nav class="border-b border-[#26262c] px-6 py-4">
+    <div class="mx-auto flex max-w-5xl items-center justify-between">
+      <a href="/" class="text-lg font-semibold text-white">ArmorClaw</a>
+      <div class="flex items-center gap-6 text-sm">
+        <a href="/trust" class="text-[#8b8b92] hover:text-white transition-colors">Trust &amp; Safety</a>
+        <a href="/changelog" class="text-[#8b8b92] hover:text-white transition-colors">Changelog</a>
+        <a href="https://github.com/Shuriken-Labs-LLC/ArmorClaw" class="text-[#8b8b92] hover:text-white transition-colors">Docs</a>
+        <a href="#pricing" class="rounded-md bg-[#d97706] px-4 py-2 font-medium text-white hover:bg-[#b45309] transition-colors">Start free trial</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <slot />
+  </main>
+
+  <footer class="border-t border-[#26262c] px-6 py-8">
+    <div class="mx-auto max-w-5xl text-center text-xs text-[#8b8b92]">
+      <p>&copy; {new Date().getFullYear()} Shuriken Labs LLC. All rights reserved.</p>
+      <div class="mt-2 flex justify-center gap-4">
+        <a href="/trust" class="hover:text-white transition-colors">Trust &amp; Safety</a>
+        <a href="/changelog" class="hover:text-white transition-colors">Changelog</a>
+        <a href="mailto:support@armorclaw.app" class="hover:text-white transition-colors">Support</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

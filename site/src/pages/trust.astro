@@ -1,0 +1,75 @@
+---
+import Base from "../layouts/Base.astro";
+---
+<Base title="Trust & Safety — ArmorClaw" description="How ArmorClaw keeps your data safe and your agent accountable.">
+  <section class="px-6 py-20">
+    <div class="mx-auto max-w-3xl">
+      <h1 class="mb-8 text-4xl font-bold text-white">Trust &amp; Safety</h1>
+      <p class="mb-12 text-lg text-[#8b8b92]">
+        ArmorClaw is built around a simple principle: you own your data,
+        you control what the agent can do, and you can verify both at any time.
+      </p>
+
+      <div class="space-y-10">
+        <div>
+          <h2 class="mb-3 text-xl font-semibold text-white">Your data stays local</h2>
+          <p class="text-sm text-[#8b8b92]">
+            All memories, chats, workspaces, and commitments live in a SQLite
+            database on your machine at
+            <code class="rounded bg-[#26262c] px-1.5 py-0.5 text-xs text-[#d97706]">~/Library/Application Support/ArmorClaw/</code>.
+            ArmorClaw never uploads your data to our servers. The only network
+            calls are to your chosen model provider (OpenAI or Anthropic) using
+            your own API key, and to our license server for subscription validation.
+          </p>
+        </div>
+
+        <div>
+          <h2 class="mb-3 text-xl font-semibold text-white">Secrets in Keychain</h2>
+          <p class="text-sm text-[#8b8b92]">
+            API keys and OAuth tokens are stored in macOS Keychain, protected by
+            your system password. They never appear in plaintext in config files,
+            logs, or the database.
+          </p>
+        </div>
+
+        <div>
+          <h2 class="mb-3 text-xl font-semibold text-white">Irreversible actions require approval</h2>
+          <p class="text-sm text-[#8b8b92]">
+            Every action the agent takes is classified as reversible or irreversible.
+            Irreversible actions (sending emails, deleting data, making purchases)
+            always require your explicit approval, regardless of your autonomy settings.
+            The <code class="rounded bg-[#26262c] px-1.5 py-0.5 text-xs text-[#d97706]">gated</code> default
+            means even reversible actions wait for approval until you opt in to autonomous mode.
+          </p>
+        </div>
+
+        <div>
+          <h2 class="mb-3 text-xl font-semibold text-white">Full audit trail</h2>
+          <p class="text-sm text-[#8b8b92]">
+            Every significant action is logged in the audit log: workspace and
+            project creation/deletion, memory approvals and rejections,
+            commitment executions, and more. You can review the full log in
+            Settings &rarr; Audit Log at any time.
+          </p>
+        </div>
+
+        <div>
+          <h2 class="mb-3 text-xl font-semibold text-white">Workspace export</h2>
+          <p class="text-sm text-[#8b8b92]">
+            Export your entire workspace as structured markdown files at any time.
+            Your data is never locked in. If you cancel, you keep everything.
+          </p>
+        </div>
+
+        <div>
+          <h2 class="mb-3 text-xl font-semibold text-white">Cancel anytime</h2>
+          <p class="text-sm text-[#8b8b92]">
+            One click in Settings &rarr; Account to cancel your subscription.
+            You receive a prorated refund for the remaining days. No retention
+            dark patterns, no "are you sure" loops.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>

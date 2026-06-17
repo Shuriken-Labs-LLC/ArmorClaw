@@ -1,0 +1,136 @@
+---
+import Base from "../layouts/Base.astro";
+---
+<Base title="ArmorClaw — Your AI agent, your rules">
+  <!-- Hero -->
+  <section class="px-6 py-24 text-center">
+    <div class="mx-auto max-w-3xl">
+      <h1 class="text-5xl font-bold leading-tight text-white">
+        Your AI agent.<br />Your rules.
+      </h1>
+      <p class="mt-6 text-lg text-[#8b8b92]">
+        ArmorClaw is a macOS desktop AI agent that remembers what matters,
+        runs tasks on your schedule, and never sends your data anywhere
+        you haven't approved.
+      </p>
+      <div class="mt-8 flex justify-center gap-4">
+        <a
+          href="#pricing"
+          class="rounded-lg bg-[#d97706] px-8 py-3 text-lg font-medium text-white hover:bg-[#b45309] transition-colors"
+        >
+          Start free trial
+        </a>
+        <a
+          href="/trust"
+          class="rounded-lg border border-[#26262c] px-8 py-3 text-lg font-medium text-[#8b8b92] hover:border-[#d97706] hover:text-white transition-colors"
+        >
+          How we keep you safe
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="border-t border-[#26262c] px-6 py-20">
+    <div class="mx-auto max-w-5xl">
+      <h2 class="mb-12 text-center text-3xl font-bold text-white">What ArmorClaw does</h2>
+      <div class="grid gap-8 md:grid-cols-3">
+        <div class="rounded-xl border border-[#26262c] bg-[#16161a] p-6">
+          <div class="mb-3 text-3xl">🧠</div>
+          <h3 class="mb-2 text-lg font-semibold text-white">Persistent memory</h3>
+          <p class="text-sm text-[#8b8b92]">
+            Emerson remembers facts, people, and context across conversations.
+            You control what stays and what goes. Three access modes let you
+            balance recall against token cost.
+          </p>
+        </div>
+        <div class="rounded-xl border border-[#26262c] bg-[#16161a] p-6">
+          <div class="mb-3 text-3xl">📋</div>
+          <h3 class="mb-2 text-lg font-semibold text-white">Scheduled commitments</h3>
+          <p class="text-sm text-[#8b8b92]">
+            Set recurring tasks the agent runs automatically: daily briefings,
+            weekly reports, timed reminders. Missed-run policies handle
+            laptop-closed scenarios gracefully.
+          </p>
+        </div>
+        <div class="rounded-xl border border-[#26262c] bg-[#16161a] p-6">
+          <div class="mb-3 text-3xl">🔒</div>
+          <h3 class="mb-2 text-lg font-semibold text-white">Your data stays yours</h3>
+          <p class="text-sm text-[#8b8b92]">
+            All data lives in a local SQLite database on your machine.
+            API keys stored in macOS Keychain. Irreversible actions always
+            require your approval, regardless of autonomy settings.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="border-t border-[#26262c] px-6 py-20">
+    <div class="mx-auto max-w-3xl">
+      <h2 class="mb-12 text-center text-3xl font-bold text-white">How it works</h2>
+      <div class="space-y-8">
+        <div class="flex gap-4">
+          <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#d97706] text-sm font-bold text-white">1</div>
+          <div>
+            <h3 class="font-semibold text-white">Download and sign up</h3>
+            <p class="mt-1 text-sm text-[#8b8b92]">
+              30-day free trial. Enter your email, verify, add a payment method.
+              No charge until the trial ends.
+            </p>
+          </div>
+        </div>
+        <div class="flex gap-4">
+          <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#d97706] text-sm font-bold text-white">2</div>
+          <div>
+            <h3 class="font-semibold text-white">Create workspaces and projects</h3>
+            <p class="mt-1 text-sm text-[#8b8b92]">
+              Organize your life into workspaces. Each project gets its own memory
+              and commitments. Switch contexts without losing thread.
+            </p>
+          </div>
+        </div>
+        <div class="flex gap-4">
+          <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#d97706] text-sm font-bold text-white">3</div>
+          <div>
+            <h3 class="font-semibold text-white">Chat and build memory</h3>
+            <p class="mt-1 text-sm text-[#8b8b92]">
+              Have conversations. Emerson proposes memories from context. Approve
+              the ones that matter. Over time, the agent becomes genuinely useful
+              because it knows your world.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section id="pricing" class="border-t border-[#26262c] px-6 py-20">
+    <div class="mx-auto max-w-xl text-center">
+      <h2 class="mb-4 text-3xl font-bold text-white">Simple pricing</h2>
+      <p class="mb-8 text-[#8b8b92]">30-day free trial. Cancel anytime with one click and get a prorated refund.</p>
+      <div class="rounded-xl border border-[#d97706] bg-[#16161a] p-8">
+        <div class="text-4xl font-bold text-white">$20<span class="text-lg font-normal text-[#8b8b92]">/month</span></div>
+        <ul class="mt-6 space-y-3 text-left text-sm text-[#e8e8ea]">
+          <li class="flex items-center gap-2"><span class="text-[#d97706]">&#10003;</span> Unlimited workspaces and projects</li>
+          <li class="flex items-center gap-2"><span class="text-[#d97706]">&#10003;</span> Persistent memory with full-text search</li>
+          <li class="flex items-center gap-2"><span class="text-[#d97706]">&#10003;</span> Scheduled commitments</li>
+          <li class="flex items-center gap-2"><span class="text-[#d97706]">&#10003;</span> Gmail and Google Calendar integration</li>
+          <li class="flex items-center gap-2"><span class="text-[#d97706]">&#10003;</span> Workspace export</li>
+          <li class="flex items-center gap-2"><span class="text-[#d97706]">&#10003;</span> Topic dossier generation</li>
+        </ul>
+        <a
+          href="#"
+          class="mt-8 inline-block w-full rounded-lg bg-[#d97706] py-3 text-center font-medium text-white hover:bg-[#b45309] transition-colors"
+        >
+          Start your free trial
+        </a>
+        <p class="mt-3 text-xs text-[#8b8b92]">
+          You bring your own model API key (OpenAI or Anthropic). ArmorClaw does not proxy or markup API calls.
+        </p>
+      </div>
+    </div>
+  </section>
+</Base>
