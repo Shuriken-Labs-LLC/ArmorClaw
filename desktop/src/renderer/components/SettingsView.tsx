@@ -4,7 +4,7 @@ import { useNotificationStore } from "../stores/notification-store";
 import type { NotificationEventType } from "../stores/notification-store";
 import type { AppState, AuditEntry } from "../types";
 
-type SettingsTab = "account" | "general" | "brain" | "notifications" | "audit";
+type SettingsTab = "account" | "general" | "brain" | "integrations" | "notifications" | "audit";
 
 export function SettingsView(): React.JSX.Element {
   const [tab, setTab] = useState<SettingsTab>("general");
@@ -18,6 +18,7 @@ export function SettingsView(): React.JSX.Element {
           <SettingsNavItem label="General" active={tab === "general"} onClick={() => setTab("general")} />
           <SettingsNavItem label="Account" active={tab === "account"} onClick={() => setTab("account")} />
           <SettingsNavItem label="Brain" active={tab === "brain"} onClick={() => setTab("brain")} />
+          <SettingsNavItem label="Integrations" active={tab === "integrations"} onClick={() => setTab("integrations")} />
           <SettingsNavItem label="Notifications" active={tab === "notifications"} onClick={() => setTab("notifications")} />
           <SettingsNavItem label="Audit Log" active={tab === "audit"} onClick={() => setTab("audit")} />
         </nav>
@@ -28,6 +29,7 @@ export function SettingsView(): React.JSX.Element {
         {tab === "general" && <GeneralSettings />}
         {tab === "account" && <AccountSettings />}
         {tab === "brain" && <BrainSettings />}
+        {tab === "integrations" && <IntegrationsSettings />}
         {tab === "notifications" && <NotificationSettings />}
         {tab === "audit" && <AuditLog />}
       </div>
@@ -342,6 +344,81 @@ function BrainModeOption({
       </div>
       <p className="mt-0.5 text-xs text-[#8b8b92]">{description}</p>
     </button>
+  );
+}
+
+interface IntegrationInfo {
+  name: string;
+  description: string;
+  icon: string;
+  connected: boolean;
+}
+
+function IntegrationsSettings(): React.JSX.Element {
+  const integrations: IntegrationInfo[] = [
+    {
+      name: "Gmail",
+      description: "Search, read, and draft emails through your agent.",
+      icon: "📧",
+      connected: false,
+    },
+    {
+      name: "Google Calendar",
+      description: "View, create, and manage calendar events.",
+      icon: "📅",
+      connected: false,
+    },
+  ];
+
+  return (
+    <div className="max-w-lg space-y-6">
+      <h3 className="text-lg font-medium text-white">Integrations</h3>
+      <p className="text-sm text-[#8b8b92]">
+        Connect services to give Emerson access to your data. Each integration
+        uses OAuth and stores tokens in macOS Keychain.
+      </p>
+
+      <div className="space-y-3">
+        {integrations.map((integration) => (
+          <div
+            key={integration.name}
+            className="rounded-lg border border-[#26262c] bg-[#16161a] p-4"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{integration.icon}</span>
+                <div>
+                  <h4 className="text-sm font-medium text-white">{integration.name}</h4>
+                  <p className="text-xs text-[#8b8b92]">{integration.description}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {integration.connected ? (
+                  <>
+                    <span className="rounded-full bg-[#65a30d]/20 px-2 py-0.5 text-xs text-[#65a30d]">
+                      Connected
+                    </span>
+                    <button className="rounded-md border border-[#26262c] px-3 py-1 text-xs text-[#8b8b92] hover:text-white">
+                      Disconnect
+                    </button>
+                  </>
+                ) : (
+                  <button className="rounded-md bg-[#d97706] px-4 py-1.5 text-xs font-medium text-white hover:bg-[#b45309]">
+                    Connect
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-md border border-dashed border-[#26262c] p-4 text-center">
+        <p className="text-xs text-[#8b8b92]">
+          More integrations coming in v1.1: Slack, Notion, GitHub, Linear.
+        </p>
+      </div>
+    </div>
   );
 }
 

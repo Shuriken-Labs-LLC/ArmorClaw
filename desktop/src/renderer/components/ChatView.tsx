@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../stores/app-store";
+import type { Message } from "../types";
 
 export function ChatView(): React.JSX.Element {
   const {
@@ -75,12 +76,14 @@ export function ChatView(): React.JSX.Element {
           )}
 
           {messages.map((msg) => (
-            <MessageBubble
-              key={msg.id}
-              role={msg.role}
-              content={msg.content}
-              timestamp={msg.createdAt}
-            />
+            <div key={msg.id}>
+              <MessageBubble
+                role={msg.role}
+                content={msg.content}
+                timestamp={msg.createdAt}
+              />
+              {msg.toolCalls && <ToolCallCards message={msg} />}
+            </div>
           ))}
 
           {openClawMessages.map((msg, i) => (
@@ -178,6 +181,89 @@ function MessageBubble({
           {time}
         </div>
       </div>
+    </div>
+  );
+}
+
+interface ToolCall {
+  name: string;
+  arguments?: Record<string, unknown>;
+}
+
+function ToolCallCards({ message }: { message: Message }): React.JSX.Element | null {
+  const [actionTaken, setActionTaken] = useState<Record<string, string>>({});
+
+  if (!message.toolCalls) return null;
+
+  let calls: ToolCall[];
+  try {
+    calls = JSON.parse(message.toolCalls) as ToolCall[];
+  } catch {
+    return null;
+  }
+
+  const proposals = calls.filter((c) => c.name === "brain.propose");
+  if (proposals.length === 0) return null;
+
+  const handleApprove = async (idx: number, memoryId?: string) => {
+    if (memoryId) {
+      await window.armorClaw.approveMemory(memoryId);
+      setActionTaken((prev) => ({ ...prev, [idx]: "approved" }));
+    }
+  };
+
+  const handleReject = async (idx: number, memoryId?: string) => {
+    if (memoryId) {
+      await window.armorClaw.rejectMemory(memoryId);
+      setActionTaken((prev) => ({ ...prev, [idx]: "rejected" }));
+    }
+  };
+
+  return (
+    <div className="mb-4 ml-4 space-y-2">
+      {proposals.map((call, idx) => {
+        const args = call.arguments ?? {};
+        const subject = (args["subject"] as string) ?? "Memory";
+        const value = (args["value"] as string) ?? "";
+        const memoryId = args["memoryId"] as string | undefined;
+        const action = actionTaken[idx];
+
+        return (
+          <div
+            key={idx}
+            className="max-w-[70%] rounded-lg border border-[#ca8a04]/30 bg-[#16161a] p-3"
+          >
+            <div className="mb-1 flex items-center gap-2">
+              <span className="text-xs font-medium text-[#ca8a04]">Memory proposed</span>
+              {action && (
+                <span className={`rounded-full px-2 py-0.5 text-xs ${
+                  action === "approved" ? "bg-[#65a30d]/20 text-[#65a30d]" : "bg-[#dc2626]/20 text-[#dc2626]"
+                }`}>
+                  {action}
+                </span>
+              )}
+            </div>
+            <h4 className="text-sm font-medium text-white">{subject}</h4>
+            <p className="mt-1 text-xs text-[#8b8b92]">{value}</p>
+            {!action && (
+              <div className="mt-2 flex gap-2">
+                <button
+                  className="rounded-md bg-[#65a30d] px-3 py-1 text-xs text-white hover:bg-[#4d7c0f]"
+                  onClick={() => void handleApprove(idx, memoryId)}
+                >
+                  Approve
+                </button>
+                <button
+                  className="rounded-md border border-[#26262c] px-3 py-1 text-xs text-[#8b8b92] hover:text-white"
+                  onClick={() => void handleReject(idx, memoryId)}
+                >
+                  Reject
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -29,6 +29,7 @@ export function App(): React.JSX.Element {
     const unsub1 = window.armorClaw.onCommitmentFired((data) => {
       addNotif({
         type: "success",
+        eventType: "commitment.fired",
         title: "Commitment fired",
         body: (data["description"] as string) ?? "A scheduled commitment ran.",
         commitmentId: data["commitmentId"] as string,
@@ -37,6 +38,7 @@ export function App(): React.JSX.Element {
     const unsub2 = window.armorClaw.onCommitmentMissed((data) => {
       addNotif({
         type: "warning",
+        eventType: "commitment.missed",
         title: "Missed commitment",
         body: `"${(data["description"] as string) ?? "A commitment"}" was due while the app was off.`,
         commitmentId: data["commitmentId"] as string,
