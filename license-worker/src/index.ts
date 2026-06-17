@@ -33,6 +33,8 @@ type SubStatus =
 
 const REFUND_WINDOW_DAYS = 7;
 const REFUND_COOLDOWN_DAYS = 365;
+const JWT_EXPIRY_DAYS = 7;
+const MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000;
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -43,9 +45,32 @@ app.post("/auth/magic-link", async (c) => {
   if (!email || !isValidEmail(email)) {
     return c.json({ error: "invalid email" }, 400);
   }
-  // TODO: generate short-lived one-time token (15min) signed with JWT_SIGNING_KEY
-  // TODO: send via Resend with armorclaw://auth?token=...
-  // TODO: rate-limit per email and per IP
+
+  const token = await signMagicToken(email, c.env.JWT_SIGNING_KEY);
+
+  const magicLink = `${c.env.DEEP_LINK_SCHEME}://auth?token=${encodeURIComponent(token)}`;
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${c.env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "ArmorClaw <noreply@armorclaw.app>",
+      to: [email],
+      subject: "Sign in to ArmorClaw",
+      html: `<p>Click the link below to sign in to ArmorClaw:</p>
+             <p><a href="${magicLink}">Sign in to ArmorClaw</a></p>
+             <p>This link expires in 15 minutes.</p>
+             <p>If you didn't request this, you can ignore this email.</p>`,
+    }),
+  });
+
+  if (!res.ok) {
+    return c.json({ error: "failed to send email" }, 500);
+  }
+
   return c.json({ ok: true });
 });
 
@@ -53,8 +78,8 @@ app.post("/auth/exchange", async (c) => {
   const { token } = await c.req.json<{ token: string }>();
   if (!token) return c.json({ error: "missing token" }, 400);
 
-  // TODO: verify one-time token, extract email
-  const email = "TODO";
+  const email = await verifyMagicToken(token, c.env.JWT_SIGNING_KEY);
+  if (!email) return c.json({ error: "invalid or expired token" }, 401);
 
   const stripe = stripeClient(c.env);
   const sub_status = await getOrCreateSubscription(stripe, email, c.env);
@@ -115,10 +140,8 @@ app.post("/subscription/cancel", async (c) => {
   if (!sub) return c.json({ error: "no active subscription" }, 404);
 
   if (sub.status === "trialing") {
-    // No charge yet; cancel immediately, no refund needed.
     await stripe.subscriptions.cancel(sub.id);
   } else {
-    // Paid past refund window: cancel at period end so user retains access through current cycle.
     await stripe.subscriptions.update(sub.id, { cancel_at_period_end: true });
   }
 
@@ -147,7 +170,6 @@ app.post("/subscription/cancel-and-refund", async (c) => {
     return c.json({ error: "outside 7-day refund window" }, 403);
   }
 
-  // Abuse mitigation: refuse a second auto-refund to the same payment method fingerprint within 12 months.
   const fingerprint = await paymentMethodFingerprint(stripe, customer.id);
   if (fingerprint) {
     const prior = await c.env.REFUND_FINGERPRINTS.get(fingerprint);
@@ -161,7 +183,6 @@ app.post("/subscription/cancel-and-refund", async (c) => {
     }
   }
 
-  // Refund latest paid invoice + cancel immediately.
   const invoice = await latestPaidInvoice(stripe, customer.id);
   if (!invoice || !invoice.payment_intent) {
     return c.json({ error: "no refundable charge" }, 400);
@@ -183,7 +204,7 @@ app.post("/subscription/cancel-and-refund", async (c) => {
 
 export default app;
 
-// ---------- helpers (stubs) ----------
+// ---------- Stripe helpers ----------
 
 function stripeClient(env: Env): Stripe {
   return new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: "2025-02-24.acacia" });
@@ -194,61 +215,197 @@ function isValidEmail(email: string): boolean {
 }
 
 async function freshLicense(env: Env, email: string, sub_status: SubStatus) {
-  const expires_at = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  const expires_at = Date.now() + JWT_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
   const jwt = await signLicenseJwt({ email, sub_status, expires_at }, env.JWT_SIGNING_KEY);
   return { jwt, expires_at, sub_status, email };
 }
 
-async function getOrCreateSubscription(_stripe: Stripe, _email: string, _env: Env): Promise<SubStatus> {
-  // TODO: lookup customer; if missing, create with 30-day trial sub against STRIPE_PRICE_ID; require payment method via Checkout
+async function getOrCreateSubscription(stripe: Stripe, email: string, env: Env): Promise<SubStatus> {
+  const existing = await findCustomerByEmail(stripe, email);
+  if (existing) {
+    const sub = await getActiveSubscription(stripe, existing.id);
+    if (sub) return sub.status as SubStatus;
+  }
+
+  const customer = existing ?? await stripe.customers.create({ email });
+
+  const session = await stripe.checkout.sessions.create({
+    customer: customer.id,
+    mode: "subscription",
+    line_items: [{ price: env.STRIPE_PRICE_ID, quantity: 1 }],
+    subscription_data: { trial_period_days: 30 },
+    payment_method_collection: "always",
+    success_url: `${env.DEEP_LINK_SCHEME}://billing/return?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${env.APP_URL}/`,
+  });
+
+  if (session.subscription) {
+    const sub = await stripe.subscriptions.retrieve(
+      typeof session.subscription === "string"
+        ? session.subscription
+        : session.subscription.id,
+    );
+    return sub.status as SubStatus;
+  }
+
   return "trialing";
 }
 
-async function readSubscriptionStatus(_stripe: Stripe, _email: string): Promise<SubStatus> {
-  // TODO
-  return "active";
+async function readSubscriptionStatus(stripe: Stripe, email: string): Promise<SubStatus> {
+  const customer = await findCustomerByEmail(stripe, email);
+  if (!customer) return "none";
+  const sub = await getActiveSubscription(stripe, customer.id);
+  if (!sub) return "none";
+  return sub.status as SubStatus;
 }
 
-async function findCustomerByEmail(_stripe: Stripe, _email: string): Promise<Stripe.Customer | null> {
-  // TODO: stripe.customers.search({ query: `email:"${email}"` })
-  return null;
+async function findCustomerByEmail(stripe: Stripe, email: string): Promise<Stripe.Customer | null> {
+  const result = await stripe.customers.search({ query: `email:"${email}"`, limit: 1 });
+  const customer = result.data[0];
+  if (!customer || customer.deleted) return null;
+  return customer;
 }
 
-async function getActiveSubscription(_stripe: Stripe, _customerId: string): Promise<Stripe.Subscription | null> {
-  // TODO: stripe.subscriptions.list({ customer, status: 'all', limit: 1 })
-  return null;
+async function getActiveSubscription(stripe: Stripe, customerId: string): Promise<Stripe.Subscription | null> {
+  const subs = await stripe.subscriptions.list({ customer: customerId, limit: 1 });
+  return subs.data[0] ?? null;
 }
 
-async function firstChargeTimestamp(_stripe: Stripe, _customerId: string): Promise<number | null> {
-  // TODO: stripe.charges.list({ customer, limit: 1 }) sorted ascending, return earliest succeeded charge.created * 1000
-  return null;
+async function firstChargeTimestamp(stripe: Stripe, customerId: string): Promise<number | null> {
+  const charges = await stripe.charges.list({
+    customer: customerId,
+    limit: 100,
+  });
+  const succeeded = charges.data
+    .filter((ch) => ch.status === "succeeded")
+    .sort((a, b) => a.created - b.created);
+  const earliest = succeeded[0];
+  return earliest ? earliest.created * 1000 : null;
 }
 
-async function latestPaidInvoice(_stripe: Stripe, _customerId: string): Promise<Stripe.Invoice | null> {
-  // TODO: stripe.invoices.list({ customer, status: 'paid', limit: 1 })
-  return null;
+async function latestPaidInvoice(stripe: Stripe, customerId: string): Promise<Stripe.Invoice | null> {
+  const invoices = await stripe.invoices.list({
+    customer: customerId,
+    status: "paid",
+    limit: 1,
+  });
+  return invoices.data[0] ?? null;
 }
 
-async function paymentMethodFingerprint(_stripe: Stripe, _customerId: string): Promise<string | null> {
-  // TODO: read default payment method, return card.fingerprint (Stripe-stable across customers/cards with same PAN)
-  return null;
+async function paymentMethodFingerprint(stripe: Stripe, customerId: string): Promise<string | null> {
+  const methods = await stripe.paymentMethods.list({
+    customer: customerId,
+    type: "card",
+    limit: 1,
+  });
+  const card = methods.data[0]?.card;
+  return card?.fingerprint ?? null;
+}
+
+// ---------- JWT helpers (Web Crypto API for Workers) ----------
+
+async function getSigningKey(secret: string): Promise<CryptoKey> {
+  const enc = new TextEncoder();
+  return crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign", "verify"],
+  );
+}
+
+function base64UrlEncode(data: ArrayBuffer | Uint8Array): string {
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function base64UrlDecode(str: string): Uint8Array {
+  const padded = str.replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function signJwt(payload: Record<string, unknown>, secret: string): Promise<string> {
+  const enc = new TextEncoder();
+  const header = base64UrlEncode(enc.encode(JSON.stringify({ alg: "HS256", typ: "JWT" })));
+  const body = base64UrlEncode(enc.encode(JSON.stringify(payload)));
+  const signingInput = `${header}.${body}`;
+  const key = await getSigningKey(secret);
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(signingInput));
+  return `${signingInput}.${base64UrlEncode(sig)}`;
+}
+
+async function verifyAndDecodeJwt(
+  token: string,
+  secret: string,
+  maxExpiredDays = 0,
+): Promise<Record<string, unknown> | null> {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [header, body, sig] = parts as [string, string, string];
+
+  const enc = new TextEncoder();
+  const key = await getSigningKey(secret);
+  const sigBytes = base64UrlDecode(sig);
+  const valid = await crypto.subtle.verify("HMAC", key, sigBytes, enc.encode(`${header}.${body}`));
+  if (!valid) return null;
+
+  const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(body))) as Record<string, unknown>;
+
+  if (typeof payload["exp"] === "number") {
+    const gracePeriod = maxExpiredDays * 24 * 60 * 60;
+    if (Date.now() / 1000 > payload["exp"] + gracePeriod) return null;
+  }
+
+  return payload;
+}
+
+async function signMagicToken(email: string, secret: string): Promise<string> {
+  return signJwt(
+    { email, purpose: "magic-link", exp: Math.floor((Date.now() + MAGIC_LINK_EXPIRY_MS) / 1000) },
+    secret,
+  );
+}
+
+async function verifyMagicToken(token: string, secret: string): Promise<string | null> {
+  const payload = await verifyAndDecodeJwt(token, secret);
+  if (!payload || payload["purpose"] !== "magic-link") return null;
+  return (payload["email"] as string) ?? null;
 }
 
 async function signLicenseJwt(
-  _claims: { email: string; sub_status: SubStatus; expires_at: number },
-  _key: string,
+  claims: { email: string; sub_status: SubStatus; expires_at: number },
+  secret: string,
 ): Promise<string> {
-  // TODO: HS256-sign with key
-  return "STUB_JWT";
+  return signJwt(
+    {
+      email: claims.email,
+      sub_status: claims.sub_status,
+      exp: Math.floor(claims.expires_at / 1000),
+      iat: Math.floor(Date.now() / 1000),
+      purpose: "license",
+    },
+    secret,
+  );
 }
 
-async function verifyJwt(_jwt: string, _key: string): Promise<string | null> {
-  // TODO: return email if valid, else null
-  return null;
+async function verifyJwt(token: string, secret: string): Promise<string | null> {
+  const payload = await verifyAndDecodeJwt(token, secret);
+  if (!payload || payload["purpose"] !== "license") return null;
+  return (payload["email"] as string) ?? null;
 }
 
-async function verifyJwtAllowingExpired(_jwt: string, _key: string, _maxDaysExpired: number): Promise<string | null> {
-  // TODO: like verifyJwt but accept up to N days of expiry
-  return null;
+async function verifyJwtAllowingExpired(token: string, secret: string, maxDaysExpired: number): Promise<string | null> {
+  const payload = await verifyAndDecodeJwt(token, secret, maxDaysExpired);
+  if (!payload || payload["purpose"] !== "license") return null;
+  return (payload["email"] as string) ?? null;
 }
-

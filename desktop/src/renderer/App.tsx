@@ -1,48 +1,67 @@
-import { useEffect, useState } from "react";
-
-declare global {
-  interface Window {
-    armorClaw: {
-      getAppVersion: () => Promise<string>;
-      onOpenClawMessage: (callback: (message: string) => void) => () => void;
-    };
-  }
-}
+import { useEffect } from "react";
+import { useAppStore } from "./stores/app-store";
+import { Sidebar } from "./components/Sidebar";
+import { ChatView } from "./components/ChatView";
+import { BrainPanel } from "./components/BrainPanel";
+import { SettingsView } from "./components/SettingsView";
+import { CommitmentsView } from "./components/CommitmentsView";
+import "./types";
 
 export function App(): React.JSX.Element {
-  const [version, setVersion] = useState("");
-  const [messages, setMessages] = useState<string[]>([]);
+  const { initialize, initializing, view, brainPanelOpen, addOpenClawMessage, toggleBrainPanel } =
+    useAppStore();
 
   useEffect(() => {
-    window.armorClaw.getAppVersion().then(setVersion);
+    void initialize();
+  }, [initialize]);
 
+  useEffect(() => {
     const unsubscribe = window.armorClaw.onOpenClawMessage((message) => {
-      setMessages((prev) => [...prev, message]);
+      addOpenClawMessage(message);
     });
     return unsubscribe;
-  }, []);
+  }, [addOpenClawMessage]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "b") {
+        e.preventDefault();
+        toggleBrainPanel();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [toggleBrainPanel]);
+
+  if (initializing) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#0f0f10]">
+        <div className="text-center">
+          <div className="mb-3 text-4xl">🦞</div>
+          <p className="text-sm text-[#8b8b92]">Loading ArmorClaw...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex h-screen flex-col items-center justify-center gap-4 p-8">
-      <h1 className="text-3xl font-bold text-white">ArmorClaw</h1>
-      {version && (
-        <p className="text-sm text-neutral-400">v{version}</p>
-      )}
-      <div className="mt-4 w-full max-w-xl space-y-2">
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className="rounded-lg bg-neutral-800 px-4 py-3 text-sm text-neutral-200"
-          >
-            {msg}
+    <div className="flex h-screen overflow-hidden bg-[#0f0f10]">
+      <Sidebar />
+      <main className="flex flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden">
+          {view === "chat" && <ChatView />}
+          {view === "brain" && <BrainPanel />}
+          {view === "settings" && <SettingsView />}
+          {view === "commitments" && <CommitmentsView />}
+        </div>
+
+        {/* Brain side panel (overlay on chat) */}
+        {brainPanelOpen && view === "chat" && (
+          <div className="w-[480px] border-l border-[#26262c] bg-[#0e0e0f]">
+            <BrainPanel />
           </div>
-        ))}
-        {messages.length === 0 && (
-          <p className="text-center text-neutral-500">
-            Waiting for OpenClaw...
-          </p>
         )}
-      </div>
+      </main>
     </div>
   );
 }

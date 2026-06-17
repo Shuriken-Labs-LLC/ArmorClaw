@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { logger } from "./logger";
 import { initDatabase, closeDatabase } from "./db";
 import { spawnOpenClaw, setMessageHandler, killOpenClaw } from "./openclaw";
+import { registerIpcHandlers } from "./ipc-handlers";
+import { getAppState } from "./repositories";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -39,16 +41,13 @@ function createWindow(): void {
   }
 }
 
-function registerIpcHandlers(): void {
-  ipcMain.handle("app:version", () => app.getVersion());
-}
-
 app.whenReady().then(() => {
   logger.initLogFile();
   logger.info("ArmorClaw starting");
 
   initDatabase();
 
+  ipcMain.handle("app:version", () => app.getVersion());
   registerIpcHandlers();
 
   setMessageHandler((message) => {
@@ -57,7 +56,10 @@ app.whenReady().then(() => {
 
   createWindow();
 
-  spawnOpenClaw("Default Workspace", "Default Project");
+  const state = getAppState();
+  const wsName = state.activeWorkspaceId ?? "Default Workspace";
+  const projName = state.activeProjectId ?? "Default Project";
+  spawnOpenClaw(wsName, projName);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

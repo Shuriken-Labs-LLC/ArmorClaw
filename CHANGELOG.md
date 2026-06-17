@@ -6,6 +6,19 @@ All notable changes to ArmorClaw are documented here. Format follows Keep a Chan
 
 ### Added
 - Initial repo skeleton.
+- Full IPC layer for workspace, project, chat, message, memory, and audit CRUD (desktop/src/main/ipc-handlers.ts).
+- Repository module with typed query helpers mapping snake_case SQL to camelCase TS (desktop/src/main/repositories.ts).
+- App state management: active workspace/project persistence across restarts, settings updates.
+- Zustand app store with navigation, workspace/project selection, chat flow (desktop/src/renderer/stores/app-store.ts).
+- Sidebar UI: workspace selector dropdown, project list, navigation (Chat/Brain/Commitments/Settings), conversation list.
+- Chat view: message bubbles with user/assistant styling, suggestion chips, empty state with Emerson, streaming message display.
+- Brain panel: three-layer progressive disclosure (overview -> project memories -> memory detail), FTS search, approve/reject controls.
+- Settings view: General (model provider, personality, autonomy, missed-run policy, OpenClaw runtime), Account (email, subscription), Brain (per-project access mode), Audit log viewer.
+- Commitments view shell with upcoming/active/paused sections.
+- License worker: complete JWT implementation using Web Crypto API (sign, verify, magic-link tokens, license tokens with expiry).
+- License worker: Stripe integration for customer lookup/creation, subscription management, Checkout session creation with 30-day trial.
+- License worker: magic-link email sending via Resend API.
+- Database tests: schema validation, cascade deletes, CRUD operations, FTS search, commitments, audit entries (8 tests).
 - TypeScript configs: root base plus per-package configs for desktop and license-worker (strict mode, noUncheckedIndexedAccess).
 - electron-vite config with main, preload, and renderer entry points.
 - React renderer scaffold with Tailwind CSS (desktop/src/renderer/).
@@ -21,6 +34,7 @@ All notable changes to ArmorClaw are documented here. Format follows Keep a Chan
 - ADR 0002: schema reconciliation.
 
 ### Fixed
+- electron-vite renderer build: removed explicit rollupOptions.input that broke path resolution with root config.
 - .gitignore anchored build/ to repo root; desktop/build/entitlements.mac.plist is now tracked.
 - Wrapper context says "macOS" instead of "macOS or Windows" (v1 scope).
 - Release workflow drops Windows from matrix (v1 is macOS only).
