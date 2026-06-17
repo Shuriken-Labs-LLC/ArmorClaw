@@ -139,6 +139,10 @@ const api = {
   // Shell
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
 
+  // OpenClaw
+  sendToOpenClaw: (text: string) => ipcRenderer.invoke("openclaw:send", text),
+  isOpenClawRunning: () => ipcRenderer.invoke("openclaw:status"),
+
   // Audit
   listAuditEntries: (limit?: number, projectId?: string) =>
     ipcRenderer.invoke("audit:list", limit, projectId),

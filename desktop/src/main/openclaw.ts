@@ -158,6 +158,19 @@ function emitMessage(message: string): void {
   }
 }
 
+export function sendToOpenClaw(text: string): boolean {
+  if (!openClawProcess?.stdin?.writable) {
+    logger.warn("Cannot send to OpenClaw — process not running");
+    return false;
+  }
+  openClawProcess.stdin.write(text + "\n");
+  return true;
+}
+
+export function isOpenClawRunning(): boolean {
+  return openClawProcess != null && !openClawProcess.killed;
+}
+
 export function killOpenClaw(): void {
   if (openClawProcess) {
     logger.info("Killing OpenClaw subprocess");

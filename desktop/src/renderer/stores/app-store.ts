@@ -231,7 +231,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       "user",
       content,
     );
-    set((s) => ({ messages: [...s.messages, userMsg] }));
+    set((s) => ({ messages: [...s.messages, userMsg], openClawMessages: [] }));
+    await window.armorClaw.sendToOpenClaw(content);
   },
 
   addOpenClawMessage: (message) => {

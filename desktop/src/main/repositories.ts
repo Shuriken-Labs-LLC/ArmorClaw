@@ -45,6 +45,13 @@ export function listWorkspaces(): Workspace[] {
   return rows.map(mapWorkspace);
 }
 
+export function getWorkspace(id: string): Workspace | undefined {
+  const row = getDb()
+    .prepare("SELECT * FROM workspaces WHERE id = ?")
+    .get(id) as WorkspaceRow | undefined;
+  return row ? mapWorkspace(row) : undefined;
+}
+
 export function createWorkspace(name: string, color?: string): Workspace {
   const id = randomUUID();
   const now = Date.now();

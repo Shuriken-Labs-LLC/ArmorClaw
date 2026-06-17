@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAppStore } from "../stores/app-store";
 import { useNotificationStore } from "../stores/notification-store";
 import type { NotificationEventType } from "../stores/notification-store";
@@ -484,16 +484,16 @@ function AuditLog(): React.JSX.Element {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    void loadEntries();
-  }, []);
-
-  const loadEntries = async () => {
+  const loadEntries = useCallback(async () => {
     setLoading(true);
     const result = await window.armorClaw.listAuditEntries(100);
     setEntries(result);
     setLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    void loadEntries();
+  }, [loadEntries]);
 
   if (loading) return <p className="text-[#8b8b92]">Loading audit log...</p>;
 

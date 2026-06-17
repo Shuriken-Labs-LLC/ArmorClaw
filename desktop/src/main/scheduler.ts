@@ -1,5 +1,6 @@
 import { BrowserWindow } from "electron";
 import { logger } from "./logger";
+import { spawnOpenClaw, sendToOpenClaw, isOpenClawRunning } from "./openclaw";
 import {
   getDueCommitments,
   updateCommitment,
@@ -7,6 +8,8 @@ import {
   finishCommitmentRun,
   writeAuditEntry,
   getAppState,
+  getWorkspace,
+  getProject,
   type Commitment,
 } from "./repositories";
 
@@ -103,9 +106,18 @@ function executeCommitment(commitment: Commitment, now: number): void {
     actionTemplate: commitment.actionTemplate,
   }, commitment.workspaceId, commitment.projectId);
 
-  // TODO: spawn work through OpenClaw subprocess
-  // For now, mark as completed immediately
-  finishCommitmentRun(run.id, "completed", "Executed (OpenClaw integration pending)");
+  if (!isOpenClawRunning()) {
+    const ws = getWorkspace(commitment.workspaceId);
+    const proj = getProject(commitment.projectId);
+    spawnOpenClaw(ws?.name ?? "Workspace", proj?.name ?? "Project");
+  }
+
+  const sent = sendToOpenClaw(commitment.actionTemplate);
+  if (sent) {
+    finishCommitmentRun(run.id, "completed", "Sent to OpenClaw");
+  } else {
+    finishCommitmentRun(run.id, "failed", "OpenClaw not available");
+  }
 
   notifyRenderer("commitment:fired", {
     commitmentId: commitment.id,

@@ -199,6 +199,8 @@ declare global {
       onCommitmentFired: (callback: (data: Record<string, unknown>) => void) => () => void;
       onCommitmentMissed: (callback: (data: Record<string, unknown>) => void) => () => void;
       openExternal: (url: string) => Promise<void>;
+      sendToOpenClaw: (text: string) => Promise<boolean>;
+      isOpenClawRunning: () => Promise<boolean>;
       listAuditEntries: (limit?: number, projectId?: string) => Promise<AuditEntry[]>;
       onDeepLinkAuth: (callback: (data: { token: string }) => void) => () => void;
       onDeepLinkBilling: (callback: (data: { sessionId: string }) => void) => () => void;

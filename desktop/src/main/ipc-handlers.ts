@@ -1,4 +1,5 @@
 import { app, ipcMain, shell } from "electron";
+import { sendToOpenClaw, isOpenClawRunning, spawnOpenClaw } from "./openclaw";
 import { exportWorkspace } from "./workspace-export";
 import {
   listWorkspaces,
@@ -355,4 +356,18 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("shell:openExternal", (_e, url: string): Promise<void> =>
     shell.openExternal(url),
   );
+
+  // ---- OpenClaw ----
+  ipcMain.handle("openclaw:send", (_e, text: string): boolean => {
+    if (!isOpenClawRunning()) {
+      const state = getAppState();
+      spawnOpenClaw(
+        state.activeWorkspaceId ?? "Default Workspace",
+        state.activeProjectId ?? "Default Project",
+      );
+    }
+    return sendToOpenClaw(text);
+  });
+
+  ipcMain.handle("openclaw:status", (): boolean => isOpenClawRunning());
 }
